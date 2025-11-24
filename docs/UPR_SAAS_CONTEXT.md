@@ -50,15 +50,17 @@
 
 ## 2. Notion Integration
 
-### Database IDs
+### Database IDs (PremiumRadar-SAAS Workspace)
 
 ```json
 {
-  "module_features_db_id": "2a266151dd16810d8578c190d7cc3e42",
-  "sprints_db_id": "2a266151dd16815b8431ce6212efb9ac",
-  "modules_db_id": "2a266151-dd16-81e7-8ea4-d3a4a761d152"
+  "sprints_db_id": "5c32e26d-641a-4711-a9fb-619703943fb9",
+  "module_features_db_id": "26ae5afe-4b5f-4d97-b402-5c459f188944",
+  "knowledge_page_id": "f1552250-cafc-4f5f-90b0-edc8419e578b"
 }
 ```
+
+**Note:** Token stored in GCP Secret Manager as `NOTION_TOKEN_SAAS`
 
 ### Sprint Management Commands
 
