@@ -7,12 +7,18 @@
  * NO direct imports from OS repo allowed.
  * NO shared code symlinks.
  * API consumption ONLY.
+ *
+ * SECURITY: Uses GCP OIDC tokens for authentication (zero-trust model)
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { GoogleAuth } from 'google-auth-library';
 
 const OS_BASE_URL = process.env.UPR_OS_BASE_URL || 'http://localhost:8080';
 const OS_API_KEY = process.env.UPR_OS_API_KEY || '';
+
+// Initialize Google Auth for OIDC token generation
+const auth = new GoogleAuth();
 
 interface OSClientConfig {
   baseURL?: string;
@@ -66,12 +72,38 @@ interface OSResponse<T = unknown> {
   timestamp: string;
 }
 
+/**
+ * Get OIDC identity token for service-to-service auth
+ * Uses GCP metadata server in Cloud Run, falls back to ADC locally
+ */
+async function getIdToken(targetAudience: string): Promise<string | null> {
+  // Skip OIDC in local dev
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[OS Client] Skipping OIDC in development mode');
+    return null;
+  }
+
+  try {
+    const client = await auth.getIdTokenClient(targetAudience);
+    const headers = await client.getRequestHeaders();
+    const token = headers.Authorization?.replace('Bearer ', '');
+    return token || null;
+  } catch (error) {
+    console.error('[OS Client] Failed to get OIDC token:', error);
+    return null;
+  }
+}
+
 class OSClient {
   private client: AxiosInstance;
+  private targetAudience: string;
 
   constructor(config: OSClientConfig = {}) {
+    const baseURL = config.baseURL || OS_BASE_URL;
+    this.targetAudience = baseURL; // Cloud Run expects the service URL as audience
+
     this.client = axios.create({
-      baseURL: `${config.baseURL || OS_BASE_URL}/api/os`,
+      baseURL: `${baseURL}/api/os`,
       timeout: config.timeout || 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -80,11 +112,29 @@ class OSClient {
       },
     });
 
+    // Request interceptor to add OIDC token
+    this.client.interceptors.request.use(
+      async (requestConfig: InternalAxiosRequestConfig) => {
+        const token = await getIdToken(this.targetAudience);
+        if (token) {
+          requestConfig.headers.Authorization = `Bearer ${token}`;
+        }
+        return requestConfig;
+      },
+      (error) => Promise.reject(error)
+    );
+
     // Response interceptor for error handling
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
         console.error('[OS Client] Error:', error.message);
+        if (error.response?.status === 401) {
+          console.error('[OS Client] Authentication failed - check OIDC token');
+        }
+        if (error.response?.status === 403) {
+          console.error('[OS Client] Authorization denied - check IAM bindings');
+        }
         throw error;
       }
     );
