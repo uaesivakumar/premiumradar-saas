@@ -247,12 +247,42 @@ TC updates these automatically:
 
 ---
 
-## 10. Success Criteria
+## 10. Security Sprints (MANDATORY BEFORE SPRINT 1)
+
+**CRITICAL:** All security sprints (S1-S6) must be completed before starting product Sprint 1.
+
+See: `docs/SECURITY_SPRINTS.md` for full details.
+
+### Security Sprint Overview
+
+| Sprint | Name | Priority | Status |
+|--------|------|----------|--------|
+| **S1** | Prompt Injection Firewall v1.0 | Critical | Pending |
+| **S2** | OS Identity & Token Hardening | Critical | Pending |
+| **S3** | Anti-Reverse-Engineering | Critical | Pending |
+| **S4** | Red-Team Suite v1.0 | Critical | Pending |
+| **S5** | WAF + Abuse Prevention | Critical | Pending |
+| **S6** | Immutable Security Change Log | Critical | Pending |
+
+### Security Gate Before Product Sprints
+
+- ✅ All S1-S6 sprints completed
+- ✅ 150+ red-team prompts passing
+- ✅ OWASP Top 10 coverage verified
+- ✅ Third-party security audit (optional but recommended)
+- ✅ SECURITY_CHANGELOG.md established
+
+**No product development starts until security foundation is complete.**
+
+---
+
+## 11. Success Criteria
 
 PremiumRadar SaaS Sprint = **COMPLETE** only if:
 
 - ✅ All sprint tasks done
 - ✅ `/qa` passed
+- ✅ Security sprints completed (if applicable)
 - ✅ TC has updated:
   - Sprint DB
   - Features DB
@@ -261,7 +291,7 @@ PremiumRadar SaaS Sprint = **COMPLETE** only if:
 
 ---
 
-## 11. Domain → Environment Mapping
+## 12. Domain → Environment Mapping
 
 | Domain | Environment | Cloud Run Service | Purpose |
 |--------|-------------|-------------------|---------|
@@ -272,7 +302,7 @@ PremiumRadar SaaS Sprint = **COMPLETE** only if:
 
 ---
 
-## 12. CI/CD Workflows
+## 13. CI/CD Workflows
 
 ### Repository: premiumradar-saas
 
