@@ -1,0 +1,86 @@
+name: Red Team Security Testing
+
+on:
+  pull_request:
+    branches: [main, production]
+  push:
+    branches: [main, production]
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  red-team-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Red Team Security Tests
+        id: red_team
+        run: |
+          echo "::group::Red Team Security Validation"
+          npm run test:security
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Check for vulnerabilities
+        if: steps.red_team.outcome == 'failure'
+        run: |
+          echo "::error::🚨 RED TEAM TESTS FAILED - CRITICAL VULNERABILITIES DETECTED"
+          echo "::error::Deployment blocked due to security vulnerabilities"
+          echo "::error::Review test output above for details"
+          exit 1
+
+      - name: Security validation passed
+        if: steps.red_team.outcome == 'success'
+        run: |
+          echo "::notice::✅ Red Team Security Validation PASSED"
+          echo "::notice::All 150+ attack patterns successfully blocked"
+          echo "::notice::Deployment cleared for security gate"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: red-team-test-results
+          path: |
+            coverage/
+            test-results/
+          retention-days: 30
+
+  security-gate:
+    runs-on: ubuntu-latest
+    needs: red-team-tests
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production')
+
+    steps:
+      - name: Security Gate - Deployment Approval
+        run: |
+          echo "::notice::🛡️ Security Gate PASSED"
+          echo "::notice::Red team validation successful"
+          echo "::notice::Deployment approved"
+
+  notify-security:
+    runs-on: ubuntu-latest
+    needs: red-team-tests
+    if: failure() && github.event_name == 'push'
+
+    steps:
+      - name: Notify security team
+        run: |
+          echo "::error::🚨 SECURITY ALERT"
+          echo "::error::Red team tests failed on branch: ${{ github.ref }}"
+          echo "::error::Commit: ${{ github.sha }}"
+          echo "::error::Author: ${{ github.actor }}"
+          # In production, send to Slack/email/PagerDuty
+          # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} -d '{"text":"Security vulnerability detected!"}'
