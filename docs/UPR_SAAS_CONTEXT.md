@@ -212,6 +212,20 @@ import { osClient } from '@/lib/os-client';
 4. Sanitize data before rendering
 5. No secrets in client-side code
 
+### Security Rules (QA Gate)
+
+**MANDATORY before QA certification:**
+
+1. **TC must run Prompt Injection Red-Team Suite** before QA certification
+2. **TC must verify no internal config fields leak to clients**
+3. **TC must run OWASP top-10 smoke tests** each sprint
+4. **TC must update `SECURITY_CHANGELOG.md`** after any security-affecting change
+5. **Any sprint failing security gate stays QA Pending**
+
+**Files:**
+- `SECURITY_CHANGELOG.md` - Track all security-affecting changes
+- `tests/security/` - Security test suites
+
 ---
 
 ## 6. Phase 2 Goals
