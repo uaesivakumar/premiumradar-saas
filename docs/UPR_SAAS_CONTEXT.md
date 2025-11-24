@@ -132,14 +132,46 @@ git push origin production
 
 ### TC MUST NOT:
 
-- Auto-create sprints
-- Auto-create features
+- Auto-create sprints (without explicit founder request)
+- Auto-create features (without explicit founder request)
 - Modify OS v1
 - Deploy to production without approval
 - Assume any table/column name
 - Assume any environment variables
 - Run local commands
 - Use local database
+
+### Sprint & Feature Creation Rules
+
+**Default Behavior:**
+- TC must **never** auto-create sprints or features without explicit founder request
+- TC only **reads** from Notion and **executes** assigned work
+- TC **updates status** of existing sprints/features
+
+**When Explicitly Requested:**
+
+When the founder explicitly asks TC to create sprints or features (e.g., "Generate Security Sprints S1-S6"), TC is allowed to:
+
+1. **Design** the sprint structure
+2. **Create** individual features
+3. **Write** the full sequence and continuity
+4. **Store** them in Notion
+
+**Approval Process:**
+
+1. After creation, the **founder must approve or modify** the sprints/features in Notion
+2. Only after **founder approval** can TC begin executing the sprint
+3. TC announces when sprints/features are created and awaits approval
+
+**Example Flow:**
+```
+Founder: "Generate Security Sprints S1-S6"
+TC: Creates sprints and features in Notion
+TC: "S1-S6 created with 42 features. Please review in Notion."
+Founder: Reviews and approves
+Founder: "Begin Sprint S1"
+TC: Executes Sprint S1
+```
 
 ---
 
