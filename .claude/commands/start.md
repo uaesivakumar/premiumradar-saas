@@ -69,3 +69,21 @@ Provide a summary:
 - All OS calls via `lib/os-client.ts` only
 - Run `npm run build` after major changes
 - Update Notion feature status when Done
+
+## Knowledge Page Rules (MANDATORY)
+After every stretch (one or more sprints), TC MUST update the Knowledge Page with ALL 8 sections:
+1. Product Essentials
+2. Core Frameworks
+3. Technologies Used
+4. Key Capabilities
+5. ELI5 (Explain Like I'm 5)
+6. Real-World Analogy
+7. Explain to Different Audiences (Investors, CXOs, BDMs, Hiring Managers, Engineers)
+8. Innovation & Differentiation
+
+**FORBIDDEN:**
+- Skipping Knowledge Page update after a stretch
+- Minimal updates (must fully populate all 8 sections)
+- Skipping any of the 8 sections
+
+**Reference:** `.claude/notion/sync.ts` for schema validation

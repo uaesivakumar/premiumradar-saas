@@ -91,6 +91,33 @@ export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKE
 node scripts/notion/getCurrentSprint.js
 ```
 
+### 8.1 Verify Full Property Population
+**MANDATORY:** Verify that ALL required fields are populated in Notion:
+
+For Sprints DB:
+- Sprint Name, Status, Goal, Outcomes, Highlights, Business Value
+- Started At, Completed At, Commit, Git Tag, Branch
+- Phases Updated, Learnings, Commits Count, Synced At
+
+For Features DB:
+- Feature Name, Sprint, Status, Priority, Complexity, Type
+- Notes, Tags, Started At, Completed At, Assignee, Done?
+
+**Reference:** `.claude/notion/sync.ts` for field validation
+
+### 8.2 Verify Knowledge Page (MANDATORY)
+**CRITICAL:** Verify Knowledge Page has ALL 8 learning sections:
+1. Product Essentials
+2. Core Frameworks
+3. Technologies Used
+4. Key Capabilities
+5. ELI5 (Explain Like I'm 5)
+6. Real-World Analogy
+7. Explain to Different Audiences (Investors, CXOs, BDMs, Hiring Managers, Engineers)
+8. Innovation & Differentiation
+
+**No stretch/sprint can be certified without complete Knowledge Page update!**
+
 ### 9. Generate QA Report
 Create a summary report with:
 - Date/Time

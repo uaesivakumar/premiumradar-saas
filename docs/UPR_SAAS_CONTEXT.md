@@ -233,6 +233,55 @@ Founder: "Begin Sprint S1"
 TC: Executes Sprint S1
 ```
 
+### Knowledge Page Update Rules (MANDATORY)
+
+**NON-NEGOTIABLE:** TC must always update the Knowledge Page after every stretch (whenever TC executes one or more sprints together).
+
+The Knowledge Page is for SKC's learning, not documentation. Minimal updates are strictly prohibited.
+
+**TC MUST fully populate ALL 8 learning sections:**
+
+1. **Product Essentials**
+   - Product name, tagline, problem solved
+   - Target audience, unique value proposition
+
+2. **Core Frameworks**
+   - Frontend, backend, infrastructure, security frameworks
+
+3. **Technologies Used**
+   - Languages, databases, cloud services, APIs, tools
+
+4. **Key Capabilities**
+   - List of major capabilities the product offers
+
+5. **ELI5 (Explain Like I'm 5)**
+   - Simple explanation a child could understand
+
+6. **Real-World Analogy**
+   - Relatable comparison to everyday concepts
+
+7. **Explain to Different Audiences**
+   - Investors: ROI, market opportunity, traction
+   - CXOs: Strategic value, risk mitigation
+   - BDMs: Sales angles, customer pain points
+   - Hiring Managers: Tech stack, engineering challenges
+   - Engineers: Architecture, technical decisions
+
+8. **Innovation & Differentiation**
+   - What makes it unique, competitive advantage, future vision
+
+**Rules for content:**
+- Must be simple, clear, educational
+- Must help SKC understand and explain UPR to investors, CXOs, BDMs, hiring managers, and engineers
+- Must NOT include raw technical documentation
+- Must NOT skip ANY of the 8 sections
+
+**Enforcement:**
+- TC must never skip this Knowledge Page update step
+- TC must never perform minimal updates
+- TC must ensure the Knowledge Page is complete and synced before closing the stretch
+- Reference: `.claude/notion/sync.ts` for schema validation
+
 ---
 
 ## 6. Slash Commands
