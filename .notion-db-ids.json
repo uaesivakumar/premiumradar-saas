@@ -2,5 +2,6 @@
   "sprints_db_id": "5c32e26d-641a-4711-a9fb-619703943fb9",
   "module_features_db_id": "26ae5afe-4b5f-4d97-b402-5c459f188944",
   "knowledge_page_id": "f1552250-cafc-4f5f-90b0-edc8419e578b",
-  "notes": "PremiumRadar-SAAS Notion workspace. Token stored in GCP Secret Manager as NOTION_TOKEN_SAAS"
+  "notes": "PremiumRadar-SAAS Notion workspace. Token stored in GCP Secret Manager as NOTION_TOKEN_SAAS",
+  "token_notes": "Get token from GCP Secret Manager: gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS. This integration has full access to Sprints, Features, and Knowledge databases."
 }
