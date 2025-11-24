@@ -2,6 +2,9 @@
 
 Run comprehensive QA validation before certifying a sprint.
 
+**IMPORTANT:** This command validates the **STAGING** environment (upr.sivakumar.ai).
+Production deployment requires manual merge to `production` branch.
+
 ## EXECUTE ALL CHECKS IN ORDER:
 
 ### 1. Integration Tests
@@ -11,15 +14,18 @@ npm test
 Report: Pass/Fail count, any failures
 
 ### 2. API Health Check
-Check all 3 Cloud Run services:
+Check all Cloud Run services:
 ```bash
-# SaaS Service
-curl -s https://premiumradar-saas-service-191599223867.us-central1.run.app/api/health | jq .
+# SaaS Staging Service
+curl -s https://upr.sivakumar.ai/api/health | jq .
 
-# OS Service (requires auth)
+# SaaS Staging Service (direct Cloud Run URL)
+gcloud run services describe premiumradar-saas-staging --region=us-central1 --format="value(status.url)"
+
+# OS Service (requires auth - shared for both envs)
 gcloud run services describe upr-os-service --region=us-central1 --format="value(status.url)"
 
-# Worker Service
+# Worker Service (shared for both envs)
 gcloud run services describe upr-os-worker --region=us-central1 --format="value(status.url)"
 ```
 
@@ -44,22 +50,29 @@ npm run type-check 2>/dev/null || npx tsc --noEmit
 gcloud run services list --region=us-central1 --format="table(SERVICE,REGION,URL,LAST_DEPLOYED)"
 
 # Check service accounts
-for svc in premiumradar-saas-service upr-os-service upr-os-worker; do
+for svc in premiumradar-saas-staging premiumradar-saas-production upr-os-service upr-os-worker; do
   echo "=== $svc ==="
-  gcloud run services describe $svc --region=us-central1 --format="value(spec.template.spec.serviceAccountName)"
+  gcloud run services describe $svc --region=us-central1 --format="value(spec.template.spec.serviceAccountName)" 2>/dev/null || echo "Service not found"
 done
 ```
 
 ### 6. Security Validation
 ```bash
 # Check IAM bindings
-for svc in premiumradar-saas-service upr-os-service upr-os-worker; do
+for svc in premiumradar-saas-staging premiumradar-saas-production upr-os-service upr-os-worker; do
   echo "=== $svc IAM ==="
-  gcloud run services get-iam-policy $svc --region=us-central1 --format="table(bindings.role,bindings.members)"
+  gcloud run services get-iam-policy $svc --region=us-central1 --format="table(bindings.role,bindings.members)" 2>/dev/null || echo "Service not found"
 done
 
 # Check Cloud Armor (if configured)
 gcloud compute security-policies list 2>/dev/null || echo "No Cloud Armor policies"
+
+# Run security gate checks (from context)
+echo "Security Gate Checks:"
+echo "1. Prompt Injection Red-Team Suite - [MANUAL]"
+echo "2. Internal config leak verification - [MANUAL]"
+echo "3. OWASP top-10 smoke tests - [MANUAL]"
+echo "4. SECURITY_CHANGELOG.md updated - [VERIFY]"
 ```
 
 ### 7. OS → SaaS Dependency Check
