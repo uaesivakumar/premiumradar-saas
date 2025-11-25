@@ -17,8 +17,9 @@ export function Header() {
 
   const navItems = [
     { href: '#features', label: translations.nav.features },
-    { href: '#pricing', label: translations.nav.pricing },
+    { href: '/pricing', label: translations.nav.pricing },
     { href: '/docs', label: translations.nav.docs },
+    { href: '/dashboard/demo', label: 'Demo' },
   ];
 
   return (

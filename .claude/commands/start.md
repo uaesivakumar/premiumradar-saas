@@ -70,6 +70,17 @@ Provide a summary:
 - Run `npm run build` after major changes
 - Update Notion feature status when Done
 
+## NO HIDDEN FEATURES RULE (MANDATORY)
+**No sprint may be marked "Done" unless its UI is visible in staging.**
+
+For every feature, TC MUST verify:
+1. Route exists in `app/` directory
+2. Navigation link exists in Sidebar.tsx or Header.tsx
+3. Component renders without TypeScript errors
+4. Feature is accessible via UI navigation
+
+**If a feature has no UI surface, it must be explicitly documented as "Backend-only" in Notion.**
+
 ## Knowledge Page Rules (MANDATORY)
 After every stretch (one or more sprints), TC MUST update the Knowledge Page with ALL 8 sections:
 1. Product Essentials

@@ -22,6 +22,10 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Trophy,
+  Send,
+  Play,
+  Shield,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -41,12 +45,14 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Home', labelAr: 'الرئيسية', href: '/dashboard', icon: <Home size={20} /> },
   { label: 'Discovery', labelAr: 'الاكتشاف', href: '/dashboard/discovery', icon: <Search size={20} /> },
-  { label: 'Prospects', labelAr: 'العملاء المحتملين', href: '/dashboard/prospects', icon: <Users size={20} /> },
+  { label: 'Ranking', labelAr: 'التصنيف', href: '/dashboard/ranking', icon: <Trophy size={20} /> },
+  { label: 'Outreach', labelAr: 'التواصل', href: '/dashboard/outreach', icon: <Send size={20} /> },
   { label: 'Analytics', labelAr: 'التحليلات', href: '/dashboard/analytics', icon: <BarChart3 size={20} /> },
-  { label: 'Alerts', labelAr: 'التنبيهات', href: '/dashboard/alerts', icon: <Bell size={20} /> },
+  { label: 'Demo', labelAr: 'العرض', href: '/dashboard/demo', icon: <Play size={20} /> },
 ];
 
 const bottomItems: NavItem[] = [
+  { label: 'Admin', labelAr: 'الإدارة', href: '/dashboard/admin', icon: <Shield size={20} /> },
   { label: 'Settings', labelAr: 'الإعدادات', href: '/dashboard/settings', icon: <Settings size={20} /> },
   { label: 'Help', labelAr: 'المساعدة', href: '/dashboard/help', icon: <HelpCircle size={20} /> },
 ];

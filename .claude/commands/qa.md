@@ -118,15 +118,35 @@ For Features DB:
 
 **No stretch/sprint can be certified without complete Knowledge Page update!**
 
-### 9. Generate QA Report
+### 9. UI Integration Verification (NO HIDDEN FEATURES)
+**MANDATORY:** Every feature must have a visible UI surface.
+
+Check for each sprint feature:
+```bash
+# Verify all routes exist
+ls -la app/**/page.tsx
+
+# Verify navigation links
+grep -r "href=" components/shell/Sidebar.tsx components/layout/Header.tsx
+
+# Run TypeScript build
+npx tsc --noEmit
+```
+
+If a feature has no UI route:
+- Must be documented as "Backend-only" in Notion
+- Otherwise, QA FAILS
+
+### 10. Generate QA Report
 Create a summary report with:
 - Date/Time
 - Sprint number
 - All check results (Pass/Fail)
+- UI Integration status
 - Any warnings or issues
 - Recommendations
 
-### 10. Sprint Certification
+### 11. Sprint Certification
 If ALL checks pass:
 - Mark sprint as "Complete" in Notion
 - Create git tag: `sprint-X-certified`
