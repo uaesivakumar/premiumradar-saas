@@ -219,3 +219,38 @@ Before claiming certification:
 8. Confirm each route renders non-placeholder content
 
 **If any of the above fails, QA is NOT CERTIFIED.**
+
+---
+
+## MANDATORY DOM STRING VERIFICATION (2025-11-25)
+
+**TC MUST NOT certify or deploy UI changes unless the LIVE HOMEPAGE DOM is validated.**
+
+### Forbidden Template Strings (If present → FAIL)
+- "AI-Powered Intelligence Platform"
+- "Transform your business intelligence"
+- "Connect your data"
+- "15 integrations"
+- "Enterprise Clients"
+- "API Calls/Day"
+- "Query your data in English"
+- "Real-time processing"
+- Generic pricing ("Starter", "Professional")
+
+### Required Custom Strings (If missing → FAIL)
+- "SIVA"
+- "Q/T/L/E"
+- "Discovery Engine" / "Enrichment Engine" / "Ranking Engine" / "Outreach Engine"
+- "Cognitive Sales OS"
+- "UAE" (UAE signals, UAE companies, etc.)
+
+### DOM Verification Process
+```bash
+# Fetch live DOM
+curl -sL https://premiumradar-saas-staging-191599223867.us-central1.run.app | grep -E "(SIVA|Q/T/L/E|Discovery Engine|Cognitive)"
+
+# If client-side rendered, verify build ID and loading state
+curl -sL https://premiumradar-saas-staging-191599223867.us-central1.run.app | grep "Initializing SIVA"
+```
+
+**This rule is permanent and applies to ALL future deployments.**

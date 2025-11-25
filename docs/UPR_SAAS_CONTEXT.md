@@ -586,6 +586,22 @@ PremiumRadar SaaS Sprint = **COMPLETE** only if:
   - Features DB
   - Knowledge Page
 - ✅ Deployment validated on staging
+- ✅ **Homepage DOM verified** (no template content, SIVA/Q/T/L/E present)
+
+### Homepage DOM Verification Rule (MANDATORY)
+
+**TC MUST NOT certify or deploy UI changes unless the LIVE HOMEPAGE DOM is validated.**
+
+**Forbidden strings:** "AI-Powered Intelligence Platform", "Transform your business", "15 integrations", generic "Starter/Professional" pricing
+
+**Required strings:** "SIVA", "Q/T/L/E", "Discovery Engine", "Cognitive Sales OS", "UAE"
+
+```bash
+# Verification command
+curl -sL https://premiumradar-saas-staging-191599223867.us-central1.run.app | grep "Initializing SIVA"
+```
+
+**This is a permanent rule effective 2025-11-25.**
 
 ---
 
