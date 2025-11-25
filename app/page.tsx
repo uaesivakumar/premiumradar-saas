@@ -11,12 +11,22 @@
  * - S25: Premium SaaS Polish & Branding
  */
 
-import { Suspense, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
-import { DynamicOrb } from '@/components/ai-orb/DynamicOrb';
+
+// Dynamic import for 3D orb - must be client-only to avoid Three.js SSR crash
+const DynamicOrb = dynamic(
+  () => import('@/components/ai-orb/DynamicOrb').then(mod => mod.DynamicOrb),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-64 h-64 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/30 animate-pulse" />
+    )
+  }
+);
 import {
   VerticalLanding,
   VerticalSection,
@@ -167,7 +177,7 @@ function HeroSection() {
           Real-time insights, predictive analytics, and automated decisions.
         </motion.p>
 
-        {/* 3D Neural Orb */}
+        {/* 3D Neural Orb - dynamically imported with ssr: false */}
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -176,21 +186,15 @@ function HeroSection() {
           onMouseEnter={() => setOrbState('active')}
           onMouseLeave={() => setOrbState('idle')}
         >
-          <Suspense
-            fallback={
-              <div className="w-64 h-64 rounded-full bg-gradient-to-br from-blue-500/50 to-purple-500/50 animate-pulse" />
-            }
-          >
-            <DynamicOrb
-              primaryColor={industryConfig.primaryColor}
-              secondaryColor={industryConfig.secondaryColor}
-              size="lg"
-              state={orbState}
-              showParticles={true}
-              showConnections={true}
-              icon={<Brain className="w-12 h-12" />}
-            />
-          </Suspense>
+          <DynamicOrb
+            primaryColor={industryConfig.primaryColor}
+            secondaryColor={industryConfig.secondaryColor}
+            size="lg"
+            state={orbState}
+            showParticles={true}
+            showConnections={true}
+            icon={<Brain className="w-12 h-12" />}
+          />
         </motion.div>
 
         {/* CTA Buttons */}

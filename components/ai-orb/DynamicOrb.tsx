@@ -9,13 +9,12 @@
 
 'use client';
 
-import { useState, useEffect, Suspense, lazy } from 'react';
 import { motion } from 'framer-motion';
-import { useReducedMotion } from '@/lib/motion/hooks';
 import { springs } from '@/lib/motion/timing';
 
-// Lazy load 3D component to avoid SSR issues
-const NeuralOrb3D = lazy(() => import('./NeuralOrb3D').then(mod => ({ default: mod.NeuralOrb3D })));
+// DISABLED: 3D orb causes client-side crashes due to Three.js SSR issues
+// TODO: Re-enable when Three.js SSR issues are resolved
+// const NeuralOrb3D = lazy(() => import('./NeuralOrb3D').then(mod => ({ default: mod.NeuralOrb3D })));
 
 type OrbMode = '2d' | '3d' | 'auto';
 type OrbState = 'idle' | 'listening' | 'thinking' | 'responding' | 'active';
@@ -227,84 +226,21 @@ export function DynamicOrb({
   showConnections = true,
   icon,
 }: DynamicOrbProps) {
-  const [use3D, setUse3D] = useState(false);
-  const prefersReducedMotion = useReducedMotion();
-  const { dimension, iconSize } = sizeConfigs[size];
+  const { dimension } = sizeConfigs[size];
 
-  useEffect(() => {
-    if (mode === '2d') {
-      setUse3D(false);
-      return;
-    }
-
-    if (mode === '3d') {
-      setUse3D(true);
-      return;
-    }
-
-    // Auto mode: detect device capabilities
-    const checkWebGLSupport = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-        if (!gl) return false;
-
-        // Check for decent GPU
-        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-        if (debugInfo) {
-          const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-          // Avoid software renderers
-          if (renderer.toLowerCase().includes('swiftshader')) return false;
-        }
-
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    const checkPerformance = () => {
-      // Check for low-power devices
-      if (typeof navigator !== 'undefined') {
-        // Mobile detection (rough heuristic)
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        const isSmallScreen = window.innerWidth < 768;
-
-        // Prefer 2D on mobile/small screens for performance
-        if (isMobile || isSmallScreen) return false;
-      }
-
-      return true;
-    };
-
-    const should3D = !prefersReducedMotion && checkWebGLSupport() && checkPerformance();
-    setUse3D(should3D);
-  }, [mode, prefersReducedMotion]);
-
+  // TEMPORARILY FORCE 2D MODE
+  // Three.js/React Three Fiber causes client-side crashes due to SSR/hydration issues
+  // TODO: Re-enable 3D mode when Three.js issues are resolved
   return (
     <div className={`relative ${className}`}>
-      {use3D ? (
-        <Suspense fallback={<OrbLoader dimension={dimension} primaryColor={primaryColor} />}>
-          <NeuralOrb3D
-            primaryColor={primaryColor}
-            secondaryColor={secondaryColor}
-            size={dimension}
-            isActive={state !== 'idle'}
-            showParticles={showParticles}
-            showConnections={showConnections}
-            onClick={onClick}
-          />
-        </Suspense>
-      ) : (
-        <Orb2D
-          primaryColor={primaryColor}
-          secondaryColor={secondaryColor}
-          dimension={dimension}
-          state={state}
-          onClick={onClick}
-          icon={icon}
-        />
-      )}
+      <Orb2D
+        primaryColor={primaryColor}
+        secondaryColor={secondaryColor}
+        dimension={dimension}
+        state={state}
+        onClick={onClick}
+        icon={icon}
+      />
     </div>
   );
 }
