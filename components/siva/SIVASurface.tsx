@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * SIVA Surface - Sprint S26
+ * SIVA Surface - Sprint S26-S30
  * Full-screen AI canvas - the pageless workspace
+ * With Multi-Agent Orchestration & Reasoning Overlay
  */
 
 import { useEffect, useRef } from 'react';
@@ -13,9 +14,11 @@ import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store
 import { SIVAPersonaPanel } from './SIVAPersonaPanel';
 import { SIVAInputBar } from './SIVAInputBar';
 import { OutputObjectRenderer } from './OutputObjectRenderer';
+import { AgentSwitcher } from './AgentSwitcher';
+import { ReasoningOverlay, ReasoningToggle } from './ReasoningOverlay';
 
 export function SIVASurface() {
-  const { messages, outputObjects, state } = useSIVAStore();
+  const { messages, outputObjects, state, showReasoningOverlay, toggleReasoningOverlay } = useSIVAStore();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -225,12 +228,32 @@ export function SIVASurface() {
         </div>
       </div>
 
-      {/* Input Bar */}
+      {/* Input Bar with Agent Switcher */}
       <div className="flex-shrink-0 p-4 md:p-6 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto space-y-3">
+          {/* Agent Switcher - S28 */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex justify-center"
+          >
+            <AgentSwitcher size="sm" />
+          </motion.div>
+
+          {/* Command Bar */}
           <SIVAInputBar />
         </div>
       </div>
+
+      {/* Reasoning Toggle Button - S29 */}
+      <ReasoningToggle />
+
+      {/* Reasoning Overlay Panel - S29 */}
+      <AnimatePresence>
+        {showReasoningOverlay && (
+          <ReasoningOverlay isOpen={showReasoningOverlay} onClose={toggleReasoningOverlay} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

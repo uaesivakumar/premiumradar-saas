@@ -16,12 +16,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
 // Dynamic imports (SSR-safe)
-const DynamicOrb = dynamic(
+const DynamicOrb = nextDynamic(
   () => import('@/components/ai-orb/DynamicOrb').then(mod => mod.DynamicOrb),
   {
     ssr: false,
@@ -73,7 +73,7 @@ import {
 } from 'lucide-react';
 
 // Dynamic import for debug overlay (dev only)
-const MotionDebugOverlay = dynamic(
+const MotionDebugOverlay = nextDynamic(
   () => import('@/components/motion/MotionDebugOverlay').then(mod => mod.MotionDebugOverlay),
   { ssr: false }
 );
@@ -139,17 +139,34 @@ function AIGreetingSection() {
   const { detectedIndustry, setDetectedIndustry, setSelectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [flashColor, setFlashColor] = useState<string | null>(null);
+  const [prevIndustry, setPrevIndustry] = useState(detectedIndustry);
 
   const handleVerticalSelect = useCallback((industry: Industry) => {
+    if (industry === detectedIndustry) return; // Prevent same industry click
+
     const newConfig = INDUSTRY_CONFIGS[industry];
     setIsTransitioning(true);
+    setPrevIndustry(detectedIndustry);
+    setFlashColor(newConfig.primaryColor);
 
+    // Phase 1: Flash effect (0-300ms)
     setTimeout(() => {
+      // Phase 2: Update industry (300ms)
       setDetectedIndustry(industry, 0.95);
       setSelectedIndustry(industry);
-      setTimeout(() => setIsTransitioning(false), 400);
-    }, 200);
-  }, [setDetectedIndustry, setSelectedIndustry]);
+
+      // Phase 3: Hold flash briefly (300-600ms)
+      setTimeout(() => {
+        setFlashColor(null);
+      }, 300);
+
+      // Phase 4: End transition (800ms total)
+      setTimeout(() => {
+        setIsTransitioning(false);
+      }, 500);
+    }, 300);
+  }, [detectedIndustry, setDetectedIndustry, setSelectedIndustry]);
 
   return (
     <VerticalSection
@@ -158,6 +175,22 @@ function AIGreetingSection() {
       animationType="none"
       className="relative min-h-screen flex items-center justify-center"
     >
+      {/* Full-screen flash overlay during transition */}
+      <AnimatePresence>
+        {flashColor && (
+          <motion.div
+            className="fixed inset-0 pointer-events-none z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.3, 0.15, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            style={{
+              background: `radial-gradient(circle at center, ${flashColor}40 0%, transparent 70%)`,
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 text-center">
         {/* AI Tagline Badge */}
         <motion.div
@@ -176,10 +209,10 @@ function AIGreetingSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="mb-4"
+          className="mb-2"
         >
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
-            Meet{' '}
+            I'm{' '}
             <span className="relative inline-flex items-center">
               {/* Small inline orb/icon */}
               <motion.span
@@ -188,12 +221,13 @@ function AIGreetingSection() {
                   background: `linear-gradient(135deg, ${industryConfig.primaryColor}, ${industryConfig.secondaryColor})`,
                 }}
                 animate={{
-                  scale: isTransitioning ? [1, 1.2, 1] : 1,
+                  scale: isTransitioning ? [1, 1.3, 1.1, 1] : 1,
+                  rotate: isTransitioning ? [0, 10, -5, 0] : 0,
                   boxShadow: isTransitioning
-                    ? [`0 0 20px ${industryConfig.primaryColor}50`, `0 0 40px ${industryConfig.primaryColor}80`, `0 0 20px ${industryConfig.primaryColor}50`]
-                    : `0 0 20px ${industryConfig.primaryColor}40`,
+                    ? [`0 0 30px ${industryConfig.primaryColor}60`, `0 0 60px ${industryConfig.primaryColor}90`, `0 0 40px ${industryConfig.primaryColor}70`, `0 0 25px ${industryConfig.primaryColor}50`]
+                    : `0 0 25px ${industryConfig.primaryColor}50`,
                 }}
-                transition={{ duration: 0.4 }}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
               >
                 <Radar className="w-6 h-6 md:w-7 md:h-7 text-white" />
               </motion.span>
@@ -201,37 +235,113 @@ function AIGreetingSection() {
                 SIVA
               </span>
             </span>
+            , your AI{' '}
+            {/* Inline industry name with dramatic transition */}
+            <span className="relative inline-block">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={industryConfig.name}
+                  initial={{
+                    opacity: 0,
+                    y: 30,
+                    scale: 0.8,
+                    filter: 'blur(10px)',
+                  }}
+                  animate={{
+                    opacity: 1,
+                    y: 0,
+                    scale: 1,
+                    filter: 'blur(0px)',
+                  }}
+                  exit={{
+                    opacity: 0,
+                    y: -30,
+                    scale: 1.2,
+                    filter: 'blur(8px)',
+                  }}
+                  transition={{
+                    duration: 0.7,
+                    ease: [0.22, 1, 0.36, 1], // Custom easing for smooth feel
+                  }}
+                  className="inline-block"
+                  style={{
+                    color: industryConfig.primaryColor,
+                    textShadow: `0 0 30px ${industryConfig.primaryColor}60`,
+                  }}
+                >
+                  {industryConfig.name}
+                </motion.span>
+              </AnimatePresence>
+              {/* Underline glow effect */}
+              <motion.span
+                className="absolute -bottom-1 left-0 right-0 h-1 rounded-full"
+                style={{ backgroundColor: industryConfig.primaryColor }}
+                animate={{
+                  scaleX: isTransitioning ? [1, 1.5, 1] : 1,
+                  opacity: isTransitioning ? [0.5, 1, 0.7] : 0.7,
+                }}
+                transition={{ duration: 0.6 }}
+              />
+            </span>
           </h1>
         </motion.div>
 
-        {/* Dynamic Industry Title */}
+        {/* SIVA Explanation - small subtitle */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="text-sm text-gray-500 mb-4"
+        >
+          Sales Intelligence Virtual Agent
+        </motion.p>
+
+        {/* Subtitle - Intelligence Agent */}
         <AnimatePresence mode="wait">
           <motion.h2
-            key={industryConfig.name}
-            initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
+            key={`subtitle-${industryConfig.name}`}
+            initial={{ opacity: 0, y: 15, filter: 'blur(6px)' }}
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
-            transition={{ duration: 0.4 }}
-            className="text-2xl md:text-3xl lg:text-4xl font-semibold text-white mb-6"
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-2xl md:text-3xl font-semibold text-white mb-6"
           >
-            Your AI{' '}
-            <span style={{ color: industryConfig.primaryColor }}>
-              {industryConfig.name}
-            </span>{' '}
             Intelligence Agent
           </motion.h2>
         </AnimatePresence>
 
-        {/* Value Proposition */}
-        <motion.p
+        {/* Value Proposition with dynamic industry */}
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
           className="text-lg md:text-xl text-gray-400 mb-8 max-w-2xl mx-auto"
         >
-          Discover, score, and engage high-value prospects with
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 font-semibold"> cognitive AI reasoning</span>.
-        </motion.p>
+          <p>
+            Discover, score, and engage high-value{' '}
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={`vp-${industryConfig.name}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.5 }}
+                className="font-semibold"
+                style={{ color: industryConfig.primaryColor }}
+              >
+                {industryConfig.name.toLowerCase()}
+              </motion.span>
+            </AnimatePresence>{' '}
+            prospects
+          </p>
+          <p className="mt-1">
+            with{' '}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 font-semibold">
+              cognitive AI reasoning
+            </span>
+            .
+          </p>
+        </motion.div>
 
         {/* Industry Selector - Always visible, inline pills */}
         <motion.div
