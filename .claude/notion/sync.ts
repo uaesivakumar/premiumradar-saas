@@ -316,6 +316,52 @@ export async function executeNotionSync(
  */
 
 // ============================================================================
+// KNOWLEDGE PAGE FORMATTING RULES (Lessons Learned)
+// ============================================================================
+
+/**
+ * KNOWLEDGE PAGE FORMATTING - TC MUST:
+ *
+ * 1. Quick Reference Card at TOP (callout, blue background)
+ *    - Product, Tagline, Problem, Solution, Market, Moat
+ *    - Always visible, not collapsible
+ *
+ * 2. Table of Contents (use table_of_contents block)
+ *    - Auto-generates navigation links
+ *
+ * 3. Collapsible Toggles for sections 1-4, 7, 8
+ *    - Keeps page clean and scannable
+ *    - Use toggle blocks, not flat paragraphs
+ *
+ * 4. Highlighted Callouts for ELI5 & Analogy
+ *    - ELI5: yellow_background with child emoji
+ *    - Analogy: green_background with target emoji
+ *    - NOT collapsible (key learning aids)
+ *
+ * 5. Target ~30 blocks total (NOT 100+ blocks)
+ *    - Use | separators for inline lists
+ *    - Keep content concise inside toggles
+ *
+ * FORBIDDEN FORMATTING:
+ * - 100+ flat blocks (page becomes unusable)
+ * - Long paragraphs without structure
+ * - Nested bullet lists 3+ levels deep
+ * - Making ELI5/Analogy collapsible
+ * - Skipping Quick Reference Card
+ *
+ * Reference: scripts/notion/updateKnowledgePage8Sections.js
+ */
+
+export const KNOWLEDGE_PAGE_FORMAT = {
+  targetBlocks: 30,
+  maxBlocks: 50,
+  quickRefColor: 'blue_background',
+  eli5Color: 'yellow_background',
+  analogyColor: 'green_background',
+  footerColor: 'gray_background',
+};
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 

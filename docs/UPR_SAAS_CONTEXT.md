@@ -276,10 +276,44 @@ The Knowledge Page is for SKC's learning, not documentation. Minimal updates are
 - Must NOT include raw technical documentation
 - Must NOT skip ANY of the 8 sections
 
+**Formatting Rules (CRITICAL - Lessons Learned):**
+
+TC MUST use organized Notion formatting:
+
+1. **Quick Reference Card** - Always at top using `callout` block (blue background)
+   - Contains: Product, Tagline, Problem, Solution, Market, Moat
+   - Always visible (not collapsible)
+
+2. **Table of Contents** - Use Notion's `table_of_contents` block
+   - Auto-generates links to all sections
+
+3. **Collapsible Toggles** - Use `toggle` blocks for sections 1-4, 7, 8
+   - Keeps page clean and scannable
+   - User expands only what they need
+
+4. **Highlighted Callouts** - Use `callout` blocks for ELI5 & Analogy
+   - ELI5: Yellow background with child emoji
+   - Analogy: Green background with target emoji
+   - Always visible (these are key learning aids)
+
+5. **Concise Content** - Keep content brief inside toggles
+   - Use `|` separators for lists (not bullet points)
+   - Target: ~30 blocks total (NOT 100+ blocks)
+
+**FORBIDDEN Formatting:**
+- Creating 100+ flat blocks (page becomes unusable)
+- Long paragraphs without structure
+- Nested bullet lists that go 3+ levels deep
+- Skipping Quick Reference Card
+- Making ELI5/Analogy collapsible (they should always be visible)
+
+**Reference Script:** `scripts/notion/updateKnowledgePage8Sections.js`
+
 **Enforcement:**
 - TC must never skip this Knowledge Page update step
 - TC must never perform minimal updates
 - TC must ensure the Knowledge Page is complete and synced before closing the stretch
+- TC must use organized formatting (toggles, callouts, quick reference)
 - Reference: `.claude/notion/sync.ts` for schema validation
 
 ---
