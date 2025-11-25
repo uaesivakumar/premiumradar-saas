@@ -15,6 +15,16 @@ export type {
   ComposerState,
 } from './types';
 
+// Workflow Types
+export type {
+  WorkflowStage,
+  OutreachRecipient,
+  OutreachDraft,
+  ScheduledSend,
+  SendResult,
+  WorkflowState,
+} from './workflow';
+
 // Templates
 export {
   BANKING_TEMPLATES,
@@ -38,3 +48,15 @@ export {
   calculateTiming,
   getTimingExplanation,
 } from './timing';
+
+// Workflow
+export {
+  useOutreachWorkflowStore,
+  getStageInfo,
+  getWorkflowProgress,
+  canGoBack,
+  canGoForward,
+  getChannelInfo,
+  formatScheduledTime,
+  getDeliveryStatusInfo,
+} from './workflow';

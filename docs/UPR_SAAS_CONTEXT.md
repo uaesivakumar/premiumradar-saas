@@ -269,20 +269,74 @@ The Knowledge Page is for SKC's learning, not documentation. Minimal updates are
 Every sub-page MUST follow this exact structure (see `/Users/skc/Downloads/Sample KNowledge page.pdf`):
 
 ```
-🎈 Simple Explanation (ELI5)    ← H2 Orange, with YELLOW CALLOUT block
-💡 [Simple explanation...]      ← Callout (yellow_background)
+🎯 Simple Explanation (ELI5)    ← H2 with color: "orange"
+💡 [Simple explanation...]      ← Callout with color: "yellow_background"
 
-🌍 Real-World Analogy           ← H2 Green, with QUOTE block
-[Relatable analogy...]          ← Quote (green_background)
+🌍 Real-World Analogy           ← H2 with color: "green"
+[Relatable analogy...]          ← Quote block with color: "green_background"
 
-⚙️ Technical Explanation        ← H2 Purple
+⚙️ Technical Explanation        ← H2 with color: "purple"
 [How it works technically...]   ← Plain paragraph
 
-🛠️ Implementation Details      ← H2 Blue
+🛠️ Implementation Details      ← H2 with color: "blue"
 • Component: [...]              ← Bullet list with files created
-• Files: [...]
-• Key code patterns: [...]
 ```
+
+#### NOTION API BLOCK TEMPLATES (MANDATORY)
+
+```javascript
+// 1. COLORED HEADING (orange, green, purple, blue)
+const coloredHeading = (text, color) => ({
+  object: 'block',
+  type: 'heading_2',
+  heading_2: {
+    rich_text: [{ type: 'text', text: { content: text } }],
+    color: color  // "orange", "green", "purple", "blue"
+  }
+});
+
+// 2. YELLOW CALLOUT (for ELI5)
+const yellowCallout = (text, emoji = '💡') => ({
+  object: 'block',
+  type: 'callout',
+  callout: {
+    rich_text: [{ type: 'text', text: { content: text } }],
+    icon: { type: 'emoji', emoji: emoji },
+    color: 'yellow_background'  // MUST be yellow_background
+  }
+});
+
+// 3. GREEN QUOTE (for Real-World Analogy)
+const greenQuote = (text) => ({
+  object: 'block',
+  type: 'quote',
+  quote: {
+    rich_text: [{ type: 'text', text: { content: text } }],
+    color: 'green_background'  // MUST be green_background
+  }
+});
+
+// 4. BROWN CALLOUT (alternative for important notes)
+const brownCallout = (text, emoji = '📌') => ({
+  object: 'block',
+  type: 'callout',
+  callout: {
+    rich_text: [{ type: 'text', text: { content: text } }],
+    icon: { type: 'emoji', emoji: emoji },
+    color: 'brown_background'
+  }
+});
+```
+
+**MANDATORY COLOR SCHEME:**
+| Section | Block Type | Color |
+|---------|------------|-------|
+| ELI5 Heading | heading_2 | `orange` |
+| ELI5 Content | callout | `yellow_background` |
+| Analogy Heading | heading_2 | `green` |
+| Analogy Content | quote | `green_background` |
+| Technical Heading | heading_2 | `purple` |
+| Implementation Heading | heading_2 | `blue` |
 
 **Optional sections (add if relevant):**
 - ❓ Why It Was Created (Problem/Solution/Impact)
@@ -341,40 +395,43 @@ TC must create a stream-specific knowledge script following the pattern:
 
 ### MANDATORY GOVERNANCE ENFORCEMENT (CRITICAL - NEVER SKIP)
 
-**AFTER EVERY STRETCH (multiple sprints completed together), TC MUST perform ALL FOUR governance actions:**
+**AFTER EVERY STRETCH, TC MUST RUN THE MASTER GOVERNANCE SCRIPT:**
 
-1. **Update Sprints DB** (full property population)
-   - ALL required fields must be populated
-   - Status, Goal, Business Value, Highlights, Outcomes, Learnings, Branch, Commits Count
-   - Minimal updates are FORBIDDEN
+```bash
+# MANDATORY - Run this after EVERY stretch
+export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)
+npx tsx scripts/notion/governanceComplete.js <sprint_start> <sprint_end>
 
-2. **Update Features DB** (full property population)
-   - ALL features must have: Name, Sprint, Status, Priority, Complexity, Type, Notes, Tags
-   - Done checkbox must be set to true for completed features
-   - Minimal updates are FORBIDDEN
+# Then run stream-specific knowledge pages
+npx tsx scripts/notion/createColorfulKnowledgePages.js
+```
 
-3. **Update Knowledge Page** (all 8 learning sections)
-   - Product Essentials, Core Frameworks, Technologies Used, Key Capabilities
-   - ELI5, Real-World Analogy, Explain to Different Audiences
-   - Innovation & Differentiation
-   - Use organized Notion formatting (callouts, toggles)
+**Master Script Location:** `scripts/notion/governanceComplete.js`
 
-4. **Run /qa certification and post full report**
-   - Build verification
-   - Type check + lint results
-   - File counts & LOC
-   - Routes created
-   - Performance metrics
-   - Security verification
-   - Deployment verification
+**What the script does automatically:**
+1. ✅ Updates ALL sprints in range → Status = Done
+2. ✅ Updates ALL features in range → Status = Done
+3. ✅ Runs `npm run build` → Verifies no errors
+4. ✅ Runs `npx tsc --noEmit` → Verifies no type errors
+5. ✅ Prints governance summary with pass/fail
+
+**Knowledge Pages (separate script):**
+- Run `scripts/notion/createColorfulKnowledgePages.js` for colorful pages
+- MUST use colored headings (orange, green, purple, blue)
+- MUST use yellow callouts for ELI5
+- MUST use green quotes for analogies
+- See "NOTION API BLOCK TEMPLATES" section above
 
 **CRITICAL RULES:**
-- TC MUST NOT deliver engineering output without governance output
-- TC MUST NOT skip ANY of the 4 governance actions
-- TC MUST run all governance actions BEFORE committing code
-- Governance violation = TC failure
+- TC MUST run `governanceComplete.js` BEFORE marking stretch complete
+- TC MUST NOT deliver code without passing governance
+- TC MUST NOT manually update Notion (use scripts only)
+- Governance failure = Sprint failure
 
-**Reference Script:** `scripts/notion/governanceUpdateStream1.js`
+**If script fails:**
+1. Fix the error (build/type/etc)
+2. Re-run the script
+3. Only proceed when script shows "✅ GOVERNANCE COMPLETE"
 
 ---
 
