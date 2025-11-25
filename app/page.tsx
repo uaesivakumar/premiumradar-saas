@@ -138,126 +138,32 @@ function NeuralMeshBackground() {
 function AIGreetingSection() {
   const { detectedIndustry, setDetectedIndustry, setSelectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
-  const [orbState, setOrbState] = useState<'idle' | 'listening' | 'thinking' | 'responding'>('idle');
-  const [greeting, setGreeting] = useState("I'm SIVA, your AI Sales Intelligence Agent");
-  const [showVerticalPicker, setShowVerticalPicker] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [flashColor, setFlashColor] = useState<string | null>(null);
-
-  // Simulate SIVA responding on initial load
-  useEffect(() => {
-    const sequence = async () => {
-      await new Promise(r => setTimeout(r, 1500));
-      setOrbState('thinking');
-      await new Promise(r => setTimeout(r, 1000));
-      setOrbState('responding');
-      setGreeting(`I'm SIVA, your AI ${industryConfig.name} Intelligence Agent`);
-      await new Promise(r => setTimeout(r, 2000));
-      setOrbState('idle');
-    };
-    sequence();
-  // Only run once on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleVerticalSelect = useCallback((industry: Industry) => {
     const newConfig = INDUSTRY_CONFIGS[industry];
-
-    // Start dramatic transition
     setIsTransitioning(true);
-    setOrbState('thinking');
-    setFlashColor(newConfig.primaryColor);
 
-    // Phase 1: Thinking animation (orb pulses)
     setTimeout(() => {
-      // Phase 2: Flash effect + content change
       setDetectedIndustry(industry, 0.95);
       setSelectedIndustry(industry);
-      setOrbState('responding');
-      setGreeting(`I'm SIVA, your AI ${newConfig.name} Intelligence Agent`);
-      setShowVerticalPicker(false);
-
-      // Phase 3: Settle down
-      setTimeout(() => {
-        setOrbState('idle');
-        setIsTransitioning(false);
-        setFlashColor(null);
-      }, 1200);
-    }, 600);
+      setTimeout(() => setIsTransitioning(false), 400);
+    }, 200);
   }, [setDetectedIndustry, setSelectedIndustry]);
-
-  // Dramatic text animation variants
-  const dramaticTextVariants = {
-    hidden: {
-      opacity: 0,
-      y: 30,
-      scale: 0.9,
-      filter: 'blur(10px)',
-    },
-    visible: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      filter: 'blur(0px)',
-      transition: {
-        duration: 0.6,
-        ease: [0.25, 0.1, 0.25, 1],
-      },
-    },
-    exit: {
-      opacity: 0,
-      y: -20,
-      scale: 1.05,
-      filter: 'blur(8px)',
-      transition: {
-        duration: 0.3,
-      },
-    },
-  };
 
   return (
     <VerticalSection
       id="section-0"
       background="transparent"
       animationType="none"
-      className="relative min-h-screen flex items-center justify-center overflow-hidden"
+      className="relative min-h-screen flex items-center justify-center"
     >
-      {/* Flash Overlay - appears during transition */}
-      <AnimatePresence>
-        {flashColor && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 0.3, 0] }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.8, times: [0, 0.3, 1] }}
-            className="absolute inset-0 z-10 pointer-events-none"
-            style={{
-              background: `radial-gradient(circle at center, ${flashColor}40 0%, transparent 70%)`,
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Pulse Ring - appears during transition */}
-      <AnimatePresence>
-        {isTransitioning && (
-          <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 2.5, opacity: [0, 0.5, 0] }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1.2, ease: 'easeOut' }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full border-2 pointer-events-none z-10"
-            style={{ borderColor: flashColor || industryConfig.primaryColor }}
-          />
-        )}
-      </AnimatePresence>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center relative z-20">
-        {/* AI Tagline */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 text-center">
+        {/* AI Tagline Badge */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-6"
         >
           <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-300 border border-blue-500/30">
             <Cpu className="w-4 h-4 mr-2" />
@@ -265,134 +171,110 @@ function AIGreetingSection() {
           </span>
         </motion.div>
 
-        {/* SIVA Orb with enhanced animation - reduced size */}
+        {/* Main Headline with inline SIVA icon */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{
-            opacity: 1,
-            scale: isTransitioning ? [1, 1.15, 1] : 1,
-          }}
-          transition={{
-            delay: 0.3,
-            duration: isTransitioning ? 0.6 : 0.8,
-            scale: { duration: 0.6, ease: 'easeInOut' },
-          }}
-          className="mb-4 flex flex-col items-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-4"
         >
-          {/* Orb with cursor hint */}
-          <motion.div
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.98 }}
-            className="cursor-pointer relative group"
-          >
-            <DynamicOrb
-              primaryColor={industryConfig.primaryColor}
-              secondaryColor={industryConfig.secondaryColor}
-              size="lg"
-              state={orbState}
-              showParticles={true}
-              showConnections={true}
-              icon={<Radar className="w-12 h-12" />}
-              onClick={() => setShowVerticalPicker(!showVerticalPicker)}
-            />
-            {/* Hover ring effect */}
-            <motion.div
-              className="absolute inset-0 rounded-full border-2 border-dashed pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ borderColor: industryConfig.primaryColor }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
-            />
-          </motion.div>
-
-          {/* Click hint text */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: showVerticalPicker ? 0 : 0.7 }}
-            className="mt-3 text-sm text-gray-400 flex items-center gap-1"
-          >
-            <span className="inline-block w-4 h-4 rounded-full bg-white/20 animate-pulse" />
-            Click to choose your industry
-          </motion.p>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
+            Meet{' '}
+            <span className="relative inline-flex items-center">
+              {/* Small inline orb/icon */}
+              <motion.span
+                className="inline-flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-full mr-2"
+                style={{
+                  background: `linear-gradient(135deg, ${industryConfig.primaryColor}, ${industryConfig.secondaryColor})`,
+                }}
+                animate={{
+                  scale: isTransitioning ? [1, 1.2, 1] : 1,
+                  boxShadow: isTransitioning
+                    ? [`0 0 20px ${industryConfig.primaryColor}50`, `0 0 40px ${industryConfig.primaryColor}80`, `0 0 20px ${industryConfig.primaryColor}50`]
+                    : `0 0 20px ${industryConfig.primaryColor}40`,
+                }}
+                transition={{ duration: 0.4 }}
+              >
+                <Radar className="w-6 h-6 md:w-7 md:h-7 text-white" />
+              </motion.span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                SIVA
+              </span>
+            </span>
+          </h1>
         </motion.div>
 
-        {/* SIVA Greeting - Enhanced dramatic animation */}
+        {/* Dynamic Industry Title */}
         <AnimatePresence mode="wait">
-          <motion.h1
-            key={greeting}
-            variants={dramaticTextVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-4"
-          >
-            {greeting}
-          </motion.h1>
-        </AnimatePresence>
-
-        {/* Value Proposition - Also animates on change */}
-        <AnimatePresence mode="wait">
-          <motion.p
+          <motion.h2
             key={industryConfig.name}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-xl md:text-2xl text-gray-400 mb-8 max-w-3xl mx-auto"
+            initial={{ opacity: 0, y: 20, filter: 'blur(8px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+            transition={{ duration: 0.4 }}
+            className="text-2xl md:text-3xl lg:text-4xl font-semibold text-white mb-6"
           >
-            Discover, score, and engage high-value{' '}
-            <motion.span
-              key={`industry-${industryConfig.name}`}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-white font-medium"
-              style={{ color: industryConfig.primaryColor }}
-            >
-              {industryConfig.name.toLowerCase()}
-            </motion.span>{' '}
-            prospects with
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 font-semibold"> cognitive AI reasoning</span>.
-          </motion.p>
+            Your AI{' '}
+            <span style={{ color: industryConfig.primaryColor }}>
+              {industryConfig.name}
+            </span>{' '}
+            Intelligence Agent
+          </motion.h2>
         </AnimatePresence>
 
-        {/* Vertical Picker - Enhanced with stagger animation */}
-        <AnimatePresence>
-          {showVerticalPicker && (
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
-              className="mb-8 flex flex-wrap justify-center gap-3"
-            >
-              {Object.values(INDUSTRY_CONFIGS).filter(c => c.id !== 'general').map((config, index) => (
-                <motion.button
-                  key={config.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05, duration: 0.3 }}
-                  whileHover={{ scale: 1.05, backgroundColor: `${config.primaryColor}30` }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleVerticalSelect(config.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                    detectedIndustry === config.id
-                      ? 'bg-white text-slate-900 shadow-lg'
-                      : 'bg-white/10 text-white hover:bg-white/20'
-                  }`}
-                  style={detectedIndustry === config.id ? { boxShadow: `0 0 20px ${config.primaryColor}50` } : {}}
-                >
-                  <span className="mr-1">{config.icon}</span> {config.name}
-                </motion.button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Value Proposition */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="text-lg md:text-xl text-gray-400 mb-8 max-w-2xl mx-auto"
+        >
+          Discover, score, and engage high-value prospects with
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 font-semibold"> cognitive AI reasoning</span>.
+        </motion.p>
+
+        {/* Industry Selector - Always visible, inline pills */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="mb-10"
+        >
+          <p className="text-sm text-gray-500 mb-3">Select your industry:</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {Object.values(INDUSTRY_CONFIGS).filter(c => c.id !== 'general').map((config) => (
+              <motion.button
+                key={config.id}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleVerticalSelect(config.id)}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  detectedIndustry === config.id
+                    ? 'text-white shadow-lg'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10'
+                }`}
+                style={
+                  detectedIndustry === config.id
+                    ? {
+                        background: `linear-gradient(135deg, ${config.primaryColor}, ${config.secondaryColor})`,
+                        boxShadow: `0 4px 20px ${config.primaryColor}40`,
+                      }
+                    : {}
+                }
+              >
+                <span className="mr-1.5">{config.icon}</span>
+                {config.name}
+              </motion.button>
+            ))}
+          </div>
+        </motion.div>
 
         {/* CTA Buttons */}
         <motion.div
-          variants={heroCtaTransition}
-          initial="hidden"
-          animate="visible"
-          className="flex flex-col sm:flex-row gap-4 justify-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="flex flex-col sm:flex-row gap-4 justify-center mb-10"
         >
           <PremiumButton
             variant="gradient"
@@ -402,7 +284,7 @@ function AIGreetingSection() {
             rightIcon={<ArrowRight className="w-5 h-5" />}
             onClick={() => (window.location.href = '/register')}
           >
-            Start Discovery
+            Start Free Trial
           </PremiumButton>
           <PremiumButton
             variant="outline"
@@ -411,40 +293,29 @@ function AIGreetingSection() {
             leftIcon={<Play className="w-5 h-5" />}
             onClick={() => document.getElementById('section-4')?.scrollIntoView({ behavior: 'smooth' })}
           >
-            Watch SIVA Demo
+            Watch Demo
           </PremiumButton>
         </motion.div>
 
-        {/* Vertical Badge - Animated on change */}
+        {/* Industry Tagline Badge */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={`badge-${industryConfig.id}`}
-            initial={{ opacity: 0, y: 20, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-12"
+            key={`tagline-${industryConfig.id}`}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
           >
-            <motion.div
-              className="inline-flex items-center gap-3 px-5 py-3 rounded-full border backdrop-blur-sm"
+            <div
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm border"
               style={{
-                borderColor: `${industryConfig.primaryColor}50`,
-                backgroundColor: `${industryConfig.primaryColor}15`,
-                boxShadow: `0 0 30px ${industryConfig.primaryColor}20`,
+                borderColor: `${industryConfig.primaryColor}40`,
+                backgroundColor: `${industryConfig.primaryColor}10`,
               }}
-              whileHover={{ scale: 1.02 }}
             >
-              <motion.span
-                key={`icon-${industryConfig.icon}`}
-                initial={{ rotate: -180, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                transition={{ duration: 0.5 }}
-                className="text-2xl"
-              >
-                {industryConfig.icon}
-              </motion.span>
-              <span className="text-gray-200 font-medium">{industryConfig.tagline}</span>
-            </motion.div>
+              <span>{industryConfig.icon}</span>
+              <span className="text-gray-300">{industryConfig.tagline}</span>
+            </div>
           </motion.div>
         </AnimatePresence>
       </div>
