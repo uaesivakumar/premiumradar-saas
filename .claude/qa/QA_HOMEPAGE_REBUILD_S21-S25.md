@@ -1,0 +1,198 @@
+# QA Certification: Homepage Rebuild - AI-First 2030 Experience
+
+**Date:** 2025-11-25
+**Sprint:** Stream 10 (S21-S25)
+**Type:** Homepage Full Rebuild
+
+============================================================
+
+## REBUILD VERIFICATION CHECKLIST
+
+### SECTION A: AI Greeting Layer (SIVA Persona)
+
+| Feature | Status |
+|---------|--------|
+| SIVA AI persona greeting | PASS |
+| DynamicOrb (2D mode, SSR-safe) | PASS |
+| Vertical detection + picker | PASS |
+| Industry-adaptive colors | PASS |
+| Magnetic CTA buttons | PASS |
+| Neural mesh background | PASS |
+| Orb state machine (idle/thinking/responding) | PASS |
+
+### SECTION B: Cognitive Engine Showcase
+
+| Engine | Status |
+|--------|--------|
+| Discovery Engine | PASS |
+| Enrichment Engine | PASS |
+| Ranking Engine | PASS |
+| Outreach Engine | PASS |
+| Capability badges | PASS |
+| PremiumCard + tilt effect | PASS |
+
+### SECTION C: Q/T/L/E Scoring
+
+| Score | Status |
+|-------|--------|
+| Q (Qualification) | PASS |
+| T (Timing) | PASS |
+| L (Likelihood) | PASS |
+| E (Effort) | PASS |
+| Animated score bars | PASS |
+| Factor breakdowns | PASS |
+
+### SECTION D: Intelligence Layer
+
+| Feature | Status |
+|---------|--------|
+| Autonomous Reasoning | PASS |
+| Signal Detection | PASS |
+| Decision Maker Mapping | PASS |
+| Personalized Messaging | PASS |
+| Pipeline Forecasting | PASS |
+| Vertical Expertise (dynamic) | PASS |
+
+### SECTION E: MicroDemo (Cinematic)
+
+| Step | Status |
+|------|--------|
+| SIVA Discovers Prospects | PASS |
+| Q/T/L/E Scoring animation | PASS |
+| Autonomous Outreach | PASS |
+| Auto-play mode | PASS |
+| Timeline UI | PASS |
+
+### SECTION F: Stats / Social Proof
+
+| Stat | Status |
+|------|--------|
+| UAE Companies Indexed (50,000+) | PASS |
+| Signals Processed Daily (2M+) | PASS |
+| Q/T/L/E Accuracy (94%) | PASS |
+| Pipeline Velocity (3x) | PASS |
+| AnimatedCounter | PASS |
+
+### SECTION G: Pricing
+
+| Plan | Status |
+|------|--------|
+| Discovery ($299) | PASS |
+| Intelligence ($799) - Popular | PASS |
+| Enterprise (Custom) | PASS |
+| UPR-specific feature copy | PASS |
+
+### SECTION H: Final CTA
+
+| Feature | Status |
+|---------|--------|
+| Mini orb animation | PASS |
+| Dual CTA buttons | PASS |
+| Industry-adaptive gradient | PASS |
+
+============================================================
+
+## CONTENT VERIFICATION
+
+### Generic Content Removed
+
+- [x] No generic SaaS hero
+- [x] No generic "business intelligence" copy
+- [x] No generic analytics features
+- [x] No template UI elements
+
+### UPR-Specific Content Added
+
+- [x] SIVA AI persona introduced
+- [x] Q/T/L/E scoring explained
+- [x] Discovery → Enrichment → Ranking → Outreach pipeline
+- [x] UAE + Banking vertical intelligence
+- [x] Autonomous sales reasoning messaging
+- [x] Cognitive Sales OS positioning
+
+============================================================
+
+## TECHNICAL VERIFICATION
+
+### Build Status
+
+```
+ Build Output:
+├ ○ /                   21.9 kB    158 kB (First Load JS)
+```
+
+- [x] Build passes without errors
+- [x] No TypeScript errors
+- [x] SSR-safe (2D orb only, Three.js disabled)
+- [x] Dynamic imports working
+
+### Components Used
+
+| Component | Usage |
+|-----------|-------|
+| DynamicOrb | Hero + Final CTA |
+| VerticalLanding | 8 sections |
+| VerticalSection | All sections |
+| ScrollProgressBar | Global |
+| MicroDemo | Section 5 |
+| PremiumCard | Engines, Q/T/L/E, Intelligence, Stats |
+| PremiumButton | All CTAs |
+| AnimatedSection | All section headers |
+| AnimatedCounter | Stats section |
+| NavDots | Navigation |
+| ScrollIndicator | Bottom |
+
+### Motion System
+
+| Feature | Status |
+|---------|--------|
+| heroTitleTransition | PASS |
+| heroSubtitleTransition | PASS |
+| heroCtaTransition | PASS |
+| staggerContainer | PASS |
+| staggerItem | PASS |
+| Scroll-triggered animations | PASS |
+
+============================================================
+
+## HOMEPAGE SECTIONS (Final Order)
+
+1. **SIVA** - AI Greeting Layer (Hero)
+2. **Engines** - Cognitive Engine Showcase
+3. **Q/T/L/E** - Scoring System
+4. **Intelligence** - AI Features
+5. **Demo** - MicroDemo Cinematic
+6. **Results** - Stats/Social Proof
+7. **Pricing** - Plans
+8. **Start** - Final CTA
+
+============================================================
+
+## SSR CONSTRAINT COMPLIANCE
+
+| Rule | Status |
+|------|--------|
+| DynamicOrb in 2D mode | PASS |
+| NeuralOrb3D disabled | PASS |
+| No GLSL shaders | PASS |
+| No R3F imports | PASS |
+| isMounted check | PASS |
+| LoadingFallback | PASS |
+
+============================================================
+
+## CERTIFICATION
+
+### Homepage Rebuild: CERTIFIED
+
+- **Design Standard:** 2030 AI-First Experience
+- **Content:** UPR Sales OS Specific (Zero Generic)
+- **Components:** All Stream 10 Components Integrated
+- **Build:** Passing
+- **SSR:** Safe (2D Only)
+
+**Certification Status:** PASS
+
+---
+*Generated by Claude Code QA Suite*
+*2025-11-25*
