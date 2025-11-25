@@ -1,20 +1,14 @@
 /**
  * Dynamic AI Orb Component - Sprint S22
  *
- * Intelligently switches between 2D and 3D orb based on:
- * - Device performance capabilities
- * - User preferences (reduced motion)
- * - Screen size
+ * 2D animated gradient orb with state-based animations.
+ * SSR-safe: No Three.js dependencies.
  */
 
 'use client';
 
 import { motion } from 'framer-motion';
 import { springs } from '@/lib/motion/timing';
-
-// DISABLED: 3D orb causes client-side crashes due to Three.js SSR issues
-// TODO: Re-enable when Three.js SSR issues are resolved
-// const NeuralOrb3D = lazy(() => import('./NeuralOrb3D').then(mod => ({ default: mod.NeuralOrb3D })));
 
 type OrbMode = '2d' | '3d' | 'auto';
 type OrbState = 'idle' | 'listening' | 'thinking' | 'responding' | 'active';
