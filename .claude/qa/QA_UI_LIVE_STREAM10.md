@@ -1,7 +1,15 @@
 # Live UI QA Report - Stream 10 (S21-S25)
 
-**Date:** 2025-11-25 10:40 UTC
+**Date:** 2025-11-25 11:20 UTC (Updated)
 **Staging URL:** https://premiumradar-saas-staging-191599223867.us-central1.run.app
+**Revision:** premiumradar-saas-staging-00005-zkd
+
+## CRITICAL FIX APPLIED
+
+**Issue:** Client-side exception on page load ("Application error")
+**Root Cause:** SSR hooks (useReducedMotion, useScrollDirection, etc.) accessing window/document during server render
+**Fix:** Added SSR guards + isMounted state check + LoadingFallback component
+**Commit:** `fix(frontend): resolve Stream10 landing crash`
 
 ============================================================
 
