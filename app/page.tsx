@@ -11,8 +11,9 @@
  * - S25: Premium SaaS Polish & Branding
  */
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { DynamicOrb } from '@/components/ai-orb/DynamicOrb';
@@ -27,7 +28,7 @@ import { MicroDemo } from '@/components/demo/MicroDemo';
 import { PremiumCard, FeatureCard, PricingCard, StatCard } from '@/components/premium/PremiumCard';
 import { PremiumButton, FAB } from '@/components/premium/PremiumButton';
 import { AnimatedSection } from '@/components/motion/AnimatedSection';
-import { MotionDebugOverlay } from '@/components/motion/MotionDebugOverlay';
+
 import {
   heroTitleTransition,
   heroSubtitleTransition,
@@ -48,6 +49,12 @@ import {
   CheckCircle,
   MessageSquare,
 } from 'lucide-react';
+
+// Dynamic import for debug overlay (dev only, no SSR)
+const MotionDebugOverlay = dynamic(
+  () => import('@/components/motion/MotionDebugOverlay').then(mod => mod.MotionDebugOverlay),
+  { ssr: false }
+);
 
 // ============================================
 // NEURAL MESH BACKGROUND
@@ -645,11 +652,37 @@ function CTASection() {
 }
 
 // ============================================
+// SSR LOADING FALLBACK
+// ============================================
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500/50 to-purple-500/50 animate-pulse" />
+        <p className="text-gray-400">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // MAIN PAGE COMPONENT
 // ============================================
 
 export default function Home() {
   const sections = ['Hero', 'Stats', 'Features', 'Demo', 'Pricing', 'CTA'];
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Ensure client-side only rendering for interactive components
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Show loading state during SSR
+  if (!isMounted) {
+    return <LoadingFallback />;
+  }
 
   return (
     <>

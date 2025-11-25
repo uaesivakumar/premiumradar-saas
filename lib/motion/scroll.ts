@@ -152,6 +152,7 @@ export function useInView(options: ViewportOptions = {}) {
 
 /**
  * Advanced viewport detection with progress
+ * SSR-safe: returns default values on server
  */
 export function useViewportProgress(rootMargin = '-10% 0px') {
   const ref = useRef<HTMLDivElement>(null);
@@ -159,6 +160,9 @@ export function useViewportProgress(rootMargin = '-10% 0px') {
   const [isInView, setIsInView] = useState(false);
 
   useEffect(() => {
+    // SSR guard
+    if (typeof window === 'undefined') return;
+
     const element = ref.current;
     if (!element) return;
 
@@ -193,12 +197,16 @@ export function useViewportProgress(rootMargin = '-10% 0px') {
 
 /**
  * Detect scroll direction
+ * SSR-safe: returns null on server
  */
 export function useScrollDirection() {
   const [direction, setDirection] = useState<'up' | 'down' | null>(null);
   const [prevScrollY, setPrevScrollY] = useState(0);
 
   useEffect(() => {
+    // SSR guard
+    if (typeof window === 'undefined') return;
+
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
 
@@ -220,12 +228,16 @@ export function useScrollDirection() {
 
 /**
  * Hide element on scroll down, show on scroll up
+ * SSR-safe: returns false on server
  */
 export function useHideOnScroll(threshold = 50) {
   const [hidden, setHidden] = useState(false);
   const [prevScrollY, setPrevScrollY] = useState(0);
 
   useEffect(() => {
+    // SSR guard
+    if (typeof window === 'undefined') return;
+
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       const diff = currentScrollY - prevScrollY;
@@ -252,11 +264,15 @@ export function useHideOnScroll(threshold = 50) {
 
 /**
  * Get current scroll position as percentage
+ * SSR-safe: returns 0 on server
  */
 export function useScrollPercentage() {
   const [percentage, setPercentage] = useState(0);
 
   useEffect(() => {
+    // SSR guard
+    if (typeof window === 'undefined') return;
+
     const handleScroll = () => {
       const windowHeight = window.innerHeight;
       const documentHeight = document.documentElement.scrollHeight;

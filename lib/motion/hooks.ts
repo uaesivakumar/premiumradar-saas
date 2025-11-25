@@ -65,11 +65,15 @@ interface MousePosition {
 
 /**
  * Track mouse position relative to viewport
+ * SSR-safe: returns {x: 0, y: 0} on server
  */
 export function useMousePosition(): MousePosition {
   const [position, setPosition] = useState<MousePosition>({ x: 0, y: 0 });
 
   useEffect(() => {
+    // SSR guard
+    if (typeof window === 'undefined') return;
+
     const handleMouseMove = (e: MouseEvent) => {
       setPosition({ x: e.clientX, y: e.clientY });
     };
@@ -120,6 +124,7 @@ export function useRelativeMousePosition() {
 
 /**
  * Smooth spring-based mouse tracking
+ * SSR-safe: returns static values on server
  */
 export function useSmoothMouse(springConfig = springs.smooth) {
   const mouseX = useMotionValue(0);
@@ -128,6 +133,9 @@ export function useSmoothMouse(springConfig = springs.smooth) {
   const smoothY = useSpring(mouseY, springConfig);
 
   useEffect(() => {
+    // SSR guard
+    if (typeof window === 'undefined') return;
+
     const handleMouseMove = (e: MouseEvent) => {
       mouseX.set(e.clientX);
       mouseY.set(e.clientY);
@@ -291,11 +299,15 @@ export function useMagneticEffect(strength = 0.3) {
 
 /**
  * Detect user's reduced motion preference
+ * SSR-safe: returns false on server
  */
 export function useReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
+    // SSR guard - only access window in browser
+    if (typeof window === 'undefined') return;
+
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     setPrefersReducedMotion(mediaQuery.matches);
 
