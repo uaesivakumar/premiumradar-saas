@@ -239,82 +239,131 @@ TC: Executes Sprint S1
 
 The Knowledge Page is for SKC's learning, not documentation. Minimal updates are strictly prohibited.
 
-**TC MUST fully populate ALL 8 learning sections:**
+---
 
-1. **Product Essentials**
-   - Product name, tagline, problem solved
-   - Target audience, unique value proposition
+#### MULTI-PAGE STRUCTURE (CRITICAL)
 
-2. **Core Frameworks**
-   - Frontend, backend, infrastructure, security frameworks
+**Each stream MUST create MULTIPLE sub-pages under the Knowledge Page** - one page per major concept/feature. A single page for an entire stream is FORBIDDEN.
 
-3. **Technologies Used**
-   - Languages, databases, cloud services, APIs, tools
+**Rule:** For every 3-5 features, create 1 learning page. A stream with 29 features should have ~5-7 learning pages.
 
-4. **Key Capabilities**
-   - List of major capabilities the product offers
+**Example - Stream 1 (Front-End Experience):**
+```
+📚 Knowledge (parent page)
+├── 🚀 What is PremiumRadar?        ← Product Overview
+├── 🔮 The AI Orb Interaction Model  ← Sprint 1 concept
+├── 🎨 Vertical Morphing Engine      ← Sprint 1 concept
+├── 🎯 Demo-Before-Signup Architecture ← Sprint 2 concept
+└── 🏠 SaaS Shell & Dashboard        ← Sprint 3-4 concept
+```
 
-5. **ELI5 (Explain Like I'm 5)**
-   - Simple explanation a child could understand
+**How to identify pages:**
+1. Group related features by concept
+2. Ask: "What is the ONE thing SKC should learn from these features?"
+3. That becomes the page title
 
-6. **Real-World Analogy**
-   - Relatable comparison to everyday concepts
+---
 
-7. **Explain to Different Audiences**
-   - Investors: ROI, market opportunity, traction
-   - CXOs: Strategic value, risk mitigation
-   - BDMs: Sales angles, customer pain points
-   - Hiring Managers: Tech stack, engineering challenges
-   - Engineers: Architecture, technical decisions
+#### EACH SUB-PAGE STRUCTURE (Following UPR Template)
 
-8. **Innovation & Differentiation**
-   - What makes it unique, competitive advantage, future vision
+Every sub-page MUST follow this exact structure (see `/Users/skc/Downloads/Sample KNowledge page.pdf`):
 
-**Rules for content:**
-- Must be simple, clear, educational
-- Must help SKC understand and explain UPR to investors, CXOs, BDMs, hiring managers, and engineers
-- Must NOT include raw technical documentation
-- Must NOT skip ANY of the 8 sections
+```
+🎈 Simple Explanation (ELI5)    ← H2 Orange, with YELLOW CALLOUT block
+💡 [Simple explanation...]      ← Callout (yellow_background)
 
-**Formatting Rules (CRITICAL - Lessons Learned):**
+🌍 Real-World Analogy           ← H2 Green, with QUOTE block
+[Relatable analogy...]          ← Quote (green_background)
 
-TC MUST use organized Notion formatting:
+⚙️ Technical Explanation        ← H2 Purple
+[How it works technically...]   ← Plain paragraph
 
-1. **Quick Reference Card** - Always at top using `callout` block (blue background)
-   - Contains: Product, Tagline, Problem, Solution, Market, Moat
-   - Always visible (not collapsible)
+🛠️ Implementation Details      ← H2 Blue
+• Component: [...]              ← Bullet list with files created
+• Files: [...]
+• Key code patterns: [...]
+```
 
-2. **Table of Contents** - Use Notion's `table_of_contents` block
-   - Auto-generates links to all sections
+**Optional sections (add if relevant):**
+- ❓ Why It Was Created (Problem/Solution/Impact)
+- 🚫 What If It Didn't Exist
+- 💻 Technologies Behind It
+- 🎭 Explain to Different Audiences (toggle blocks)
 
-3. **Collapsible Toggles** - Use `toggle` blocks for sections 1-4, 7, 8
-   - Keeps page clean and scannable
-   - User expands only what they need
+---
 
-4. **Highlighted Callouts** - Use `callout` blocks for ELI5 & Analogy
-   - ELI5: Yellow background with child emoji
-   - Analogy: Green background with target emoji
-   - Always visible (these are key learning aids)
+#### KEY FORMATTING RULES
 
-5. **Concise Content** - Keep content brief inside toggles
-   - Use `|` separators for lists (not bullet points)
-   - Target: ~30 blocks total (NOT 100+ blocks)
+1. **ELI5 = Yellow Callout** - Always visible, uses `callout` with `yellow_background`
+2. **Analogy = Green Quote** - Always visible, uses `quote` with `green_background`
+3. **Color-coded Headings** - Each section has its own color for easy scanning
+4. **Bullet Lists** - Clean, simple bullets for lists (not nested)
+5. **Sub-pages** - Click Knowledge → See list of learning topics → Click one → Learn
 
-**FORBIDDEN Formatting:**
-- Creating 100+ flat blocks (page becomes unusable)
-- Long paragraphs without structure
-- Nested bullet lists that go 3+ levels deep
-- Skipping Quick Reference Card
-- Making ELI5/Analogy collapsible (they should always be visible)
+**FORBIDDEN:**
+- ❌ ONE page for entire stream (must be multiple pages)
+- ❌ Creating 100+ flat blocks in one page
+- ❌ Long paragraphs without structure
+- ❌ Making ELI5/Analogy collapsible (they should always be visible)
+- ❌ Skipping the visual hierarchy (colors, callouts, toggles)
+- ❌ Using plain text where callouts/quotes should be used
 
-**Reference Script:** `scripts/notion/updateKnowledgePage8Sections.js`
+---
+
+#### AUTOMATION
+
+**Reference Script:** `scripts/notion/createKnowledgePages.js`
+**Template Reference:** `/Users/skc/Downloads/Sample KNowledge page.pdf`
+
+TC must create a stream-specific knowledge script following the pattern:
+```javascript
+// scripts/notion/createKnowledgePagesStream<N>.js
+// Creates sub-pages under Knowledge page for Stream N
+```
 
 **Enforcement:**
 - TC must never skip this Knowledge Page update step
-- TC must never perform minimal updates
-- TC must ensure the Knowledge Page is complete and synced before closing the stretch
-- TC must use organized formatting (toggles, callouts, quick reference)
-- Reference: `.claude/notion/sync.ts` for schema validation
+- TC must never perform minimal updates (one page = failure)
+- TC must create 1 page per major concept (5-7 pages per stream)
+- TC must ensure all pages follow the ELI5 + Analogy + Technical structure
+- TC must verify pages are created before closing the stretch
+
+### MANDATORY GOVERNANCE ENFORCEMENT (CRITICAL - NEVER SKIP)
+
+**AFTER EVERY STRETCH (multiple sprints completed together), TC MUST perform ALL FOUR governance actions:**
+
+1. **Update Sprints DB** (full property population)
+   - ALL required fields must be populated
+   - Status, Goal, Business Value, Highlights, Outcomes, Learnings, Branch, Commits Count
+   - Minimal updates are FORBIDDEN
+
+2. **Update Features DB** (full property population)
+   - ALL features must have: Name, Sprint, Status, Priority, Complexity, Type, Notes, Tags
+   - Done checkbox must be set to true for completed features
+   - Minimal updates are FORBIDDEN
+
+3. **Update Knowledge Page** (all 8 learning sections)
+   - Product Essentials, Core Frameworks, Technologies Used, Key Capabilities
+   - ELI5, Real-World Analogy, Explain to Different Audiences
+   - Innovation & Differentiation
+   - Use organized Notion formatting (callouts, toggles)
+
+4. **Run /qa certification and post full report**
+   - Build verification
+   - Type check + lint results
+   - File counts & LOC
+   - Routes created
+   - Performance metrics
+   - Security verification
+   - Deployment verification
+
+**CRITICAL RULES:**
+- TC MUST NOT deliver engineering output without governance output
+- TC MUST NOT skip ANY of the 4 governance actions
+- TC MUST run all governance actions BEFORE committing code
+- Governance violation = TC failure
+
+**Reference Script:** `scripts/notion/governanceUpdateStream1.js`
 
 ---
 
