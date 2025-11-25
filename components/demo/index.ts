@@ -15,3 +15,4 @@ export {
 } from './LockedFeature';
 export { DemoPipeline } from './DemoPipeline';
 export { DemoDiscovery } from './DemoDiscovery';
+export { MicroDemo, Spotlight, TooltipGuide } from './MicroDemo';

@@ -4,6 +4,7 @@
  * Hero Section - AI-First Landing Experience
  * Sprint 1: AI Orb + Vertical Morphing + Responsive
  * Sprint 2: Chat Interface Integration
+ * Sprint S21: Premium Motion Engine Integration
  */
 
 import { useState } from 'react';
@@ -12,12 +13,21 @@ import { AIOrb } from '@/components/ai-orb/AIOrb';
 import { ChatInterface } from '@/components/chat';
 import { useIndustryStore, getIndustryConfig, Industry } from '@/lib/stores/industry-store';
 import { useTranslation } from '@/lib/stores/locale-store';
+import {
+  heroTitleTransition,
+  heroSubtitleTransition,
+  heroCtaTransition,
+  heroOrbTransition,
+} from '@/lib/motion/transitions';
+import { springs, easings, durations } from '@/lib/motion/timing';
+import { useReducedMotion } from '@/lib/motion/hooks';
 
 export function Hero() {
   const { detectedIndustry, setSelectedIndustry } = useIndustryStore();
   const { translations, isRTL } = useTranslation();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const industryConfig = getIndustryConfig(detectedIndustry);
+  const prefersReducedMotion = useReducedMotion();
 
   const handleIndustryDetected = (industry: Industry) => {
     setSelectedIndustry(industry);
@@ -68,32 +78,44 @@ export function Hero() {
             </span>
           </motion.div>
 
-          {/* Main Title */}
+          {/* Main Title - S21 Enhanced */}
           <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            variants={heroTitleTransition}
+            initial="hidden"
+            animate="visible"
             className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6"
           >
             {translations.hero.title.split('Radar')[0]}
-            <span style={{ color: industryConfig.primaryColor }}>Radar</span>
+            <motion.span
+              style={{ color: industryConfig.primaryColor }}
+              animate={prefersReducedMotion ? {} : {
+                textShadow: [
+                  `0 0 20px ${industryConfig.primaryColor}00`,
+                  `0 0 30px ${industryConfig.primaryColor}40`,
+                  `0 0 20px ${industryConfig.primaryColor}00`,
+                ],
+              }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              Radar
+            </motion.span>
           </motion.h1>
 
-          {/* Subtitle */}
+          {/* Subtitle - S21 Enhanced */}
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            variants={heroSubtitleTransition}
+            initial="hidden"
+            animate="visible"
             className="text-xl md:text-2xl text-gray-600 mb-12 max-w-2xl"
           >
             {translations.hero.description}
           </motion.p>
 
-          {/* AI Orb */}
+          {/* AI Orb - S21 Premium Animation */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3, duration: 0.5 }}
+            variants={heroOrbTransition}
+            initial="hidden"
+            animate="visible"
             className="mb-12"
           >
             <AIOrb
@@ -109,18 +131,22 @@ export function Hero() {
             onClose={() => setIsChatOpen(false)}
           />
 
-          {/* CTA Buttons */}
+          {/* CTA Buttons - S21 Enhanced */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
+            variants={heroCtaTransition}
+            initial="hidden"
+            animate="visible"
             className="flex flex-col sm:flex-row gap-4"
           >
             <motion.a
               href="/signup"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="px-8 py-4 rounded-xl text-white font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow"
+              whileHover={prefersReducedMotion ? {} : {
+                scale: 1.03,
+                boxShadow: `0 20px 40px -10px ${industryConfig.primaryColor}40`,
+              }}
+              whileTap={{ scale: 0.97 }}
+              transition={springs.snappy}
+              className="px-8 py-4 rounded-xl text-white font-semibold text-lg shadow-lg transition-shadow"
               style={{
                 background: `linear-gradient(135deg, ${industryConfig.primaryColor}, ${industryConfig.secondaryColor})`,
               }}
@@ -129,8 +155,12 @@ export function Hero() {
             </motion.a>
             <motion.a
               href="#demo"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={prefersReducedMotion ? {} : {
+                scale: 1.03,
+                backgroundColor: `${industryConfig.primaryColor}10`,
+              }}
+              whileTap={{ scale: 0.97 }}
+              transition={springs.snappy}
               className="px-8 py-4 rounded-xl border-2 font-semibold text-lg transition-colors"
               style={{
                 borderColor: industryConfig.primaryColor,
