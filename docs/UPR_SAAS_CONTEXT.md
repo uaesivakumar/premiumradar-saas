@@ -299,6 +299,17 @@ Every sub-page MUST follow this exact structure (see `/Users/skc/Downloads/Sampl
 3. **Color-coded Headings** - Each section has its own color for easy scanning
 4. **Bullet Lists** - Clean, simple bullets for lists (not nested)
 5. **Sub-pages** - Click Knowledge → See list of learning topics → Click one → Learn
+6. **Last Updated in Title** - Every page title MUST include `(Updated: YYYY-MM-DD)` suffix
+
+**Page Title Format:**
+```
+📚 Topic Name (Updated: 2025-11-25)
+```
+Example titles:
+- `🎯 Q/T/L/E Scoring Engine (Updated: 2025-11-25)`
+- `🏦 Banking Signal Library (Updated: 2025-11-25)`
+
+This makes it easy to see at a glance which pages have recent content vs outdated content.
 
 **FORBIDDEN:**
 - ❌ ONE page for entire stream (must be multiple pages)
