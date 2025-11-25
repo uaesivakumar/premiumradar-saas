@@ -194,3 +194,28 @@ Warnings: Y
 - All checks must pass for certification
 - If any check fails, fix issues before re-running
 - The sprint is NOT certified until all checks pass
+
+---
+
+## NO FAKE UI CERTIFICATION RULE (MANDATORY)
+
+**TC MUST NOT claim "UI integrated" or "Full-Phase QA & UI Integration Sweep Complete"
+unless the live staging URL visually reflects the new UI.**
+
+Verification must be done at the ROUTE and COMPONENT level:
+- `app/page.tsx` must show the latest planned hero
+- All Phase-2 pages must be reachable by navigation
+- Any mismatch between code and live UI = **QA FAILURE**
+
+### Live Verification Checklist
+Before claiming certification:
+1. Push code to main branch
+2. Wait for Cloud Run deployment to complete
+3. Load https://upr.sivakumar.ai in browser
+4. Verify landing page shows new AI-first hero (not old Sprint-1 layout)
+5. Verify AI Orb is visible and clickable
+6. Verify chat interface opens when orb is clicked
+7. Navigate to each dashboard route via Sidebar
+8. Confirm each route renders non-placeholder content
+
+**If any of the above fails, QA is NOT CERTIFIED.**

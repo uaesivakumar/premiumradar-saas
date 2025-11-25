@@ -141,12 +141,25 @@ export function Hero() {
             </motion.a>
           </motion.div>
 
+          {/* Powered by Badge */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="mt-8"
+          >
+            <span className="inline-flex items-center px-4 py-2 rounded-full bg-gray-900 text-white text-sm font-medium">
+              <span className="w-2 h-2 rounded-full bg-green-400 mr-2 animate-pulse" />
+              Powered by UPR OS v1.0.0
+            </span>
+          </motion.div>
+
           {/* Trust Badges */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.7 }}
-            className="mt-16 flex flex-wrap justify-center gap-8 text-gray-400"
+            className="mt-8 flex flex-wrap justify-center gap-8 text-gray-400"
           >
             <div className="flex items-center gap-2">
               <span className="text-green-500">●</span>
