@@ -284,7 +284,12 @@ export async function GET() {
             name: dbConfig.name,
             description: dbConfig.description || '',
             relevantSignalTypes: dbConfig.config?.allowedSignalTypes || [],
-            defaultKPIs: dbConfig.config?.defaultKPIs || [],
+            defaultKPIs: (dbConfig.config?.defaultKPIs || []).map((kpi: { product: string; target: number; unit: string; period: string }) => ({
+              product: kpi.product,
+              defaultTarget: kpi.target,
+              unit: kpi.unit,
+              period: kpi.period as 'monthly' | 'quarterly' | 'yearly',
+            })),
           },
         ],
         allowedSignalTypes: dbConfig.config?.allowedSignalTypes || [],
