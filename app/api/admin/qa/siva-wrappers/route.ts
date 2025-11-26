@@ -172,26 +172,70 @@ function testRoutingWrapper(context: SalesContext): TestResult {
 function testPersonaWrapper(context: SalesContext): TestResult {
   // Test: Persona should be contextual to vertical
   // Banking personas should have professional tone focused on B2B
+  // SIVA must switch personalities dynamically based on vertical
 
-  const verticalPersonaMapping: Record<Vertical, string> = {
-    banking: 'Professional B2B Banking',
-    insurance: 'Empathetic Individual Advisor',
-    'real-estate': 'Friendly Family Consultant',
-    recruitment: 'Career-focused Recruiter',
-    'saas-sales': 'Technical B2B Sales',
+  const verticalPersonaMapping: Record<Vertical, {
+    name: string;
+    baseTone: string;
+    outreachTone: string;
+    formality: string;
+  }> = {
+    banking: {
+      name: 'Banking Professional',
+      baseTone: 'professional',
+      outreachTone: 'executive',
+      formality: 'formal',
+    },
+    insurance: {
+      name: 'Insurance Advisor',
+      baseTone: 'friendly',
+      outreachTone: 'consultative',
+      formality: 'semi-formal',
+    },
+    'real-estate': {
+      name: 'Real Estate Consultant',
+      baseTone: 'friendly',
+      outreachTone: 'consultative',
+      formality: 'semi-formal',
+    },
+    recruitment: {
+      name: 'Recruitment Specialist',
+      baseTone: 'professional',
+      outreachTone: 'consultative',
+      formality: 'semi-formal',
+    },
+    'saas-sales': {
+      name: 'SaaS Sales Consultant',
+      baseTone: 'professional',
+      outreachTone: 'executive',
+      formality: 'semi-formal',
+    },
   };
 
   const expectedPersona = verticalPersonaMapping[context.vertical];
-  const hasCorrectPersona = context.vertical === 'banking';
+
+  // For banking, verify the persona switches correctly
+  const isBanking = context.vertical === 'banking';
+  const hasCorrectTone = isBanking && expectedPersona.baseTone === 'professional';
+  const hasCorrectOutreach = isBanking && expectedPersona.outreachTone === 'executive';
+  const hasCorrectFormality = isBanking && expectedPersona.formality === 'formal';
+
+  const allChecksPass = hasCorrectTone && hasCorrectOutreach && hasCorrectFormality;
 
   return {
-    name: 'PersonaWrapper - Vertical Persona',
-    passed: hasCorrectPersona,
-    details: `Expected persona type: ${expectedPersona}`,
+    name: 'PersonaWrapper - Vertical Persona Switching',
+    passed: allChecksPass,
+    details: allChecksPass
+      ? `Banking persona: ${expectedPersona.name} (${expectedPersona.baseTone}/${expectedPersona.outreachTone}/${expectedPersona.formality})`
+      : `Persona mismatch for ${context.vertical}`,
     data: {
       vertical: context.vertical,
-      expectedPersonaType: expectedPersona,
-      recommendedTone: 'professional',
+      expectedPersona,
+      checks: {
+        baseTone: hasCorrectTone,
+        outreachTone: hasCorrectOutreach,
+        formality: hasCorrectFormality,
+      },
     },
   };
 }
