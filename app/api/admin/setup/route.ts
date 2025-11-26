@@ -248,6 +248,44 @@ const BANKING_EMPLOYEE_UAE_CONFIG: VerticalConfigData = {
     },
   ],
 
+  timingSignals: [
+    {
+      id: 'cbuae-open-banking',
+      name: 'CBUAE Open Banking Deadline',
+      description: 'Central Bank UAE open banking framework compliance',
+      deadline: '2025-06-01',
+      urgencyMultiplier: 1.5,
+    },
+    {
+      id: 'q4-budget-planning',
+      name: 'Q4 Budget Planning',
+      description: 'Annual budget planning period',
+      months: [9, 10, 11],
+      urgencyMultiplier: 1.3,
+    },
+  ],
+
+  b2bAdjustments: {
+    companySize: {
+      enterprise: 1.3,
+      'mid-market': 1.2,
+      smb: 1.0,
+      startup: 0.9,
+    },
+    decisionSpeed: {
+      privateBank: 0.8,
+      governmentBank: 1.5,
+      internationalBank: 1.0,
+      fintech: 0.6,
+    },
+    dealCycle: {
+      tier1Bank: 12,
+      tier2Bank: 9,
+      challengerBank: 6,
+      fintech: 3,
+    },
+  },
+
   enrichmentSources: [
     {
       id: 'apollo',
