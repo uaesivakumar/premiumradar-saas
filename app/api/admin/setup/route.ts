@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS vertical_configs (
   sub_vertical VARCHAR(50) NOT NULL,
   region_country VARCHAR(50) NOT NULL,
   region_city VARCHAR(100),
+  region_territory VARCHAR(100),
 
   -- Display info
   name VARCHAR(200) NOT NULL,
@@ -74,6 +75,17 @@ CREATE TRIGGER trigger_vertical_configs_updated_at
   BEFORE UPDATE ON vertical_configs
   FOR EACH ROW
   EXECUTE FUNCTION update_vertical_configs_updated_at();
+
+-- Add region_territory column if it doesn't exist (for existing tables)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'vertical_configs' AND column_name = 'region_territory'
+  ) THEN
+    ALTER TABLE vertical_configs ADD COLUMN region_territory VARCHAR(100);
+  END IF;
+END $$;
 `;
 
 // =============================================================================

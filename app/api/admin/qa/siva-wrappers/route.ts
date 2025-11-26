@@ -11,6 +11,9 @@
  * 5. Object Creation - Should pick correct type based on radar target
  */
 
+// Force dynamic rendering - this route needs to hit the database
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import { getVerticalConfigCached } from '@/lib/admin/vertical-config-service';
 import {
