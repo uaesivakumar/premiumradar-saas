@@ -1,6 +1,6 @@
-# QA Report: Sprint S31 - AI-First Signup
+# QA Report: Sprint S37 - AI-First Signup
 
-**Sprint:** S31
+**Sprint:** S37
 **Name:** AI-First Signup
 **Date:** 2025-11-26
 **Status:** CERTIFIED
@@ -71,7 +71,7 @@ Replace old /login and /signup with 2030 AI-first UI featuring SIVA-assisted flo
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║                     SPRINT S31 CERTIFIED                     ║
+║                     SPRINT S37 CERTIFIED                     ║
 ║                                                              ║
 ║  Features:    6/6 (100%)                                     ║
 ║  Build:       PASS                                           ║

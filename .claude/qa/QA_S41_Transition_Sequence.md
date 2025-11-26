@@ -1,6 +1,6 @@
-# QA Report: Sprint S35 - Transition Sequence → SIVA Pageless Workspace
+# QA Report: Sprint S41 - Transition Sequence → SIVA Pageless Workspace
 
-**Sprint:** S35
+**Sprint:** S41
 **Name:** Transition Sequence → SIVA Pageless Workspace
 **Date:** 2025-11-26
 **Status:** CERTIFIED
@@ -107,7 +107,7 @@ User clicks "Ready to begin"
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║                     SPRINT S35 CERTIFIED                     ║
+║                     SPRINT S41 CERTIFIED                     ║
 ║                                                              ║
 ║  Features:    7/7 (100%)                                     ║
 ║  Build:       PASS                                           ║

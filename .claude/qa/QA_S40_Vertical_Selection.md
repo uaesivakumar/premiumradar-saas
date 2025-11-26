@@ -1,6 +1,6 @@
-# QA Report: Sprint S34 - Vertical Selection + Intelligence Setup
+# QA Report: Sprint S40 - Vertical Selection + Intelligence Setup
 
-**Sprint:** S34
+**Sprint:** S40
 **Name:** Vertical Selection + Intelligence Setup
 **Date:** 2025-11-26
 **Status:** CERTIFIED
@@ -96,7 +96,7 @@ setVertical(vertical: VerticalId): void
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║                     SPRINT S34 CERTIFIED                     ║
+║                     SPRINT S40 CERTIFIED                     ║
 ║                                                              ║
 ║  Features:    8/8 (100%)                                     ║
 ║  Build:       PASS                                           ║
