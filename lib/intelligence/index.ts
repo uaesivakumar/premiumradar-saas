@@ -16,7 +16,7 @@
 export * from './hooks';
 
 // S43: Intent & Contextual Understanding
-// export * from './intent';
+export * from './intent';
 
 // S44: Evidence & Signals Reasoning
 // export * from './evidence';
@@ -30,5 +30,38 @@ export * from './hooks';
 // S47: Agent Personality & Tone Pack System
 // export * from './persona';
 
-// Shared types
-export * from './types';
+// Shared types (S44-S47 - export only non-conflicting types)
+// Note: Intent types are exported from ./intent
+// Evidence, Routing, Objects, Persona types will be exported from their modules
+export type {
+  Evidence,
+  ReasoningChain,
+  ReasoningChainStep,
+  EvidencePack,
+  ScoreJustification,
+  RoutingMode,
+  RoutingDecision,
+  ExecutionStep,
+  OrchestrationPlan,
+  FallbackPath,
+  AgentHandoff,
+  LiveObject,
+  ObjectThread,
+  ThreadMessage,
+  ObjectInspectorData,
+  ObjectHistoryEntry,
+  ObjectLink,
+  ObjectSession,
+  ToneType,
+  OutreachToneType,
+  PersonaConfig,
+  PersonaTrait,
+  TonePack,
+  ToneModifier,
+  PersonalizationEntry,
+  LearnedPattern,
+  IntentWrapperResult,
+  RoutingWrapperResult,
+  EvidenceWrapperResult,
+  PersonaWrapperResult,
+} from './types';

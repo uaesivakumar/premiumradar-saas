@@ -5,116 +5,220 @@
  *
  * Pattern:
  *   1. User query comes in
- *   2. IntentClassifier analyzes query → Intent
- *   3. EntityExtractor extracts entities
- *   4. QueryNormalizer normalizes query
- *   5. ContextMemory stores for follow-ups
- *   6. THEN calls existing submitQuery (unchanged)
+ *   2. Resolve references from context memory
+ *   3. IntentClassifier analyzes query → Intent
+ *   4. EntityExtractor extracts entities
+ *   5. QueryNormalizer normalizes query
+ *   6. ContextMemory stores for follow-ups
+ *   7. THEN calls existing submitQuery (unchanged)
  *
  * CRITICAL: This hook WRAPS submitQuery, it does NOT replace it.
  */
 
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { useSIVAStore } from '@/lib/stores/siva-store';
-import type {
-  Intent,
-  IntentType,
-  ExtractedEntity,
-  NormalizedQuery,
-  ContextMemoryEntry,
-  IntentWrapperResult,
-} from '../types';
+import { useIntentStore } from '@/lib/stores/intent-store';
+import {
+  classifyIntent,
+  extractEntities,
+  normalizeQuery,
+  needsContextResolution,
+  getRequiredAgents,
+} from '../intent';
+import type { IntentClassification, EntityExtractionResult, NormalizedQuery } from '../intent/types';
 
-// Placeholder - will be implemented in S43
-const classifyIntent = async (query: string): Promise<Intent> => {
-  // TODO: S43 - Implement IntentClassifier
-  return {
-    type: 'meta.unknown' as IntentType,
-    confidence: 0.5,
-    agents: ['discovery'],
-    entities: [],
-    normalized: {
-      original: query,
-      normalized: query,
-      parameters: {},
-    },
-  };
-};
+// =============================================================================
+// Types
+// =============================================================================
 
-// Placeholder - will be implemented in S43
-const extractEntities = async (query: string): Promise<ExtractedEntity[]> => {
-  // TODO: S43 - Implement EntityExtractor
-  return [];
-};
+export interface IntentWrapperResult {
+  /**
+   * Process a query through the intelligence layer, then call submitQuery
+   */
+  processQuery: (query: string) => Promise<void>;
 
-// Placeholder - will be implemented in S43
-const normalizeQuery = (query: string, intent: Intent): NormalizedQuery => {
-  // TODO: S43 - Implement QueryNormalizer
-  return {
-    original: query,
-    normalized: query,
-    parameters: {},
-  };
-};
+  /**
+   * Current intent classification
+   */
+  currentIntent: IntentClassification | null;
+
+  /**
+   * Current extracted entities
+   */
+  currentEntities: EntityExtractionResult | null;
+
+  /**
+   * Current normalized query
+   */
+  currentNormalized: NormalizedQuery | null;
+
+  /**
+   * Whether classification is in progress
+   */
+  isProcessing: boolean;
+
+  /**
+   * Recent companies from context memory
+   */
+  recentCompanies: string[];
+
+  /**
+   * Recent sectors from context memory
+   */
+  recentSectors: string[];
+
+  /**
+   * Recent regions from context memory
+   */
+  recentRegions: string[];
+
+  /**
+   * Clear context memory
+   */
+  clearContext: () => void;
+}
+
+// =============================================================================
+// Hook Implementation
+// =============================================================================
 
 /**
  * Intent Wrapper Hook
  *
  * Usage:
- *   const { processQuery, currentIntent, contextMemory } = useIntentWrapper();
+ *   const { processQuery, currentIntent, recentCompanies } = useIntentWrapper();
  *   await processQuery("Find banking companies in UAE");
+ *
+ * Follow-up with context:
+ *   await processQuery("Score them"); // "them" resolves to found companies
  */
 export function useIntentWrapper(): IntentWrapperResult {
-  const { submitQuery } = useSIVAStore();
+  // Existing SIVA store (UNCHANGED - we wrap, not replace)
+  const { submitQuery, setActiveAgent } = useSIVAStore();
 
-  const [currentIntent, setCurrentIntent] = useState<Intent | null>(null);
-  const [contextMemory, setContextMemory] = useState<ContextMemoryEntry[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  // New intent store (S43)
+  const {
+    currentIntent,
+    currentEntities,
+    currentNormalized,
+    contextMemory,
+    isClassifying,
+    setIsClassifying,
+    setClassificationError,
+    processClassification,
+    resolveQueryReferences,
+    addContextResponse,
+    clearContextMemory,
+  } = useIntentStore();
 
+  /**
+   * Main processing function - wraps submitQuery with intelligence
+   */
   const processQuery = useCallback(
     async (query: string) => {
-      setIsProcessing(true);
+      setIsClassifying(true);
+      setClassificationError(null);
 
       try {
-        // Step 1: Classify intent
-        const intent = await classifyIntent(query);
-        setCurrentIntent(intent);
+        // ─────────────────────────────────────────────────────────────────────
+        // Step 1: Resolve references from context memory
+        // ─────────────────────────────────────────────────────────────────────
+        let resolvedQuery = query;
 
-        // Step 2: Extract entities
-        const entities = await extractEntities(query);
-        intent.entities = entities;
+        if (needsContextResolution(query)) {
+          const { resolvedQuery: resolved, hadResolutions } = resolveQueryReferences(query);
+          if (hadResolutions) {
+            resolvedQuery = resolved;
+            console.log(`[Intent] Resolved query: "${query}" → "${resolvedQuery}"`);
+          }
+        }
 
-        // Step 3: Normalize query
-        const normalized = normalizeQuery(query, intent);
-        intent.normalized = normalized;
+        // ─────────────────────────────────────────────────────────────────────
+        // Step 2: Classify intent
+        // ─────────────────────────────────────────────────────────────────────
+        const intent = classifyIntent(resolvedQuery);
+        console.log(`[Intent] Classified: ${intent.primary.type} (${(intent.primary.confidence * 100).toFixed(1)}%)`);
 
-        // Step 4: Store in context memory for follow-ups
-        const memoryEntry: ContextMemoryEntry = {
-          id: `ctx-${Date.now()}`,
-          query,
-          intent,
-          timestamp: new Date(),
-          entities,
-          resolved: {},
-        };
-        setContextMemory((prev) => [...prev.slice(-9), memoryEntry]); // Keep last 10
+        // ─────────────────────────────────────────────────────────────────────
+        // Step 3: Extract entities
+        // ─────────────────────────────────────────────────────────────────────
+        const entities = extractEntities(resolvedQuery);
+        console.log(`[Intent] Entities:`, {
+          companies: entities.companies,
+          sectors: entities.sectors,
+          regions: entities.regions,
+          signals: entities.signals,
+        });
 
-        // Step 5: Call existing submitQuery (UNCHANGED)
+        // ─────────────────────────────────────────────────────────────────────
+        // Step 4: Normalize query
+        // ─────────────────────────────────────────────────────────────────────
+        const normalized = normalizeQuery(resolvedQuery, intent, entities);
+        console.log(`[Intent] Normalized: "${normalized.normalized}"`);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Step 5: Store in context memory and update state
+        // ─────────────────────────────────────────────────────────────────────
+        processClassification(intent, entities, normalized);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Step 6: Set active agent based on intent
+        // ─────────────────────────────────────────────────────────────────────
+        const requiredAgents = getRequiredAgents(intent);
+        if (requiredAgents.length > 0) {
+          // Set the first agent as active
+          // (Multi-agent orchestration will be handled by useRoutingWrapper in S45)
+          setActiveAgent(requiredAgents[0]);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Step 7: Call existing submitQuery (UNCHANGED)
+        // ─────────────────────────────────────────────────────────────────────
         // The intelligence layer has processed, now pass to execution layer
         await submitQuery(normalized.normalized);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Step 8: Update context with response info
+        // ─────────────────────────────────────────────────────────────────────
+        addContextResponse(
+          requiredAgents,
+          [intent.primary.type],
+          entities.companies
+        );
+
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        setClassificationError(message);
+        console.error('[Intent] Classification error:', message);
+
+        // Fallback: still call submitQuery with original query
+        await submitQuery(query);
       } finally {
-        setIsProcessing(false);
+        setIsClassifying(false);
       }
     },
-    [submitQuery]
+    [
+      submitQuery,
+      setActiveAgent,
+      setIsClassifying,
+      setClassificationError,
+      processClassification,
+      resolveQueryReferences,
+      addContextResponse,
+    ]
   );
 
   return {
     processQuery,
     currentIntent,
-    contextMemory,
-    isProcessing,
+    currentEntities,
+    currentNormalized,
+    isProcessing: isClassifying,
+    recentCompanies: contextMemory.recentCompanies,
+    recentSectors: contextMemory.recentSectors,
+    recentRegions: contextMemory.recentRegions,
+    clearContext: clearContextMemory,
   };
 }
