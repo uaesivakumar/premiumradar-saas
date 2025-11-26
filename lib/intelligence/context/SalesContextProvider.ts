@@ -5,9 +5,20 @@
  * This context sits ABOVE the SIVA Intelligence Layer and filters
  * all intelligence operations.
  *
+ * CRITICAL ARCHITECTURE:
+ * - SaaS Frontend ONLY selects: vertical/sub-vertical/region
+ * - UPR OS DECIDES: which signals, how reasoning, how routing
+ * - SalesContextProvider LOADS rules from OS, applies to SIVA
+ *
  * Hierarchy: Vertical → Sub-Vertical → Region
  *
- * IMPORTANT: This is about the SALESPERSON's context, NOT target company industries.
+ * DIFFERENT VERTICALS TARGET DIFFERENT ENTITIES:
+ * - Banking: targets COMPANIES (hiring signals relevant)
+ * - Insurance: targets INDIVIDUALS (life events relevant)
+ * - Real Estate: targets FAMILIES (rental expiry relevant)
+ * - Recruitment: targets CANDIDATES (job postings relevant)
+ *
+ * HIRING SIGNALS ARE ONLY FOR BANKING.
  */
 
 import type {
@@ -18,9 +29,13 @@ import type {
   RegionContext,
   ContextFilter,
   SalesSignal,
-  SalesSignalType,
-  SignalMatchPredicate,
+  VerticalConfig,
+  RadarTarget,
+} from './types';
+import {
   DEFAULT_SALES_CONTEXT,
+  DEFAULT_BANKING_CONFIG,
+  VERTICAL_RADAR_TARGETS,
 } from './types';
 
 // =============================================================================
@@ -37,6 +52,7 @@ export function createSalesContext(
     subVertical: SubVertical;
     region: RegionContext;
     salesConfig?: Partial<SalesConfig>;
+    verticalConfig?: VerticalConfig;
   }
 ): SalesContext {
   const now = new Date();
@@ -48,13 +64,11 @@ export function createSalesContext(
     subVertical: options.subVertical,
     region: options.region,
     salesConfig: {
-      targetCompanySize: options.salesConfig?.targetCompanySize || ['mid-market', 'enterprise'],
-      hiringSensitivity: options.salesConfig?.hiringSensitivity || 'high',
-      expansionSensitivity: options.salesConfig?.expansionSensitivity || 'medium',
-      fundingSensitivity: options.salesConfig?.fundingSensitivity || 'medium',
+      signalSensitivities: options.salesConfig?.signalSensitivities || {},
       productKPIs: options.salesConfig?.productKPIs || [],
       ...options.salesConfig,
     },
+    verticalConfig: options.verticalConfig,
     createdAt: now,
     updatedAt: now,
   };
@@ -78,9 +92,89 @@ export function updateSalesContext(
   };
 }
 
+/**
+ * Apply OS configuration to a context
+ */
+export function applyVerticalConfig(
+  context: SalesContext,
+  config: VerticalConfig
+): SalesContext {
+  return {
+    ...context,
+    verticalConfig: config,
+    updatedAt: new Date(),
+  };
+}
+
 // =============================================================================
-// Context Filtering
+// Radar Target Helpers
 // =============================================================================
+
+/**
+ * Get the radar target for a vertical
+ */
+export function getRadarTarget(vertical: Vertical): RadarTarget {
+  return VERTICAL_RADAR_TARGETS[vertical];
+}
+
+/**
+ * Check if a vertical targets companies (vs individuals/families)
+ */
+export function targetsCompanies(vertical: Vertical): boolean {
+  const target = getRadarTarget(vertical);
+  return target === 'companies';
+}
+
+/**
+ * Check if hiring signals are relevant for this vertical
+ * HIRING SIGNALS ARE ONLY FOR BANKING (and SaaS sales)
+ */
+export function hiringSignalsRelevant(vertical: Vertical): boolean {
+  return vertical === 'banking' || vertical === 'saas-sales';
+}
+
+// =============================================================================
+// Signal Filtering (OS-Configured)
+// =============================================================================
+
+/**
+ * Get allowed signal types for a context
+ * Returns from OS config if available, otherwise defaults for banking
+ */
+export function getAllowedSignalTypes(context: SalesContext): string[] {
+  // If OS config is loaded, use it
+  if (context.verticalConfig) {
+    // Find sub-vertical specific signals
+    const subVerticalConfig = context.verticalConfig.subVerticals.find(
+      sv => sv.id === context.subVertical
+    );
+    if (subVerticalConfig) {
+      return subVerticalConfig.relevantSignalTypes;
+    }
+    // Fall back to vertical-level allowed signals
+    return context.verticalConfig.allowedSignalTypes;
+  }
+
+  // No OS config - only Banking is supported without it
+  if (context.vertical !== 'banking') {
+    console.warn(`[SalesContext] No OS config for vertical: ${context.vertical}. Only banking signals available.`);
+    return [];
+  }
+
+  // Default banking signals (temporary until OS provides config)
+  return DEFAULT_BANKING_CONFIG.allowedSignalTypes;
+}
+
+/**
+ * Check if a signal type is allowed for this context
+ */
+export function isSignalTypeAllowed(
+  signalType: string,
+  context: SalesContext
+): boolean {
+  const allowedTypes = getAllowedSignalTypes(context);
+  return allowedTypes.includes(signalType);
+}
 
 /**
  * Create a filter from SalesContext for querying
@@ -92,7 +186,7 @@ export function createContextFilter(context: SalesContext): ContextFilter {
     country: context.region.country,
     city: context.region.city,
     territory: context.region.territory,
-    companySizes: context.salesConfig.targetCompanySize,
+    allowedSignalTypes: getAllowedSignalTypes(context),
     minConfidence: 0.6,
   };
 }
@@ -104,27 +198,32 @@ export function signalMatchesContext(
   signal: SalesSignal,
   context: SalesContext
 ): boolean {
-  // Region must match
+  // 1. Check if signal type is allowed for this vertical
+  if (!isSignalTypeAllowed(signal.type, context)) {
+    return false;
+  }
+
+  // 2. Region must match
   if (signal.region.country !== context.region.country) {
     return false;
   }
 
-  // City filter (if specified in context)
+  // 3. City filter (if specified in context)
   if (context.region.city && signal.region.city) {
     if (signal.region.city !== context.region.city) {
       return false;
     }
   }
 
-  // Territory filter (if specified)
+  // 4. Territory filter (if specified)
   if (context.region.territory && signal.region.territory) {
     if (signal.region.territory !== context.region.territory) {
       return false;
     }
   }
 
-  // Check relevance threshold based on signal type sensitivity
-  const sensitivity = getSignalSensitivity(signal.type, context);
+  // 5. Check confidence threshold
+  const sensitivity = context.salesConfig.signalSensitivities[signal.type] || 'medium';
   const minRelevance = sensitivityToThreshold(sensitivity);
 
   if (signal.relevance < minRelevance) {
@@ -145,36 +244,8 @@ export function filterSignalsByContext(
 }
 
 // =============================================================================
-// Signal Relevance
+// Signal Relevance (OS-Configured)
 // =============================================================================
-
-/**
- * Get the sensitivity setting for a signal type
- */
-function getSignalSensitivity(
-  signalType: SalesSignalType,
-  context: SalesContext
-): 'low' | 'medium' | 'high' {
-  const { salesConfig } = context;
-
-  switch (signalType) {
-    case 'hiring-expansion':
-    case 'headcount-jump':
-      return salesConfig.hiringSensitivity;
-
-    case 'office-opening':
-    case 'market-entry':
-    case 'expansion-announcement':
-    case 'subsidiary-creation':
-      return salesConfig.expansionSensitivity;
-
-    case 'funding-round':
-      return salesConfig.fundingSensitivity;
-
-    default:
-      return 'medium';
-  }
-}
 
 /**
  * Convert sensitivity to relevance threshold
@@ -190,121 +261,35 @@ function sensitivityToThreshold(sensitivity: 'low' | 'medium' | 'high'): number 
   }
 }
 
-// =============================================================================
-// Sub-Vertical Signal Mapping
-// =============================================================================
-
 /**
- * Get relevant signal types for a sub-vertical
- */
-export function getRelevantSignalsForSubVertical(
-  subVertical: SubVertical
-): SalesSignalType[] {
-  const signalMap: Record<SubVertical, SalesSignalType[]> = {
-    // Banking
-    'employee-banking': [
-      'hiring-expansion',
-      'headcount-jump',
-      'office-opening',
-      'subsidiary-creation',
-      'market-entry',
-    ],
-    'corporate-banking': [
-      'funding-round',
-      'merger-acquisition',
-      'expansion-announcement',
-      'project-award',
-    ],
-    'sme-banking': [
-      'funding-round',
-      'hiring-expansion',
-      'office-opening',
-      'expansion-announcement',
-    ],
-    'retail-banking': [
-      'market-entry',
-      'expansion-announcement',
-      'office-opening',
-    ],
-    'wealth-management': [
-      'leadership-hiring',
-      'merger-acquisition',
-      'funding-round',
-    ],
-
-    // Insurance
-    'group-insurance': [
-      'hiring-expansion',
-      'headcount-jump',
-      'subsidiary-creation',
-    ],
-    'commercial-insurance': [
-      'expansion-announcement',
-      'project-award',
-      'office-opening',
-    ],
-    'retail-insurance': [
-      'market-entry',
-      'expansion-announcement',
-    ],
-
-    // Real Estate
-    'commercial-leasing': [
-      'office-opening',
-      'expansion-announcement',
-      'market-entry',
-      'hiring-expansion',
-    ],
-    'residential-sales': [
-      'leadership-hiring',
-      'hiring-expansion',
-    ],
-    'development-sales': [
-      'project-award',
-      'funding-round',
-    ],
-
-    // SaaS
-    'enterprise-sales': [
-      'funding-round',
-      'hiring-expansion',
-      'leadership-hiring',
-      'expansion-announcement',
-    ],
-    'mid-market-sales': [
-      'funding-round',
-      'hiring-expansion',
-      'office-opening',
-    ],
-    'smb-sales': [
-      'funding-round',
-      'hiring-expansion',
-    ],
-  };
-
-  return signalMap[subVertical] || [];
-}
-
-/**
- * Score a signal's relevance to a sub-vertical
+ * Score a signal's relevance to context
+ * Uses OS config if available
  */
 export function scoreSignalRelevance(
   signal: SalesSignal,
   context: SalesContext
 ): number {
-  const relevantSignals = getRelevantSignalsForSubVertical(context.subVertical);
-
   // Base relevance from signal
   let score = signal.relevance;
 
-  // Boost if signal type is highly relevant to sub-vertical
-  if (relevantSignals.includes(signal.type)) {
-    const position = relevantSignals.indexOf(signal.type);
-    const boost = (relevantSignals.length - position) / relevantSignals.length;
-    score = score * (1 + boost * 0.3);
-  } else {
-    // Penalize if not directly relevant
-    score = score * 0.7;
+  // Check if signal type is allowed
+  if (!isSignalTypeAllowed(signal.type, context)) {
+    return 0; // Not relevant at all
+  }
+
+  // Boost based on sub-vertical relevance (from OS config)
+  if (context.verticalConfig) {
+    const subVerticalConfig = context.verticalConfig.subVerticals.find(
+      sv => sv.id === context.subVertical
+    );
+    if (subVerticalConfig) {
+      const relevantTypes = subVerticalConfig.relevantSignalTypes;
+      if (relevantTypes.includes(signal.type)) {
+        const position = relevantTypes.indexOf(signal.type);
+        const boost = (relevantTypes.length - position) / relevantTypes.length;
+        score = score * (1 + boost * 0.3);
+      }
+    }
   }
 
   // Cap at 1.0
@@ -344,6 +329,7 @@ export function deserializeSalesContext(json: string): SalesContext {
 
 /**
  * Validate that a sub-vertical belongs to a vertical
+ * NOTE: This will eventually be loaded from OS config
  */
 export function isValidSubVertical(
   vertical: Vertical,
@@ -358,14 +344,20 @@ export function isValidSubVertical(
       'wealth-management',
     ],
     'insurance': [
+      'life-insurance',
       'group-insurance',
+      'health-insurance',
       'commercial-insurance',
-      'retail-insurance',
     ],
     'real-estate': [
-      'commercial-leasing',
       'residential-sales',
-      'development-sales',
+      'commercial-leasing',
+      'property-management',
+    ],
+    'recruitment': [
+      'executive-search',
+      'tech-recruitment',
+      'mass-recruitment',
     ],
     'saas-sales': [
       'enterprise-sales',
@@ -379,6 +371,7 @@ export function isValidSubVertical(
 
 /**
  * Get available sub-verticals for a vertical
+ * NOTE: This will eventually be loaded from OS config
  */
 export function getSubVerticalsForVertical(vertical: Vertical): SubVertical[] {
   const mapping: Record<Vertical, SubVertical[]> = {
@@ -390,14 +383,20 @@ export function getSubVerticalsForVertical(vertical: Vertical): SubVertical[] {
       'wealth-management',
     ],
     'insurance': [
+      'life-insurance',
       'group-insurance',
+      'health-insurance',
       'commercial-insurance',
-      'retail-insurance',
     ],
     'real-estate': [
-      'commercial-leasing',
       'residential-sales',
-      'development-sales',
+      'commercial-leasing',
+      'property-management',
+    ],
+    'recruitment': [
+      'executive-search',
+      'tech-recruitment',
+      'mass-recruitment',
     ],
     'saas-sales': [
       'enterprise-sales',
@@ -421,6 +420,7 @@ export function getVerticalDisplayName(vertical: Vertical): string {
     'banking': 'Banking',
     'insurance': 'Insurance',
     'real-estate': 'Real Estate',
+    'recruitment': 'Recruitment',
     'saas-sales': 'SaaS Sales',
   };
   return names[vertical] || vertical;
@@ -436,12 +436,16 @@ export function getSubVerticalDisplayName(subVertical: SubVertical): string {
     'sme-banking': 'SME Banking',
     'retail-banking': 'Retail Banking',
     'wealth-management': 'Wealth Management',
+    'life-insurance': 'Life Insurance',
     'group-insurance': 'Group Insurance',
+    'health-insurance': 'Health Insurance',
     'commercial-insurance': 'Commercial Insurance',
-    'retail-insurance': 'Retail Insurance',
-    'commercial-leasing': 'Commercial Leasing',
     'residential-sales': 'Residential Sales',
-    'development-sales': 'Development Sales',
+    'commercial-leasing': 'Commercial Leasing',
+    'property-management': 'Property Management',
+    'executive-search': 'Executive Search',
+    'tech-recruitment': 'Tech Recruitment',
+    'mass-recruitment': 'Mass Recruitment',
     'enterprise-sales': 'Enterprise Sales',
     'mid-market-sales': 'Mid-Market Sales',
     'smb-sales': 'SMB Sales',
@@ -450,20 +454,15 @@ export function getSubVerticalDisplayName(subVertical: SubVertical): string {
 }
 
 /**
- * Get human-readable signal type name
+ * Get human-readable radar target description
  */
-export function getSignalTypeDisplayName(signalType: SalesSignalType): string {
-  const names: Record<SalesSignalType, string> = {
-    'hiring-expansion': 'Hiring Expansion',
-    'office-opening': 'Office Opening',
-    'market-entry': 'Market Entry',
-    'project-award': 'Project Award',
-    'headcount-jump': 'Headcount Jump',
-    'subsidiary-creation': 'Subsidiary Creation',
-    'leadership-hiring': 'Leadership Hiring',
-    'funding-round': 'Funding Round',
-    'merger-acquisition': 'M&A Activity',
-    'expansion-announcement': 'Expansion Announcement',
+export function getRadarTargetDescription(vertical: Vertical): string {
+  const target = getRadarTarget(vertical);
+  const descriptions: Record<RadarTarget, string> = {
+    'companies': 'Companies and businesses',
+    'individuals': 'Individual people',
+    'families': 'Families and home buyers',
+    'candidates': 'Job candidates and employers',
   };
-  return names[signalType] || signalType;
+  return descriptions[target];
 }

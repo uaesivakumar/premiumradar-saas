@@ -24,7 +24,7 @@ import {
   createContextFilter,
   getVerticalDisplayName,
   getSubVerticalDisplayName,
-  getRelevantSignalsForSubVertical,
+  getAllowedSignalTypes,
   scoreSignalRelevance,
 } from '@/lib/intelligence/context/SalesContextProvider';
 
@@ -113,10 +113,10 @@ export function useSalesContext(): UseSalesContextResult {
     [vertical] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // Relevant signal types for current sub-vertical
+  // Relevant signal types for current context (from OS config or defaults)
   const relevantSignalTypes = useMemo(
-    () => getRelevantSignalsForSubVertical(subVertical),
-    [subVertical]
+    () => getAllowedSignalTypes(context),
+    [context]
   );
 
   // Create context filter for queries

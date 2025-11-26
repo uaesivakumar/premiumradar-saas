@@ -23,7 +23,7 @@ import { useCallback } from 'react';
 import { OutputObject } from '@/lib/stores/siva-store';
 import { useEvidenceStore, selectEvidenceSummary, selectJustificationDisplay } from '@/lib/stores/evidence-store';
 import { useSalesContextStore } from '@/lib/stores/sales-context-store';
-import { getRelevantSignalsForSubVertical } from '../context/SalesContextProvider';
+import { getAllowedSignalTypes } from '../context/SalesContextProvider';
 import type {
   LiveObject,
   EvidencePack,
@@ -56,8 +56,8 @@ export function useEvidenceWrapper(): EvidenceWrapperResult {
     storeDiscoveryPack,
   } = useEvidenceStore();
 
-  // Get relevant signal types for current sub-vertical
-  const relevantSignalTypes = getRelevantSignalsForSubVertical(salesContext.subVertical);
+  // Get relevant signal types for current context (from OS config or defaults)
+  const relevantSignalTypes = getAllowedSignalTypes(salesContext);
 
   /**
    * Enrich an output object with evidence and reasoning
