@@ -3,6 +3,20 @@
  *
  * Gathers evidence from multiple sources for a target entity.
  * Provides the raw material for reasoning and justification.
+ *
+ * IMPORTANT: Evidence collection is filtered by Sales Context.
+ *
+ * Signal types are SALES ACTIVITY signals, NOT industry analysis:
+ * - hiring-expansion: Company is hiring = needs banking/payroll products
+ * - office-opening: New office = new accounts opportunity
+ * - market-entry: Entering region = needs local services
+ * - funding-round: Capital event = banking relationship opportunity
+ * - expansion: Growth signals = sales opportunity
+ * - partnership: Strategic moves = potential needs
+ *
+ * The signal templates below are for UAE Banking as the primary implementation.
+ * Other verticals (Insurance, Real Estate, SaaS) will reuse these same
+ * signal types but with different relevance weighting via SalesContextProvider.
  */
 
 import type {

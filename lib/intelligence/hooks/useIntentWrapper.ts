@@ -5,14 +5,18 @@
  *
  * Pattern:
  *   1. User query comes in
- *   2. Resolve references from context memory
- *   3. IntentClassifier analyzes query → Intent
- *   4. EntityExtractor extracts entities
- *   5. QueryNormalizer normalizes query
- *   6. ContextMemory stores for follow-ups
- *   7. THEN calls existing submitQuery (unchanged)
+ *   2. Apply Sales Context (Vertical/Sub-Vertical/Region)
+ *   3. Resolve references from context memory
+ *   4. IntentClassifier analyzes query → Intent
+ *   5. EntityExtractor extracts entities
+ *   6. QueryNormalizer normalizes query
+ *   7. ContextMemory stores for follow-ups
+ *   8. THEN calls existing submitQuery (unchanged)
  *
  * CRITICAL: This hook WRAPS submitQuery, it does NOT replace it.
+ *
+ * IMPORTANT: All intelligence is filtered by Sales Context:
+ *   Vertical → Sub-Vertical → Region
  */
 
 'use client';
@@ -20,6 +24,7 @@
 import { useCallback } from 'react';
 import { useSIVAStore } from '@/lib/stores/siva-store';
 import { useIntentStore } from '@/lib/stores/intent-store';
+import { useSalesContextStore } from '@/lib/stores/sales-context-store';
 import {
   classifyIntent,
   extractEntities,
@@ -98,6 +103,9 @@ export function useIntentWrapper(): IntentWrapperResult {
   // Existing SIVA store (UNCHANGED - we wrap, not replace)
   const { submitQuery, setActiveAgent } = useSIVAStore();
 
+  // Sales Context (Vertical/Sub-Vertical/Region)
+  const salesContext = useSalesContextStore((state) => state.context);
+
   // New intent store (S43)
   const {
     currentIntent,
@@ -153,10 +161,23 @@ export function useIntentWrapper(): IntentWrapperResult {
         });
 
         // ─────────────────────────────────────────────────────────────────────
-        // Step 4: Normalize query
+        // Step 4: Normalize query with Sales Context
         // ─────────────────────────────────────────────────────────────────────
         const normalized = normalizeQuery(resolvedQuery, intent, entities);
+
+        // Inject Sales Context into normalized parameters
+        // This ensures all downstream operations respect Vertical/Sub-Vertical/Region
+        normalized.parameters = {
+          ...normalized.parameters,
+          salesContext: {
+            vertical: salesContext.vertical,
+            subVertical: salesContext.subVertical,
+            region: salesContext.region,
+          },
+        };
+
         console.log(`[Intent] Normalized: "${normalized.normalized}"`);
+        console.log(`[Intent] Sales Context: ${salesContext.vertical}/${salesContext.subVertical}/${salesContext.region.country}`);
 
         // ─────────────────────────────────────────────────────────────────────
         // Step 5: Store in context memory and update state

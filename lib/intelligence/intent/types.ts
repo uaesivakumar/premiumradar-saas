@@ -175,6 +175,17 @@ export interface QueryParameters {
   compareEntities?: string[];
   // Output preferences
   outputFormat?: 'list' | 'table' | 'detailed' | 'summary';
+  // Sales Context (Vertical/Sub-Vertical/Region)
+  // Injected by useIntentWrapper to filter all downstream operations
+  salesContext?: {
+    vertical: string;
+    subVertical: string;
+    region: {
+      country: string;
+      city?: string;
+      territory?: string;
+    };
+  };
 }
 
 /**

@@ -8,9 +8,18 @@
  * It does NOT replace or modify existing SIVA components.
  *
  * Architecture:
+ *   Sales Context (Vertical/Sub-Vertical/Region)
+ *        ↓ filters
  *   Brain (Intelligence) → wraps → Muscles (Execution)
  *   lib/intelligence/*   → wraps → lib/agents/*, components/siva/*
+ *
+ * IMPORTANT: PremiumRadar is a SALES ENABLEMENT platform.
+ * All intelligence is filtered by: Vertical → Sub-Vertical → Region
+ * This is about the SALESPERSON's context, NOT target company industries.
  */
+
+// Sales Context Layer (sits ABOVE all intelligence)
+export * from './context';
 
 // Wrapper Hooks (Primary Integration Points)
 export * from './hooks';
