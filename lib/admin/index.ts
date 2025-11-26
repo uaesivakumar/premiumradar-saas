@@ -78,3 +78,7 @@ export {
   getUsagePercentage,
   getUsageStatusColor,
 } from './tenant-viewer';
+
+// Vertical Config Service
+// NOTE: Server-only exports are in ./server.ts
+// Import from '@/lib/admin/server' in API routes and server components

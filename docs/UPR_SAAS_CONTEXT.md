@@ -688,7 +688,7 @@ gcloud run services describe upr-os-worker --region=us-central1 --format="value(
 
 ---
 
-## 14. Onboarding Rules (S31-S36 - User Journey Spine)
+## 14. Onboarding Rules (S37-S42 - User Journey Spine)
 
 **CRITICAL:** TC must ensure onboarding is fully completed before allowing user access to SIVA surface. No exceptions.
 

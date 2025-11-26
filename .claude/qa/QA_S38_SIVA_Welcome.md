@@ -1,6 +1,6 @@
-# QA Report: Sprint S32 - SIVA Welcome + Identity Setup
+# QA Report: Sprint S38 - SIVA Welcome + Identity Setup
 
-**Sprint:** S32
+**Sprint:** S38
 **Name:** SIVA Welcome + Identity Setup
 **Date:** 2025-11-26
 **Status:** CERTIFIED
@@ -86,7 +86,7 @@ interface OnboardingState {
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║                     SPRINT S32 CERTIFIED                     ║
+║                     SPRINT S38 CERTIFIED                     ║
 ║                                                              ║
 ║  Features:    5/5 (100%)                                     ║
 ║  Build:       PASS                                           ║
