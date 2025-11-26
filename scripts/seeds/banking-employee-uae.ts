@@ -579,8 +579,11 @@ export async function seedBankingEmployeeUAE(): Promise<void> {
   }
 }
 
+export { BANKING_EMPLOYEE_UAE_CONFIG };
+
 // Run if called directly
-if (require.main === module) {
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
   seedBankingEmployeeUAE()
     .then(() => {
       console.log('[Seed] Complete!');
@@ -591,5 +594,3 @@ if (require.main === module) {
       process.exit(1);
     });
 }
-
-export { BANKING_EMPLOYEE_UAE_CONFIG };
