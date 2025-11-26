@@ -293,7 +293,12 @@ export async function GET() {
           },
         ],
         allowedSignalTypes: dbConfig.config?.allowedSignalTypes || [],
-        scoringFactors: dbConfig.config?.scoringFactors || [],
+        scoringFactors: (dbConfig.config?.scoringFactors || []).map((sf: { id: string; name: string; weight: number; description?: string }) => ({
+          id: sf.id,
+          name: sf.name,
+          weight: sf.weight,
+          signals: [], // Signals are defined at vertical level, not factor level
+        })),
         playbooks: [],
         regions: [{ country: region, cities: ['Dubai'], territories: [] }],
       };
