@@ -1,5 +1,5 @@
-import { LoginPage } from '@/components/auth';
+import { SIVALoginPage } from '@/components/auth';
 
 export default function Login() {
-  return <LoginPage />;
+  return <SIVALoginPage />;
 }

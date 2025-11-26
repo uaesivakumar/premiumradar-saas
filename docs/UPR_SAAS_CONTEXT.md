@@ -688,4 +688,32 @@ gcloud run services describe upr-os-worker --region=us-central1 --format="value(
 
 ---
 
+## 14. Onboarding Rules (S31-S36 - User Journey Spine)
+
+**CRITICAL:** TC must ensure onboarding is fully completed before allowing user access to SIVA surface. No exceptions.
+
+### Onboarding Flow (5 Steps)
+1. **Welcome** (`/onboarding/welcome`) - SIVA greeting, animated introduction
+2. **Identity** (`/onboarding/welcome?step=identity`) - Name, role, region capture
+3. **Workspace** (`/onboarding/workspace`) - Personal vs Organization workspace creation
+4. **Vertical** (`/onboarding/vertical`) - Industry selection (Banking, FinTech, Insurance, Real Estate, Consulting)
+5. **Transition** (`/onboarding/transition`) - Cinematic loading sequence → dashboard
+
+### Route Protection
+- Middleware enforces onboarding completion before dashboard access
+- Incomplete onboarding → redirect to correct step
+- Complete onboarding → full dashboard access
+
+### Onboarding Store
+Location: `lib/stores/onboarding-store.ts`
+Persists: `currentStep`, `completedSteps`, `profile`, `workspace`, `selectedVertical`, `isComplete`
+
+### 2030 AI-First Rules
+- NO generic SaaS templates
+- All pages match SIVA surface aesthetic (slate-950, neural mesh, gradient orbs)
+- Onboarding feels like interacting with SIVA, not filling forms
+- Zero placeholders, zero Lorem Ipsum
+
+---
+
 **End of UPR_SAAS_CONTEXT.md**

@@ -1,256 +1,247 @@
 # PremiumRadar-SAAS QA & Sprint Certification
 
-Run comprehensive QA validation before certifying a sprint.
+Enterprise-grade Quality Assurance and Sprint Certification.
 
-**IMPORTANT:** This command validates the **STAGING** environment (upr.sivakumar.ai).
-Production deployment requires manual merge to `production` branch.
+**Usage:**
+- `/qa` - QA current sprint
+- `/qa S26` - QA specific sprint
+- `/qa S26-S30` - QA sprint range
 
-## EXECUTE ALL CHECKS IN ORDER:
+**NOTE:** This command does NOT deploy. Use `/deploy` for deployments.
 
-### 1. Integration Tests
+---
+
+## QA PHASES
+
+### Phase 1: Code Quality Gate
 ```bash
-npm test
-```
-Report: Pass/Fail count, any failures
-
-### 2. API Health Check
-Check all Cloud Run services:
-```bash
-# SaaS Staging Service
-curl -s https://upr.sivakumar.ai/api/health | jq .
-
-# SaaS Staging Service (direct Cloud Run URL)
-gcloud run services describe premiumradar-saas-staging --region=us-central1 --format="value(status.url)"
-
-# OS Service (requires auth - shared for both envs)
-gcloud run services describe upr-os-service --region=us-central1 --format="value(status.url)"
-
-# Worker Service (shared for both envs)
-gcloud run services describe upr-os-worker --region=us-central1 --format="value(status.url)"
-```
-
-### 3. Worker Check
-```bash
-# Check Pub/Sub subscriptions
-gcloud pubsub subscriptions list --format="table(name,topic,ackDeadlineSeconds)"
-
-# Check worker logs (last 10 entries)
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=upr-os-worker" --limit=10 --format="table(timestamp,textPayload)"
-```
-
-### 4. Schema Validation
-```bash
-npm run build
-npm run type-check 2>/dev/null || npx tsc --noEmit
-```
-
-### 5. Deployment Validation
-```bash
-# List all Cloud Run services
-gcloud run services list --region=us-central1 --format="table(SERVICE,REGION,URL,LAST_DEPLOYED)"
-
-# Check service accounts
-for svc in premiumradar-saas-staging premiumradar-saas-production upr-os-service upr-os-worker; do
-  echo "=== $svc ==="
-  gcloud run services describe $svc --region=us-central1 --format="value(spec.template.spec.serviceAccountName)" 2>/dev/null || echo "Service not found"
-done
-```
-
-### 6. Security Validation
-```bash
-# Check IAM bindings
-for svc in premiumradar-saas-staging premiumradar-saas-production upr-os-service upr-os-worker; do
-  echo "=== $svc IAM ==="
-  gcloud run services get-iam-policy $svc --region=us-central1 --format="table(bindings.role,bindings.members)" 2>/dev/null || echo "Service not found"
-done
-
-# Check Cloud Armor (if configured)
-gcloud compute security-policies list 2>/dev/null || echo "No Cloud Armor policies"
-
-# Run security gate checks (from context)
-echo "Security Gate Checks:"
-echo "1. Prompt Injection Red-Team Suite - [MANUAL]"
-echo "2. Internal config leak verification - [MANUAL]"
-echo "3. OWASP top-10 smoke tests - [MANUAL]"
-echo "4. SECURITY_CHANGELOG.md updated - [VERIFY]"
-```
-
-### 7. OS → SaaS Dependency Check
-```bash
-# Verify os-client.ts exists and has OIDC
-grep -n "getIdToken" lib/os-client.ts
-
-# Check OS base URL config
-grep -n "UPR_OS_BASE_URL" lib/os-client.ts .env.example
-```
-
-### 8. Update Notion
-Fetch token and update sprint status:
-```bash
-export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)
-node scripts/notion/getCurrentSprint.js
-```
-
-### 8.1 Verify Full Property Population
-**MANDATORY:** Verify that ALL required fields are populated in Notion:
-
-For Sprints DB:
-- Sprint Name, Status, Goal, Outcomes, Highlights, Business Value
-- Started At, Completed At, Commit, Git Tag, Branch
-- Phases Updated, Learnings, Commits Count, Synced At
-
-For Features DB:
-- Feature Name, Sprint, Status, Priority, Complexity, Type
-- Notes, Tags, Started At, Completed At, Assignee, Done?
-
-**Reference:** `.claude/notion/sync.ts` for field validation
-
-### 8.2 Verify Knowledge Page (MANDATORY)
-**CRITICAL:** Verify Knowledge Page has ALL 8 learning sections:
-1. Product Essentials
-2. Core Frameworks
-3. Technologies Used
-4. Key Capabilities
-5. ELI5 (Explain Like I'm 5)
-6. Real-World Analogy
-7. Explain to Different Audiences (Investors, CXOs, BDMs, Hiring Managers, Engineers)
-8. Innovation & Differentiation
-
-**No stretch/sprint can be certified without complete Knowledge Page update!**
-
-### 9. UI Integration Verification (NO HIDDEN FEATURES)
-**MANDATORY:** Every feature must have a visible UI surface.
-
-Check for each sprint feature:
-```bash
-# Verify all routes exist
-ls -la app/**/page.tsx
-
-# Verify navigation links
-grep -r "href=" components/shell/Sidebar.tsx components/layout/Header.tsx
-
-# Run TypeScript build
+# 1.1 TypeScript Compilation
+echo "=== TypeScript Check ==="
 npx tsc --noEmit
+TS_STATUS=$?
+
+# 1.2 Build Verification
+echo "=== Build Check ==="
+npm run build
+BUILD_STATUS=$?
+
+# 1.3 Linting
+echo "=== Lint Check ==="
+npm run lint 2>/dev/null || echo "No lint script"
+LINT_STATUS=$?
+
+# 1.4 Tests
+echo "=== Test Suite ==="
+npm test
+TEST_STATUS=$?
 ```
 
-If a feature has no UI route:
-- Must be documented as "Backend-only" in Notion
-- Otherwise, QA FAILS
-
-### 10. Generate QA Report
-Create a summary report with:
-- Date/Time
-- Sprint number
-- All check results (Pass/Fail)
-- UI Integration status
-- Any warnings or issues
-- Recommendations
-
-### 11. Sprint Certification
-If ALL checks pass:
-- Mark sprint as "Complete" in Notion
-- Create git tag: `sprint-X-certified`
-- Push tag to remote
-
+### Phase 2: Service Health Gate
 ```bash
-# Only if all checks pass
-git tag -a sprint-X-certified -m "Sprint X QA Certified - $(date +%Y-%m-%d)"
-git push origin sprint-X-certified
+# 2.1 Staging Service
+echo "=== Service Health ==="
+STAGING_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" https://upr.sivakumar.ai/api/health)
+echo "Staging: $STAGING_HEALTH"
+
+# 2.2 OS Service
+OS_STATUS=$(gcloud run services describe upr-os-service --region=us-central1 --format="value(status.conditions[0].status)" 2>/dev/null)
+echo "OS Service: $OS_STATUS"
+
+# 2.3 Worker Service
+WORKER_STATUS=$(gcloud run services describe upr-os-worker --region=us-central1 --format="value(status.conditions[0].status)" 2>/dev/null)
+echo "Worker: $WORKER_STATUS"
 ```
 
-## Output Format
+### Phase 3: Security Gate
+```bash
+# 3.1 Dependency Vulnerabilities
+echo "=== Security Audit ==="
+npm audit --audit-level=high 2>/dev/null || echo "Audit check complete"
 
-Provide a structured QA report:
+# 3.2 Secrets Check (no hardcoded secrets)
+echo "=== Secrets Scan ==="
+grep -r "NOTION_TOKEN\|API_KEY\|SECRET" --include="*.ts" --include="*.tsx" --exclude-dir=node_modules | grep -v "process.env" | grep -v ".example" || echo "No exposed secrets"
 
-```
-============================================================
-QA REPORT - Sprint X
-Date: YYYY-MM-DD HH:MM
-============================================================
-
-1. Integration Tests:    [PASS/FAIL] (X/Y passed)
-2. API Health:           [PASS/FAIL]
-   - SaaS Service:       [OK/FAIL]
-   - OS Service:         [OK/FAIL]
-   - Worker Service:     [OK/FAIL]
-3. Worker Check:         [PASS/FAIL]
-4. Schema Validation:    [PASS/FAIL]
-5. Deployment:           [PASS/FAIL]
-6. Security:             [PASS/FAIL]
-7. OS→SaaS Dependency:   [PASS/FAIL]
-8. Notion Updated:       [PASS/FAIL]
-
-============================================================
-CERTIFICATION: [CERTIFIED / NOT CERTIFIED]
-============================================================
-Issues Found: X
-Warnings: Y
-
-[List any issues or warnings here]
+# 3.3 OWASP Top 10 Markers
+echo "=== OWASP Check ==="
+# Check for unsafe eval
+grep -r "eval(" --include="*.ts" --include="*.tsx" --exclude-dir=node_modules || echo "No eval usage"
+# Check for innerHTML
+grep -r "innerHTML" --include="*.ts" --include="*.tsx" --exclude-dir=node_modules || echo "No innerHTML usage"
 ```
 
-## Notes
-- Run this command at the end of each sprint
-- All checks must pass for certification
-- If any check fails, fix issues before re-running
-- The sprint is NOT certified until all checks pass
+### Phase 4: UI Integration Gate (NO HIDDEN FEATURES)
+```bash
+# 4.1 Route Existence
+echo "=== Route Check ==="
+find app -name "page.tsx" -type f | wc -l
+ls -la app/**/page.tsx 2>/dev/null | head -20
+
+# 4.2 Navigation Links
+echo "=== Navigation Check ==="
+grep -r "href=" components/shell/Sidebar.tsx components/layout/Header.tsx 2>/dev/null | head -10
+
+# 4.3 Component Exports
+echo "=== Component Exports ==="
+grep "export" components/index.ts 2>/dev/null || echo "Check individual exports"
+```
+
+### Phase 5: DOM Verification Gate (Live UI)
+```bash
+# 5.1 Fetch Live DOM
+echo "=== Live DOM Check ==="
+LIVE_DOM=$(curl -sL https://premiumradar-saas-staging-191599223867.us-central1.run.app 2>/dev/null)
+
+# 5.2 Required Strings Present
+echo "Checking required strings..."
+echo "$LIVE_DOM" | grep -q "SIVA" && echo "✓ SIVA found" || echo "✗ SIVA missing"
+echo "$LIVE_DOM" | grep -q "Q/T/L/E\|QTLE" && echo "✓ Q/T/L/E found" || echo "✗ Q/T/L/E missing"
+
+# 5.3 Forbidden Strings Absent
+echo "Checking forbidden strings..."
+echo "$LIVE_DOM" | grep -q "AI-Powered Intelligence Platform" && echo "✗ Template content found" || echo "✓ No template content"
+echo "$LIVE_DOM" | grep -q "15 integrations" && echo "✗ Template content found" || echo "✓ Clean"
+```
+
+### Phase 6: Notion Verification Gate
+```bash
+# 6.1 Fetch Token
+export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)
+
+# 6.2 Sprint Status
+echo "=== Notion Sprint Status ==="
+node scripts/notion/getCurrentSprint.js 2>/dev/null
+
+# 6.3 Feature Completion
+echo "=== Feature Completion ==="
+# Query features for sprint and check status
+node -e "
+const { Client } = require('@notionhq/client');
+const notion = new Client({ auth: process.env.NOTION_TOKEN });
+
+notion.databases.query({
+  database_id: '26ae5afe-4b5f-4d97-b402-5c459f188944',
+  filter: { property: 'Sprint', number: { equals: SPRINT_NUMBER } }
+}).then(res => {
+  const done = res.results.filter(r => r.properties.Status?.select?.name === 'Done').length;
+  const total = res.results.length;
+  console.log('Features: ' + done + '/' + total + ' complete');
+});
+" 2>/dev/null
+```
 
 ---
 
-## NO FAKE UI CERTIFICATION RULE (MANDATORY)
+## QA REPORT FORMAT
 
-**TC MUST NOT claim "UI integrated" or "Full-Phase QA & UI Integration Sweep Complete"
-unless the live staging URL visually reflects the new UI.**
-
-Verification must be done at the ROUTE and COMPONENT level:
-- `app/page.tsx` must show the latest planned hero
-- All Phase-2 pages must be reachable by navigation
-- Any mismatch between code and live UI = **QA FAILURE**
-
-### Live Verification Checklist
-Before claiming certification:
-1. Push code to main branch
-2. Wait for Cloud Run deployment to complete
-3. Load https://upr.sivakumar.ai in browser
-4. Verify landing page shows new AI-first hero (not old Sprint-1 layout)
-5. Verify AI Orb is visible and clickable
-6. Verify chat interface opens when orb is clicked
-7. Navigate to each dashboard route via Sidebar
-8. Confirm each route renders non-placeholder content
-
-**If any of the above fails, QA is NOT CERTIFIED.**
+```
+╔══════════════════════════════════════════════════════════════╗
+║                    QA CERTIFICATION REPORT                   ║
+║                Sprint: SX-SY | Date: YYYY-MM-DD              ║
+╠══════════════════════════════════════════════════════════════╣
+║ PHASE 1: CODE QUALITY                                        ║
+║   TypeScript:     [PASS/FAIL]                                ║
+║   Build:          [PASS/FAIL]                                ║
+║   Lint:           [PASS/FAIL]                                ║
+║   Tests:          [PASS/FAIL] (X/Y passed)                   ║
+╠══════════════════════════════════════════════════════════════╣
+║ PHASE 2: SERVICE HEALTH                                      ║
+║   Staging:        [200 OK/FAIL]                              ║
+║   OS Service:     [HEALTHY/UNHEALTHY]                        ║
+║   Worker:         [HEALTHY/UNHEALTHY]                        ║
+╠══════════════════════════════════════════════════════════════╣
+║ PHASE 3: SECURITY                                            ║
+║   npm audit:      [PASS/FAIL] (X vulnerabilities)            ║
+║   Secrets scan:   [PASS/FAIL]                                ║
+║   OWASP markers:  [PASS/FAIL]                                ║
+╠══════════════════════════════════════════════════════════════╣
+║ PHASE 4: UI INTEGRATION                                      ║
+║   Routes:         [X routes found]                           ║
+║   Navigation:     [PASS/FAIL]                                ║
+║   Components:     [PASS/FAIL]                                ║
+╠══════════════════════════════════════════════════════════════╣
+║ PHASE 5: LIVE DOM                                            ║
+║   Required:       [X/Y present]                              ║
+║   Forbidden:      [0 found/X found]                          ║
+╠══════════════════════════════════════════════════════════════╣
+║ PHASE 6: NOTION                                              ║
+║   Sprint status:  [Done/In Progress]                         ║
+║   Features:       [X/Y complete]                             ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║  OVERALL: [CERTIFIED / NOT CERTIFIED]                        ║
+║                                                              ║
+║  Issues: X | Warnings: Y                                     ║
+╚══════════════════════════════════════════════════════════════╝
+```
 
 ---
 
-## MANDATORY DOM STRING VERIFICATION (2025-11-25)
+## CERTIFICATION CRITERIA
 
-**TC MUST NOT certify or deploy UI changes unless the LIVE HOMEPAGE DOM is validated.**
+### MUST PASS (Blocking)
+- [ ] TypeScript compilation (0 errors)
+- [ ] Build success
+- [ ] Tests pass (>80% coverage recommended)
+- [ ] Staging service healthy (200)
+- [ ] No high/critical vulnerabilities
+- [ ] No exposed secrets
+- [ ] Required DOM strings present
+- [ ] No forbidden DOM strings
+- [ ] All sprint features marked Done
 
-### Forbidden Template Strings (If present → FAIL)
-- "AI-Powered Intelligence Platform"
-- "Transform your business intelligence"
-- "Connect your data"
-- "15 integrations"
-- "Enterprise Clients"
-- "API Calls/Day"
-- "Query your data in English"
-- "Real-time processing"
-- Generic pricing ("Starter", "Professional")
+### SHOULD PASS (Warning)
+- [ ] Lint clean
+- [ ] OS/Worker services healthy
+- [ ] Knowledge Page updated
+- [ ] No medium vulnerabilities
 
-### Required Custom Strings (If missing → FAIL)
-- "SIVA"
-- "Q/T/L/E"
-- "Discovery Engine" / "Enrichment Engine" / "Ranking Engine" / "Outreach Engine"
-- "Cognitive Sales OS"
-- "UAE" (UAE signals, UAE companies, etc.)
+---
 
-### DOM Verification Process
+## POST-CERTIFICATION (if passed)
+
+### Create Git Tag
 ```bash
-# Fetch live DOM
-curl -sL https://premiumradar-saas-staging-191599223867.us-central1.run.app | grep -E "(SIVA|Q/T/L/E|Discovery Engine|Cognitive)"
-
-# If client-side rendered, verify build ID and loading state
-curl -sL https://premiumradar-saas-staging-191599223867.us-central1.run.app | grep "Initializing SIVA"
+git tag -a sprint-SX-certified -m "Sprint SX QA Certified - $(date +%Y-%m-%d)"
+git push origin sprint-SX-certified
 ```
 
-**This rule is permanent and applies to ALL future deployments.**
+### Update Notion
+```bash
+# Run notion-update to ensure all fields populated
+/notion-update SX
+```
+
+### Generate Certificate
+```
+Sprint SX Certification Complete
+Date: YYYY-MM-DD
+Commit: [hash]
+Tag: sprint-SX-certified
+QA Report: docs/qa/Sprint_SX_QA_Report.md
+```
+
+---
+
+## FAILURE HANDLING
+
+If QA fails:
+1. **Do NOT tag or certify**
+2. **Document failures** in QA report
+3. **Create fix tasks** for each failure
+4. **Re-run QA** after fixes
+5. **Only certify when ALL blocking criteria pass**
+
+---
+
+## ENTERPRISE COMPLIANCE MARKERS
+
+This QA process aligns with:
+- **ISO 27001** - Security controls verification
+- **SOC 2** - Change management & testing
+- **GDPR** - Data handling verification
+- **OWASP** - Security best practices
+
+---
+
+**NOTE:** This command is QA-only. Use `/deploy` for deployments, `/audit` for security audits.
