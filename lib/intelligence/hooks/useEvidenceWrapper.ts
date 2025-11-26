@@ -15,49 +15,14 @@
 
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { OutputObject } from '@/lib/stores/siva-store';
+import { useEvidenceStore, selectEvidenceSummary, selectJustificationDisplay } from '@/lib/stores/evidence-store';
 import type {
   LiveObject,
-  Evidence,
   EvidencePack,
-  ReasoningChain,
-  ScoreJustification,
   EvidenceWrapperResult,
 } from '../types';
-
-// Placeholder - will be implemented in S44
-const collectEvidence = async (target: string): Promise<Evidence[]> => {
-  // TODO: S44 - Implement EvidenceCollector
-  return [];
-};
-
-// Placeholder - will be implemented in S44
-const createReasoningChain = async (evidence: Evidence[]): Promise<ReasoningChain> => {
-  // TODO: S44 - Implement SignalReasoner
-  return {
-    steps: [],
-    conclusion: 'Evidence analysis pending',
-    confidence: 0.5,
-    duration: 0,
-  };
-};
-
-// Placeholder - will be implemented in S44
-const justifyScore = async (
-  score: number,
-  component: 'Q' | 'T' | 'L' | 'E' | 'overall',
-  evidence: Evidence[]
-): Promise<ScoreJustification> => {
-  // TODO: S44 - Implement ScoreJustifier
-  return {
-    score,
-    component,
-    justification: 'Score justification pending',
-    evidence: [],
-    factors: [],
-  };
-};
 
 /**
  * Evidence Wrapper Hook
@@ -67,31 +32,59 @@ const justifyScore = async (
  *   const enrichedObject = await enrichOutput(outputObject);
  */
 export function useEvidenceWrapper(): EvidenceWrapperResult {
-  const [currentEvidence, setCurrentEvidence] = useState<EvidencePack | null>(null);
+  const {
+    currentEvidence,
+    currentReasoning,
+    currentJustification,
+    isCollecting,
+    isReasoning,
+    error,
+    collectForTarget,
+    buildReasoning,
+    generateJustification,
+    storeRankingPack,
+    storeOutreachPack,
+    storeDiscoveryPack,
+  } = useEvidenceStore();
 
+  /**
+   * Enrich an output object with evidence and reasoning
+   */
   const enrichOutput = useCallback(
     async (object: OutputObject): Promise<LiveObject> => {
       // Step 1: Extract target from object
       const target = (object.data?.companyName as string) || object.title || 'Unknown';
 
-      // Step 2: Collect evidence
-      const evidence = await collectEvidence(target);
+      // Step 2: Collect evidence for target
+      const collection = await collectForTarget(target, 'company', []);
 
-      // Step 3: Create reasoning chain
-      const reasoning = await createReasoningChain(evidence);
+      // Step 3: Build reasoning chain
+      const reasoning = buildReasoning(collection);
 
-      // Step 4: Create evidence pack
+      // Step 4: Generate Q/T/L/E justification if we have score data
+      const existingScores = object.data?.scores as { Q?: number; T?: number; L?: number; E?: number } | undefined;
+      const justification = generateJustification(target, existingScores);
+
+      // Step 5: Create evidence pack based on object type
       const pack: EvidencePack = {
-        type: object.type as 'ranking' | 'outreach' | 'discovery',
+        type: (object.type as 'ranking' | 'outreach' | 'discovery') || 'discovery',
         target,
-        evidence,
-        reasoning,
+        evidence: collection.evidence,
+        reasoning: {
+          steps: reasoning.steps.map(s => ({
+            stage: s.stage,
+            output: s.output,
+            evidence: s.evidence,
+          })),
+          conclusion: reasoning.conclusion,
+          confidence: reasoning.confidence,
+          duration: reasoning.totalDuration,
+        },
         confidence: reasoning.confidence,
         generatedAt: new Date(),
       };
-      setCurrentEvidence(pack);
 
-      // Step 5: Return enriched object (extends, does not replace)
+      // Step 6: Return enriched object (extends, does not replace)
       const liveObject: LiveObject = {
         ...object,
         isLive: false,
@@ -100,13 +93,18 @@ export function useEvidenceWrapper(): EvidenceWrapperResult {
         threads: [],
         inspectorData: {
           metadata: object.data,
-          signals: evidence,
-          reasoning,
+          signals: collection.evidence,
+          reasoning: pack.reasoning,
           history: [
             {
               action: 'created',
               timestamp: object.timestamp,
               details: 'Object created by agent',
+            },
+            {
+              action: 'enriched',
+              timestamp: new Date(),
+              details: `Evidence collected: ${collection.evidence.length} items, confidence: ${(reasoning.confidence * 100).toFixed(0)}%`,
             },
           ],
         },
@@ -114,32 +112,91 @@ export function useEvidenceWrapper(): EvidenceWrapperResult {
 
       return liveObject;
     },
-    []
+    [collectForTarget, buildReasoning, generateJustification]
   );
 
+  /**
+   * Collect evidence for a specific target
+   */
   const collectEvidenceForTarget = useCallback(
-    async (target: string): Promise<EvidencePack> => {
-      const evidence = await collectEvidence(target);
-      const reasoning = await createReasoningChain(evidence);
+    async (target: string, signals: string[] = []): Promise<EvidencePack> => {
+      // Collect evidence
+      const collection = await collectForTarget(target, 'company', signals);
 
+      // Build reasoning
+      const reasoning = buildReasoning(collection);
+
+      // Create pack
       const pack: EvidencePack = {
         type: 'discovery',
         target,
-        evidence,
-        reasoning,
+        evidence: collection.evidence,
+        reasoning: {
+          steps: reasoning.steps.map(s => ({
+            stage: s.stage,
+            output: s.output,
+            evidence: s.evidence,
+          })),
+          conclusion: reasoning.conclusion,
+          confidence: reasoning.confidence,
+          duration: reasoning.totalDuration,
+        },
         confidence: reasoning.confidence,
         generatedAt: new Date(),
       };
 
-      setCurrentEvidence(pack);
+      // Store in discovery packs
+      storeDiscoveryPack({
+        id: `dp-${Date.now()}`,
+        query: target,
+        companies: [target],
+        reasoning,
+        matchCriteria: signals,
+        signalsDetected: collection.evidence
+          .filter(e => e.type === 'signal')
+          .map(e => e.title),
+        marketContext: `Evidence collected for ${target}`,
+        generatedAt: new Date(),
+      });
+
       return pack;
     },
-    []
+    [collectForTarget, buildReasoning, storeDiscoveryPack]
   );
+
+  /**
+   * Build current evidence pack from store state
+   */
+  const currentEvidencePack: EvidencePack | null = currentEvidence
+    ? {
+        type: 'discovery',
+        target: currentEvidence.target,
+        evidence: currentEvidence.evidence,
+        reasoning: currentReasoning
+          ? {
+              steps: currentReasoning.steps.map(s => ({
+                stage: s.stage,
+                output: s.output,
+                evidence: s.evidence,
+              })),
+              conclusion: currentReasoning.conclusion,
+              confidence: currentReasoning.confidence,
+              duration: currentReasoning.totalDuration,
+            }
+          : {
+              steps: [],
+              conclusion: 'Reasoning not yet built',
+              confidence: 0.5,
+              duration: 0,
+            },
+        confidence: currentEvidence.averageConfidence,
+        generatedAt: currentEvidence.collectedAt,
+      }
+    : null;
 
   return {
     enrichOutput,
     collectEvidence: collectEvidenceForTarget,
-    currentEvidence,
+    currentEvidence: currentEvidencePack,
   };
 }

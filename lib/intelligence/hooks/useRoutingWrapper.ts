@@ -16,61 +16,16 @@
 
 'use client';
 
-import { useCallback, useState } from 'react';
-import { useSIVAStore, AgentType } from '@/lib/stores/siva-store';
+import { useCallback, useMemo } from 'react';
+import { useSIVAStore } from '@/lib/stores/siva-store';
+import { useIntentStore } from '@/lib/stores/intent-store';
+import { useRoutingStore, selectRoutingSummary, selectExecutionStatus } from '@/lib/stores/routing-store';
+import type { RoutingWrapperResult } from '../types';
 import type {
-  Intent,
   RoutingDecision,
   OrchestrationPlan,
   RoutingMode,
-  ExecutionStep,
-  FallbackPath,
-  RoutingWrapperResult,
-} from '../types';
-
-// Placeholder - will be implemented in S45
-const createRoutingDecision = async (intent: Intent): Promise<RoutingDecision> => {
-  // TODO: S45 - Implement ToolRouter
-  return {
-    id: `route-${Date.now()}`,
-    query: intent.normalized.original,
-    intent,
-    selectedAgents: intent.agents,
-    executionOrder: intent.agents,
-    mode: 'step-by-step',
-    reasoning: 'Default routing based on intent agents',
-    confidence: intent.confidence,
-    timestamp: new Date(),
-  };
-};
-
-// Placeholder - will be implemented in S45
-const createOrchestrationPlan = (decision: RoutingDecision): OrchestrationPlan => {
-  // TODO: S45 - Implement MultiAgentOrchestrator
-  const steps: ExecutionStep[] = decision.executionOrder.map((agent, index) => ({
-    id: `step-${index}`,
-    agent,
-    status: 'pending',
-    inputs: {},
-  }));
-
-  const fallbackPaths: FallbackPath[] = [
-    {
-      trigger: 'error',
-      fromAgent: decision.executionOrder[0],
-      toAgent: 'abort',
-      message: 'Agent execution failed',
-    },
-  ];
-
-  return {
-    id: `plan-${Date.now()}`,
-    decision,
-    steps,
-    fallbackPaths,
-    estimatedDuration: steps.length * 2000, // 2s per step estimate
-  };
-};
+} from '../routing/types';
 
 /**
  * Routing Wrapper Hook
@@ -81,33 +36,174 @@ const createOrchestrationPlan = (decision: RoutingDecision): OrchestrationPlan =
  */
 export function useRoutingWrapper(): RoutingWrapperResult {
   const { setActiveAgent } = useSIVAStore();
+  const { currentIntent, currentEntities } = useIntentStore();
+  const {
+    currentDecision,
+    currentPlan,
+    executionProgress,
+    isRouting,
+    isExecuting,
+    error,
+    routeQuery,
+    quickRouteIntent,
+    executeCurrentPlan,
+  } = useRoutingStore();
 
-  const [currentPlan, setCurrentPlan] = useState<OrchestrationPlan | null>(null);
-  const [mode, setMode] = useState<RoutingMode>('step-by-step');
+  /**
+   * Route based on current intent from intent store
+   */
+  const routeCurrentIntent = useCallback(
+    (query: string): RoutingDecision | null => {
+      if (!currentIntent) {
+        console.warn('No current intent. Call useIntentWrapper.processQuery first.');
+        return null;
+      }
 
-  const routeToAgent = useCallback(
-    async (intent: Intent): Promise<RoutingDecision> => {
-      // Step 1: Create routing decision
-      const decision = await createRoutingDecision(intent);
+      // Route the query - currentIntent is already IntentClassification
+      const decision = routeQuery(query, currentIntent, currentEntities?.entities || []);
 
-      // Step 2: Create orchestration plan
-      const plan = createOrchestrationPlan(decision);
-      setCurrentPlan(plan);
-
-      // Step 3: Set the first agent as active (WRAPS existing setActiveAgent)
-      if (decision.executionOrder.length > 0) {
-        setActiveAgent(decision.executionOrder[0]);
+      // Set the primary agent as active (WRAPS existing setActiveAgent)
+      if (decision.primaryAgent) {
+        setActiveAgent(decision.primaryAgent);
       }
 
       return decision;
     },
-    [setActiveAgent]
+    [currentIntent, currentEntities, routeQuery, setActiveAgent]
   );
 
+  /**
+   * Route to agent based on intent type directly
+   */
+  const routeToAgent = useCallback(
+    async (intent: {
+      type: string;
+      confidence: number;
+      agents: string[];
+      normalized: { original: string };
+    }): Promise<RoutingDecision> => {
+      // Build a complete intent classification
+      // Filter agents to only include valid AgentType values
+      const validAgents = intent.agents.filter(
+        (a): a is import('@/lib/stores/siva-store').AgentType =>
+          ['discovery', 'ranking', 'outreach', 'enrichment', 'demo'].includes(a)
+      );
+
+      const primaryIntent = {
+        type: intent.type as import('../intent/types').IntentType,
+        category: 'discovery' as import('../intent/types').IntentCategory,
+        confidence: intent.confidence,
+        agents: validAgents,
+        matchedKeywords: [],
+        matchedPatterns: [],
+      };
+
+      const intentClassification: import('../intent/types').IntentClassification = {
+        primary: primaryIntent,
+        secondary: [],
+        isCompound: false,
+        allIntents: [primaryIntent],
+        rawQuery: intent.normalized.original,
+        processedQuery: intent.normalized.original,
+      };
+
+      // Route the query
+      const decision = routeQuery(
+        intent.normalized.original,
+        intentClassification,
+        currentEntities?.entities || []
+      );
+
+      // Set the primary agent as active (WRAPS existing setActiveAgent)
+      if (decision.primaryAgent) {
+        setActiveAgent(decision.primaryAgent);
+      }
+
+      return decision;
+    },
+    [currentEntities, routeQuery, setActiveAgent]
+  );
+
+  /**
+   * Execute the current plan
+   */
+  const executePlan = useCallback(async () => {
+    return executeCurrentPlan();
+  }, [executeCurrentPlan]);
+
+  /**
+   * Quick route for simple intent types
+   */
+  const quickRoute = useCallback(
+    (intentType: string) => {
+      const agent = quickRouteIntent(intentType);
+      setActiveAgent(agent);
+      return agent;
+    },
+    [quickRouteIntent, setActiveAgent]
+  );
+
+  /**
+   * Get current routing mode
+   */
+  const mode: RoutingMode = currentDecision?.mode || 'single';
+
+  /**
+   * Set routing mode (updates decision if exists)
+   */
+  const setMode = useCallback((newMode: RoutingMode) => {
+    // Mode changes would require re-routing
+    // For now, just log - actual mode is determined by routing decision
+    console.log('Mode change requested:', newMode);
+  }, []);
+
+  /**
+   * Routing summary for display
+   */
+  const routingSummary = useMemo(() => {
+    if (!currentDecision) return null;
+
+    return {
+      primaryAgent: currentDecision.primaryAgent,
+      supportingAgents: currentDecision.supportingAgents,
+      mode: currentDecision.mode,
+      confidence: currentDecision.confidence,
+      reasoning: currentDecision.reasoning,
+    };
+  }, [currentDecision]);
+
+  /**
+   * Execution status for display
+   */
+  const executionStatus = useMemo(() => {
+    return {
+      isExecuting,
+      status: executionProgress.status,
+      progress: executionProgress.totalSteps > 0
+        ? Math.round((executionProgress.completedSteps / executionProgress.totalSteps) * 100)
+        : 0,
+      currentStep: executionProgress.currentStep,
+    };
+  }, [isExecuting, executionProgress]);
+
   return {
+    // Core routing
     routeToAgent,
+    routeCurrentIntent,
+    quickRoute,
+
+    // Plan management
     currentPlan,
+    executePlan,
+
+    // Mode
     mode,
     setMode,
+
+    // Status
+    routingSummary,
+    executionStatus,
+    isRouting,
+    error,
   };
 }

@@ -15,92 +15,15 @@
 
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { usePersonaStore, selectCurrentTone, selectAvailablePersonas } from '@/lib/stores/persona-store';
 import type {
   ToneType,
   OutreachToneType,
   PersonaConfig,
-  TonePack,
+  PersonaApplicationResult,
   PersonaWrapperResult,
 } from '../types';
-
-// Default Banking Persona - will be expanded in S47
-const DEFAULT_PERSONA: PersonaConfig = {
-  id: 'banking-premium',
-  name: 'Premium Banking Sales',
-  basePersonality:
-    'Professional, knowledgeable, solution-oriented banking sales expert with deep UAE market expertise',
-  toneDefault: 'banking_sales',
-  outreachToneDefault: 'email_formal',
-  traits: [
-    { name: 'Professional', description: 'Maintains executive-level professionalism', weight: 0.9 },
-    { name: 'Knowledgeable', description: 'Deep banking and finance expertise', weight: 0.85 },
-    { name: 'Solution-oriented', description: 'Focuses on solving client problems', weight: 0.8 },
-    { name: 'UAE Market Expert', description: 'Understands UAE banking landscape', weight: 0.75 },
-  ],
-  vocabulary: [
-    'digital transformation',
-    'premium banking',
-    'wealth management',
-    'relationship banking',
-    'advisory services',
-  ],
-  avoidWords: ['cheap', 'basic', 'simple', 'just', 'only'],
-};
-
-// Placeholder tone packs - will be expanded in S47
-const TONE_PACKS: Record<ToneType, TonePack> = {
-  formal: {
-    id: 'formal',
-    name: 'Formal',
-    description: 'Professional and formal tone suitable for executive communication',
-    examples: ['I would like to bring to your attention...', 'Please find enclosed...'],
-    modifiers: [],
-  },
-  friendly: {
-    id: 'friendly',
-    name: 'Friendly',
-    description: 'Warm and approachable while maintaining professionalism',
-    examples: ["I'd love to share...", "Here's something you might find interesting..."],
-    modifiers: [],
-  },
-  executive: {
-    id: 'executive',
-    name: 'Executive',
-    description: 'Concise and direct, suitable for C-suite communication',
-    examples: ['Key insight:', 'Bottom line:', 'Strategic recommendation:'],
-    modifiers: [],
-  },
-  banking_sales: {
-    id: 'banking_sales',
-    name: 'Banking Sales',
-    description: 'Premium banking sales tone with UAE market focus',
-    examples: [
-      'Based on our analysis of the UAE banking sector...',
-      'This aligns with your digital transformation objectives...',
-    ],
-    modifiers: [],
-  },
-  technical: {
-    id: 'technical',
-    name: 'Technical',
-    description: 'Detailed technical tone for in-depth analysis',
-    examples: ['Technical analysis indicates...', 'The data suggests...'],
-    modifiers: [],
-  },
-};
-
-// Placeholder - will be implemented in S47
-const applyToneModifiers = (message: string, tone: ToneType): string => {
-  // TODO: S47 - Implement TonePackManager
-  return message;
-};
-
-// Placeholder - will be implemented in S47
-const applyPersonaTraits = (message: string, persona: PersonaConfig): string => {
-  // TODO: S47 - Implement PersonaKernel
-  return message;
-};
 
 /**
  * Persona Wrapper Hook
@@ -110,30 +33,130 @@ const applyPersonaTraits = (message: string, persona: PersonaConfig): string => 
  *   const formattedMessage = applyTone(rawMessage);
  */
 export function usePersonaWrapper(): PersonaWrapperResult {
-  const [currentTone, setCurrentTone] = useState<ToneType>('banking_sales');
-  const [persona] = useState<PersonaConfig>(DEFAULT_PERSONA);
+  const {
+    activePersona,
+    activeTonePack,
+    isApplying,
+    error,
+    setActiveTone,
+    applyToContent,
+    getSuggestedTone,
+  } = usePersonaStore();
 
+  /**
+   * Apply tone and persona to a message
+   */
   const applyTone = useCallback(
-    (message: string): string => {
-      // Step 1: Apply persona traits
-      let formatted = applyPersonaTraits(message, persona);
-
-      // Step 2: Apply tone modifiers
-      formatted = applyToneModifiers(formatted, currentTone);
-
-      return formatted;
+    (message: string, context?: {
+      isOutreach?: boolean;
+      agentType?: string;
+      intentType?: string;
+    }): string => {
+      const result = applyToContent(message, context);
+      return result.modified;
     },
-    [currentTone, persona]
+    [applyToContent]
   );
 
-  const setTone = useCallback((tone: ToneType) => {
-    setCurrentTone(tone);
+  /**
+   * Apply tone with full result details
+   */
+  const applyToneWithDetails = useCallback(
+    (message: string, context?: {
+      isOutreach?: boolean;
+      agentType?: string;
+      intentType?: string;
+    }): PersonaApplicationResult => {
+      return applyToContent(message, context);
+    },
+    [applyToContent]
+  );
+
+  /**
+   * Set the active tone
+   */
+  const setTone = useCallback(
+    (tone: ToneType | OutreachToneType) => {
+      setActiveTone(tone);
+    },
+    [setActiveTone]
+  );
+
+  /**
+   * Get suggested tone for context
+   */
+  const suggestToneFor = useCallback(
+    (context: {
+      isOutreach: boolean;
+      recipientRole?: string;
+      urgency?: 'low' | 'medium' | 'high';
+      relationship?: 'new' | 'warm' | 'existing';
+    }) => {
+      return getSuggestedTone(context);
+    },
+    [getSuggestedTone]
+  );
+
+  /**
+   * Current tone (for display/compatibility)
+   */
+  const currentTone: ToneType = activePersona.baseTone;
+
+  /**
+   * Persona config (for display/compatibility)
+   * Maps new format to legacy format for backwards compatibility
+   */
+  const persona: PersonaConfig = useMemo(() => ({
+    id: activePersona.id,
+    name: activePersona.name,
+    basePersonality: activePersona.description,
+    toneDefault: activePersona.baseTone,
+    outreachToneDefault: activePersona.outreachTone,
+    traits: activePersona.traits.map(t => ({
+      name: t.name,
+      description: t.description,
+      weight: t.intensity,
+    })),
+    vocabulary: [],
+    avoidWords: [],
+  }), [activePersona]);
+
+  /**
+   * Available tones for selection
+   */
+  const availableTones = useMemo(() => {
+    const baseTones: ToneType[] = ['professional', 'friendly', 'concise', 'detailed'];
+    const outreachTones: OutreachToneType[] = ['executive', 'consultative'];
+    return { base: baseTones, outreach: outreachTones };
   }, []);
 
+  /**
+   * Tone metrics for current tone pack
+   */
+  const toneInfo = useMemo(() => {
+    if (!activeTonePack) return null;
+    return {
+      id: activeTonePack.id,
+      name: activeTonePack.name,
+      tone: activeTonePack.tone,
+    };
+  }, [activeTonePack]);
+
   return {
+    // Core functions
     applyTone,
-    currentTone,
+    applyToneWithDetails,
     setTone,
+    suggestToneFor,
+
+    // Current state
+    currentTone,
     persona,
+    toneInfo,
+    availableTones,
+
+    // Status
+    isApplying,
+    error,
   };
 }

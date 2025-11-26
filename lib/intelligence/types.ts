@@ -78,11 +78,14 @@ export interface ContextMemoryEntry {
 
 export interface Evidence {
   id: string;
-  type: 'signal' | 'metric' | 'news' | 'profile' | 'comparison' | 'trend';
+  type: 'signal' | 'metric' | 'news' | 'profile' | 'comparison' | 'trend' | 'social' | 'financial' | 'technology' | 'leadership';
   source: string;
+  title?: string;
   content: string;
   confidence: number;
+  relevance?: number;
   timestamp: Date;
+  url?: string;
   metadata: Record<string, unknown>;
 }
 
@@ -94,13 +97,14 @@ export interface ReasoningChain {
 }
 
 export interface ReasoningChainStep {
-  step: number;
-  name: string;
-  description: string;
-  inputs: string[];
+  step?: number;
+  stage?: string;
+  name?: string;
+  description?: string;
+  inputs?: string[];
   output: string;
   evidence: Evidence[];
-  duration: number;
+  duration?: number;
 }
 
 export interface EvidencePack {
@@ -124,7 +128,11 @@ export interface ScoreJustification {
 // S45: Routing Types
 // =============================================================================
 
-export type RoutingMode = 'autonomous' | 'step-by-step' | 'manual';
+export type RoutingMode =
+  | 'single'      // Single agent execution
+  | 'sequential'  // Multiple agents in sequence
+  | 'parallel'    // Multiple agents in parallel
+  | 'hybrid';     // Mix of sequential and parallel
 
 export interface RoutingDecision {
   id: string;
@@ -207,7 +215,7 @@ export interface ObjectInspectorData {
 }
 
 export interface ObjectHistoryEntry {
-  action: 'created' | 'updated' | 'linked' | 'pinned' | 'unpinned';
+  action: 'created' | 'updated' | 'linked' | 'pinned' | 'unpinned' | 'enriched' | 'unlinked' | 'archived' | 'restored' | 'refreshed';
   timestamp: Date;
   details: string;
 }
@@ -234,19 +242,19 @@ export interface ObjectSession {
 // =============================================================================
 
 export type ToneType =
-  | 'formal'
-  | 'friendly'
-  | 'executive'
-  | 'banking_sales'
-  | 'technical';
+  | 'professional'    // Formal, business-appropriate
+  | 'friendly'        // Warm, approachable
+  | 'concise'         // Brief, to-the-point
+  | 'detailed'        // Comprehensive, thorough
+  | 'technical'       // Technical language, precise
+  | 'casual';         // Relaxed, conversational
 
 export type OutreachToneType =
-  | 'email_formal'
-  | 'email_casual'
-  | 'linkedin_connection'
-  | 'linkedin_inmail'
-  | 'call_script_short'
-  | 'call_script_detailed';
+  | 'executive'       // C-suite appropriate
+  | 'consultative'    // Advisory, problem-solving
+  | 'challenger'      // Thought-provoking
+  | 'relationship'    // Connection-focused
+  | 'value-driven';   // ROI and benefits focused
 
 export interface PersonaConfig {
   id: string;
@@ -298,6 +306,20 @@ export interface LearnedPattern {
   lastUsed: Date;
 }
 
+export interface PersonaApplicationResult {
+  original: string;
+  modified: string;
+  appliedRules: string[];
+  toneMetrics: {
+    formality: number;
+    brevity: number;
+    warmth: number;
+    technicality: number;
+    readability: number;
+    wordCount: number;
+  };
+}
+
 // =============================================================================
 // Wrapper Hook Types
 // =============================================================================
@@ -310,10 +332,40 @@ export interface IntentWrapperResult {
 }
 
 export interface RoutingWrapperResult {
-  routeToAgent: (intent: Intent) => Promise<RoutingDecision>;
-  currentPlan: OrchestrationPlan | null;
+  // Core routing - uses 'any' for RoutingDecision to avoid import conflicts
+  routeToAgent: (intent: {
+    type: string;
+    confidence: number;
+    agents: string[];
+    normalized: { original: string };
+  }) => Promise<unknown>;
+  routeCurrentIntent: (query: string) => unknown;
+  quickRoute: (intentType: string) => AgentType;
+
+  // Plan management - uses 'unknown' for OrchestrationPlan to avoid import conflicts
+  currentPlan: unknown;
+  executePlan: () => Promise<unknown>;
+
+  // Mode
   mode: RoutingMode;
   setMode: (mode: RoutingMode) => void;
+
+  // Status
+  routingSummary: {
+    primaryAgent: AgentType;
+    supportingAgents: AgentType[];
+    mode: RoutingMode;
+    confidence: number;
+    reasoning: string;
+  } | null;
+  executionStatus: {
+    isExecuting: boolean;
+    status: string;
+    progress: number;
+    currentStep: string | null;
+  };
+  isRouting: boolean;
+  error: string | null;
 }
 
 export interface EvidenceWrapperResult {
@@ -323,8 +375,19 @@ export interface EvidenceWrapperResult {
 }
 
 export interface PersonaWrapperResult {
-  applyTone: (message: string) => string;
+  // Core functions
+  applyTone: (message: string, context?: { isOutreach?: boolean; agentType?: string; intentType?: string }) => string;
+  applyToneWithDetails: (message: string, context?: { isOutreach?: boolean; agentType?: string; intentType?: string }) => PersonaApplicationResult;
+  setTone: (tone: ToneType | OutreachToneType) => void;
+  suggestToneFor: (context: { isOutreach: boolean; recipientRole?: string; urgency?: 'low' | 'medium' | 'high'; relationship?: 'new' | 'warm' | 'existing' }) => ToneType | OutreachToneType;
+
+  // Current state
   currentTone: ToneType;
-  setTone: (tone: ToneType) => void;
   persona: PersonaConfig;
+  toneInfo: { id: string; name: string; tone: string } | null;
+  availableTones: { base: ToneType[]; outreach: OutreachToneType[] };
+
+  // Status
+  isApplying: boolean;
+  error: string | null;
 }
