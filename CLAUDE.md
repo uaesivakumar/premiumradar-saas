@@ -104,81 +104,115 @@ The specific function or product area the salesperson covers.
                           ↓ sends selection
 ┌─────────────────────────────────────────────────────────┐
 │                       UPR OS                             │
-│  DECIDES: which signals | how reasoning | how routing   │
-│  OWNS: vertical definitions, sub-verticals, rules       │
-│  STORES: all configuration                              │
+│  PURE ENGINES ONLY (no business rules)                  │
+│  FETCHES config from SaaS via API                       │
+│  APPLIES config to SIVA wrappers                        │
 └─────────────────────────────────────────────────────────┘
-                          ↓ returns rules
+                          ↓ calls API
 ┌─────────────────────────────────────────────────────────┐
-│                  Sales Context Layer                     │
-│  LOADS rules from OS | APPLIES to SIVA wrappers         │
+│              PremiumRadar SaaS (this repo)              │
+│  STORES: all vertical configs in PostgreSQL             │
+│  EXPOSES: /api/admin/vertical-config                    │
+│  MANAGES: Super-Admin Panel for vertical editing        │
 └─────────────────────────────────────────────────────────┘
-                          ↓ filters
+                          ↓ returns config
 ┌─────────────────────────────────────────────────────────┐
 │                  SIVA Intelligence Layer                 │
 │  Intent → Evidence → Routing → Objects → Persona        │
+│  (uses config to decide signals, scoring, etc.)         │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Architectural Responsibility
 
-| Component | Responsibility |
-|-----------|----------------|
-| **SaaS Frontend** | ONLY select vertical/sub-vertical/region |
-| **UPR OS** | DECIDES all rules (signals, reasoning, routing) |
-| **Sales Context Layer** | LOADS rules from OS, applies to SIVA |
-| **SIVA Wrappers** | READ rules before generating intelligence |
+| Component | Responsibility | Contains Vertical Logic? |
+|-----------|----------------|--------------------------|
+| **SaaS Frontend** | Select vertical/sub-vertical/region, display results | ❌ NO |
+| **SaaS Admin Panel** | CRUD for vertical configs, seeded examples | ✅ YES (stores) |
+| **SaaS PostgreSQL** | Single source of truth for configs | ✅ YES (data) |
+| **UPR OS** | Pure engines, fetches config via API | ❌ NO |
+| **SIVA Wrappers** | Apply config to intelligence operations | ❌ NO (reads config) |
 
-### What This Means for TC
+### Runtime Flow
 
-1. **NO hardcoded signal logic** in SaaS frontend
-2. **NO vertical-specific conditionals** in SIVA wrappers
-3. **ALL rules come from OS** via Sales Context Layer
-4. **OS config determines** which signals apply to which vertical
-5. **SaaS is plug-and-play** - add new verticals via OS config, not code
+```
+1. Frontend → sends vertical/subVertical/region
+2. OS → calls GET /api/admin/vertical-config?vertical=X&subVertical=Y&region=Z
+3. SaaS → returns config from PostgreSQL (with 5-min cache)
+4. OS → applies config inside SIVA wrappers
+5. SIVA → generates intelligence using config rules
+```
 
 ---
 
-## OS Configuration Interface
+## Vertical Config API
 
-The SalesContextProvider should fetch configuration from OS:
+**Endpoint:** `/api/admin/vertical-config`
 
 ```typescript
-// This is what OS returns for a vertical
-interface VerticalConfig {
-  vertical: string;
-  subVerticals: SubVerticalConfig[];
-  radarTarget: 'companies' | 'individuals' | 'families' | 'candidates';
-  allowedSignalTypes: string[];
-  playbooks: PlaybookConfig[];
-  scoringFactors: ScoringConfig;
+// GET - Fetch specific config
+GET /api/admin/vertical-config?vertical=banking&subVertical=employee-banking&region=UAE
+
+// Response when found
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "vertical": "banking",
+    "subVertical": "employee-banking",
+    "regionCountry": "UAE",
+    "radarTarget": "companies",
+    "config": {
+      "allowedSignalTypes": ["hiring-expansion", "headcount-jump", ...],
+      "signalConfigs": [...],
+      "scoringWeights": { "quality": 0.3, ... },
+      "enrichmentSources": [...],
+      "outreachChannels": [...],
+      "journeyStages": [...]
+    }
+  }
 }
 
-// SaaS calls OS to get config
-const config = await osClient.getVerticalConfig(vertical, subVertical, region);
-
-// Sales Context applies this config
-salesContext.applyConfig(config);
+// Response when NOT configured
+{
+  "success": false,
+  "error": "VERTICAL_NOT_CONFIGURED",
+  "message": "Coming Soon — We're expanding to your industry! Request early access."
+}
 ```
 
 ---
 
 ## Current Implementation Status
 
-### ✅ Implemented (Banking Only)
-- Banking vertical with sub-verticals
-- UAE region support
-- Hiring/expansion signals for banking
+### ✅ Fully Implemented
+- Vertical config service with PostgreSQL storage
+- API endpoint `/api/admin/vertical-config`
+- Banking/Employee Banking/UAE seed script
+- Config caching (5-min TTL)
+- Zod validation for configs
 
-### 🚧 Placeholder (No Backend Logic)
-- Insurance vertical (UI only)
-- Real Estate vertical (UI only)
-- Other regions
+### ✅ Seeded (Ready to Use)
+- Banking vertical
+- Employee Banking sub-vertical
+- UAE region
+- All hiring/expansion signals
+- Scoring weights and factors
+- Regional weights (UAE, KSA, Qatar, etc.)
+- Enrichment sources (Apollo, LinkedIn, Crunchbase)
+- Outreach channels
+- Journey stages
 
-### ❌ NOT Implemented
-- OS-level vertical config API
-- Dynamic signal loading from OS
-- Non-banking signal types
+### 🚧 To Build
+- Super-Admin UI for vertical management
+- Non-banking vertical seeds
+
+### Seeding Banking Vertical
+
+```bash
+# Run the seed script
+npx ts-node scripts/seeds/banking-employee-uae.ts
+```
 
 ---
 
