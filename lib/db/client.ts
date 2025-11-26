@@ -13,15 +13,55 @@ if (!DATABASE_URL && process.env.NODE_ENV === 'production') {
   console.error('[DB] DATABASE_URL not set in production!');
 }
 
-const poolConfig: PoolConfig = {
-  connectionString: DATABASE_URL,
-  max: 10, // Maximum connections in pool
-  idleTimeoutMillis: 30000, // Close idle connections after 30s
-  connectionTimeoutMillis: 10000, // Fail connection after 10s
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false } // GCP Cloud SQL requires SSL
-    : false,
-};
+/**
+ * Parse Cloud SQL socket connection string
+ * Format: postgresql://user:pass@/dbname?host=/cloudsql/instance-connection-name
+ */
+function parseCloudSQLConfig(url: string): PoolConfig {
+  // Check if this is a Cloud SQL socket URL
+  const isCloudSQL = url.includes('/cloudsql/');
+
+  if (isCloudSQL) {
+    // Extract components from Cloud SQL URL
+    // postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
+    const match = url.match(/postgresql:\/\/([^:]+):([^@]+)@\/([^?]+)\?host=(.+)/);
+    if (match) {
+      const [, user, password, database, host] = match;
+      return {
+        user,
+        password,
+        database,
+        host, // Unix socket path
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+        // No SSL for Unix socket connections
+      };
+    }
+  }
+
+  // Standard connection string
+  return {
+    connectionString: url,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+    ssl: process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: false }
+      : false,
+  };
+}
+
+const poolConfig: PoolConfig = DATABASE_URL
+  ? parseCloudSQLConfig(DATABASE_URL)
+  : {
+      host: 'localhost',
+      port: 5432,
+      database: 'premiumradar_saas',
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    };
 
 // Singleton pool instance
 let pool: Pool | null = null;
