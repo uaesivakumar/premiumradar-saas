@@ -1,201 +1,351 @@
-# PremiumRadar-SAAS Sprint Execution
+# PremiumRadar Sprint Execution
 
-Start executing sprints with full Notion integration and implementation guidelines.
+Start executing sprints with architecture enforcement and Notion integration.
 
 **Usage:**
 - `/start` - Start current sprint (fetches from Notion)
-- `/start S26` - Start specific sprint
-- `/start S26-S30` - Start sprint range (stream)
+- `/start S48` - Start specific sprint
+- `/start S48-S52` - Start sprint range (stream)
+
+---
+
+## CRITICAL: ARCHITECTURE BOUNDARY
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              TWO ENGINES - NEVER MIX THEM                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  🎨 PremiumRadar SaaS          │  🧠 UPR OS                     │
+│  (Multi-tenant Experience)     │  (Intelligence Engine)         │
+│                                │                                 │
+│  • Auth & Identity             │  • LLM Routing                  │
+│  • Billing & Plans             │  • API Providers                │
+│  • Tenant Admin UI             │  • Vertical Packs               │
+│  • Workspace UI                │  • Journey Engine               │
+│  • Journey Builder UI          │  • Autonomous Engine            │
+│  • Widgets & Dashboards        │  • Evidence System              │
+│  • Mobile/PWA                  │  • Object Intelligence          │
+│  • Marketplace                 │  • Predictive Models            │
+│                                │  • Real-time Signals            │
+│  Knows tenants: YES            │  Knows tenants: NO              │
+│  Path: packages/saas/          │  Path: packages/upr-os/         │
+│                                │                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### SPRINT → SERVICE ALLOCATION (MEMORIZE THIS)
+
+| Sprint | Service | Sprint | Service |
+|--------|---------|--------|---------|
+| S48 | **SaaS** | S63 | **SaaS** |
+| S49 | **SaaS** | S64 | OS |
+| S50 | OS | S65 | OS |
+| S51 | OS | S66 | OS |
+| S52 | OS | S67 | OS |
+| S53 | OS | S68 | OS |
+| S54 | **SaaS** | S69 | OS |
+| S55 | OS | S70 | OS |
+| S56 | OS | S71 | OS |
+| S57 | **SaaS** | S72 | OS |
+| S58 | OS | S73 | OS |
+| S59 | OS | S74 | OS |
+| S60 | OS | S75 | **Shared** |
+| S61 | OS | S76 | **SaaS** |
+| S62 | **SaaS** | S77 | **SaaS** |
+
+---
 
 ## EXECUTE THESE STEPS IN ORDER:
 
-### Step 1: Read Master Context (MANDATORY)
+### Step 1: Read Architecture (MANDATORY FIRST)
+```bash
+cat ARCHITECTURE.md
+cat .claude/SPRINT_TRACKER.md
+```
+**TC MUST read these files BEFORE any action.**
+
+### Step 2: Check Sprint Service Allocation (MANDATORY)
+```bash
+node scripts/sprint-service.js S48
+```
+
+This outputs:
+- Which service (SaaS / OS / Shared)
+- Which directory to work in
+- Branch naming convention
+- Commit convention
+- Focus areas
+
+**STOP if you don't know which service you're working on!**
+
+### Step 3: Read Master Context
 ```bash
 cat docs/UPR_SAAS_CONTEXT.md
 ```
-**TC MUST read this file completely before any action.**
 
-### Step 2: Parse Sprint Input
+### Step 4: Parse Sprint Input
 Extract sprint number(s) from command:
-- Single: `/start S26` → Sprint 26
-- Range: `/start S26-S30` → Sprints 26, 27, 28, 29, 30
+- Single: `/start S48` → Sprint 48
+- Range: `/start S48-S52` → Sprints 48, 49, 50, 51, 52
 - Current: `/start` → Fetch latest incomplete sprint
 
-### Step 3: Fetch Notion Token
+### Step 5: Fetch Sprint Details from Notion
 ```bash
 export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)
 ```
 
-### Step 4: Fetch Sprint Details from Notion
 ```javascript
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const SPRINTS_DB = '5c32e26d-641a-4711-a9fb-619703943fb9';
 const FEATURES_DB = '26ae5afe-4b5f-4d97-b402-5c459f188944';
 
-// Fetch sprint(s)
-const sprints = await notion.databases.query({
-  database_id: SPRINTS_DB,
-  filter: {
-    or: sprintNumbers.map(n => ({
-      property: 'Sprint',
-      title: { contains: `S${n}` }
-    }))
-  }
-});
-
-// Fetch features for these sprints
-const features = await notion.databases.query({
-  database_id: FEATURES_DB,
-  filter: {
-    and: [
-      { property: 'Sprint', number: { greater_than_or_equal_to: startSprint } },
-      { property: 'Sprint', number: { less_than_or_equal_to: endSprint } },
-    ]
-  }
-});
+// Fetch sprint(s) and features
 ```
 
-### Step 5: Validate Environment
-```bash
-# Check staging health
-curl -s https://upr.sivakumar.ai/api/health | jq .
+### Step 6: Display Sprint Plan WITH SERVICE INFO
 
-# Check git status
-git status
-git log --oneline -3
 ```
-
-### Step 6: Display Sprint Plan
-Present to user:
-```
-============================================================
+════════════════════════════════════════════════════════════════════
 SPRINT EXECUTION PLAN
-============================================================
+════════════════════════════════════════════════════════════════════
 
-Sprint(s): S26-S30
-Stream: Stream 11 - AI Surface Extension
-Total Features: 40
+Sprint: S48 - Identity Intelligence & Vertical Lockdown
+Service: 🎨 PremiumRadar SaaS
+Path: packages/saas/src/lib/auth/identity
+Branch: feat/s48-saas-identity-intelligence
+Commit: feat(saas/s48): ...
 
-SPRINT S26: Global SIVA Surface
-Goal: Full-screen AI canvas replacing traditional dashboard
-Features (8):
-  [ ] SIVASurface.tsx component
-  [ ] Neural mesh background animation
-  [ ] SIVAInputBar with Cmd+K
-  [ ] SIVAPersonaPanel for AI state
-  [ ] Zustand store setup
-  [ ] Industry-aware theming
-  [ ] Quick start suggestion cards
-  [ ] Keyboard shortcut handler
+────────────────────────────────────────────────────────────────────
+⚠️  ARCHITECTURE RULES FOR THIS SPRINT:
+────────────────────────────────────────────────────────────────────
 
-SPRINT S27: Output Object Engine
-Goal: Draggable AI response containers
-Features (8):
-  ...
+✅ DO:
+  • Work in packages/saas/ directory
+  • Handle multi-tenant concerns
+  • Call UPR OS via uprClient API
+  • Know about tenant IDs, user IDs
 
-============================================================
+❌ DON'T:
+  • Put intelligence logic here
+  • Implement LLM calls directly
+  • Add scoring/ranking logic
+  • Process signals directly
+
+────────────────────────────────────────────────────────────────────
+
+Features (10):
+  [ ] Email Domain → Company Extraction
+  [ ] Enrichment-based Industry Detection
+  [ ] Vertical Suggestion at Onboarding
+  [ ] Vertical Lock After Confirmation
+  [ ] Super-Admin Vertical Override
+  [ ] Consulting-Mode Vertical
+  [ ] MFA for Vertical Overrides
+  [ ] Session Validation (Vertical-bound)
+  [ ] Corporate Email MX Verification
+  [ ] Industry Confidence Score
+
+════════════════════════════════════════════════════════════════════
 ```
 
-### Step 7: Implementation Guidelines (CRITICAL)
+### Step 7: Create Branch with Service Prefix
+```bash
+# For SaaS sprints:
+git checkout -b feat/s48-saas-identity-intelligence
 
-**TC MUST follow these rules during implementation:**
+# For OS sprints:
+git checkout -b feat/s50-os-api-provider-management
 
-#### DO:
-- ✅ Create components in appropriate directories (`components/`, `lib/`, `app/`)
-- ✅ Use TypeScript for all new files
-- ✅ Follow existing code patterns in the codebase
-- ✅ Run `npm run build` after major changes
-- ✅ Update feature status in Notion as you complete each feature
-- ✅ Create meaningful git commits with conventional commit format
-- ✅ Test locally before considering complete
-
-#### DON'T:
-- ❌ Skip reading existing code before modifying
-- ❌ Create features without UI surface (unless backend-only)
-- ❌ Deploy to production without approval
-- ❌ Mark sprint complete without all features done
-- ❌ Skip Notion updates
-- ❌ Introduce security vulnerabilities (OWASP Top 10)
-
-#### File Organization:
-```
-components/
-├── siva/           # SIVA AI Surface components
-├── shell/          # AppShell, Sidebar, Header
-├── ui/             # Shared UI components
-└── layout/         # Layout components
-
-lib/
-├── stores/         # Zustand stores
-├── agents/         # AI agent definitions
-└── os-client.ts    # OS API client (ONLY way to call OS)
-
-app/
-├── (dashboard)/    # Dashboard routes
-├── api/            # API routes
-└── page.tsx        # Landing page
+# For Shared sprints:
+git checkout -b feat/s75-shared-integrations-hub
 ```
 
-### Step 8: Begin Execution
-After displaying the plan, ask:
+### Step 8: Implementation Rules by Service
+
+#### IF SERVICE = SaaS:
+```typescript
+// ✅ CORRECT: SaaS handles auth, billing, UI
+// packages/saas/src/lib/auth/identity/vertical-lock.ts
+
+export async function lockUserToVertical(userId: string, vertical: string) {
+  // SaaS handles the user record
+  await supabase.from('users').update({ vertical, vertical_locked: true })
+    .eq('id', userId);
+}
+
+// ✅ CORRECT: SaaS calls OS for intelligence
+import { uprClient } from '@/lib/upr-client';
+
+export async function detectIndustry(email: string) {
+  // SaaS extracts domain, calls OS for enrichment
+  const domain = email.split('@')[1];
+  const industry = await uprClient.enrichment.detectIndustry(domain);
+  return industry;
+}
 ```
-Ready to begin Sprint S26?
-- Features will be implemented in order
-- Status will be updated in Notion
-- Commits will follow conventional format
 
-Reply "begin" to start, or specify a different starting point.
+#### IF SERVICE = OS:
+```typescript
+// ✅ CORRECT: OS handles intelligence, NO tenant awareness
+// packages/upr-os/src/intelligence/providers/fallback.ts
+
+export async function enrichWithFallback(
+  domain: string,
+  context: VerticalContext  // Passed from SaaS, NOT stored
+) {
+  // Try providers in priority order
+  for (const provider of getProviders(context)) {
+    const result = await provider.enrich(domain);
+    if (result) return result;
+  }
+  return null;
+}
+
+// ❌ WRONG: OS should NEVER do this
+export async function enrichForTenant(tenantId: string) {
+  // NEVER! OS doesn't know about tenants
+}
 ```
 
-### Step 9: Track Progress
-As features are completed:
-1. Mark feature as "Done" in Notion
-2. Create meaningful commit
-3. Update sprint status if all features complete
-4. Move to next feature
+#### IF SERVICE = Shared:
+```typescript
+// UI component in SaaS
+// packages/saas/src/components/integrations/SalesforceConnect.tsx
 
-### Step 10: Sprint Completion
-When all features in a sprint are done:
+// Backend logic in OS
+// packages/upr-os/src/integrations/salesforce/sync.ts
+```
+
+### Step 9: Commit Convention
+```bash
+# SaaS commits
+git commit -m "feat(saas/s48): Add email domain verification"
+
+# OS commits
+git commit -m "feat(os/s50): Implement provider fallback engine"
+
+# Shared commits
+git commit -m "feat(shared/s75): Add Salesforce sync"
+```
+
+### Step 10: Before Completing Feature
+Ask yourself:
+1. **Is this code in the right service?**
+2. **Does OS code reference tenant IDs?** (Should be NO)
+3. **Does SaaS code contain intelligence logic?** (Should be NO)
+4. **Is SaaS calling OS via API client?** (Should be YES)
+
+### Step 11: Sprint Completion
 1. Run `npm run build` to verify no errors
-2. Run `npm test` for test coverage
-3. Update sprint status to "Done" in Notion
-4. Fill in Outcomes, Highlights, Learnings
-5. Create git tag: `sprint-sX-complete`
-6. Ask if user wants to continue to next sprint
+2. Update sprint status to "Done" in Notion
+3. Create git tag: `sprint-s48-complete`
+4. Update `.claude/SPRINT_TRACKER.md` with completion
+
+---
+
+## ARCHITECTURE VIOLATIONS - STOP IMMEDIATELY IF YOU SEE:
+
+### Red Flags in SaaS Code:
+```typescript
+// ❌ STOP! Intelligence logic in SaaS
+import OpenAI from 'openai';
+const response = await openai.chat.completions.create(...);
+
+// ❌ STOP! Scoring logic in SaaS
+const score = calculateQTLEScore(company);
+
+// ❌ STOP! Provider calls in SaaS
+const data = await apollo.enrich(domain);
+```
+
+### Red Flags in OS Code:
+```typescript
+// ❌ STOP! Tenant awareness in OS
+const tenant = await getTenant(tenantId);
+
+// ❌ STOP! User records in OS
+const user = await supabase.from('users').select();
+
+// ❌ STOP! Billing logic in OS
+if (user.plan === 'pro') { ... }
+```
+
+---
 
 ## Quick Reference
+
+### Sprint Lookup
+```bash
+node scripts/sprint-service.js S48
+```
 
 ### Notion Database IDs
 - Sprints: `5c32e26d-641a-4711-a9fb-619703943fb9`
 - Features: `26ae5afe-4b5f-4d97-b402-5c459f188944`
-- Knowledge: `f1552250-cafc-4f5f-90b0-edc8419e578b`
-
-### Environment URLs
-- Staging: https://upr.sivakumar.ai
-- Production: https://premiumradar.com
 
 ### Key Files
-- `docs/UPR_SAAS_CONTEXT.md` - Master context
-- `lib/os-client.ts` - OS API client
-- `.notion-db-ids.json` - Database IDs
+- `ARCHITECTURE.md` - Full architecture documentation
+- `.claude/SPRINT_TRACKER.md` - Sprint-to-service allocation
+- `scripts/sprint-service.js` - Sprint lookup tool
 
-## Golden Rules
+### Directory Structure (Target)
+```
+premiumradar/
+├── packages/
+│   ├── upr-os/          # Intelligence Engine (OS sprints)
+│   │   ├── src/
+│   │   │   ├── intelligence/
+│   │   │   ├── journey-engine/
+│   │   │   ├── autonomous/
+│   │   │   └── api/
+│   │   └── package.json
+│   │
+│   └── saas/            # Multi-tenant SaaS (SaaS sprints)
+│       ├── src/
+│       │   ├── app/
+│       │   ├── components/
+│       │   ├── lib/
+│       │   │   ├── auth/
+│       │   │   ├── billing/
+│       │   │   └── upr-client/   # API client to call OS
+│       │   └── stores/
+│       └── package.json
+│
+└── turbo.json
+```
 
-1. **Load context first** - Always read UPR_SAAS_CONTEXT.md
-2. **Fetch from Notion** - Get sprint/feature details from source of truth
-3. **Follow guidelines** - Implement according to established patterns
-4. **Update as you go** - Keep Notion in sync with progress
-5. **No hidden features** - Every feature must have UI surface
-6. **Build before done** - Always verify build passes
+---
 
-## NO HIDDEN FEATURES RULE
+## GOLDEN RULES
 
-**No sprint may be marked "Done" unless its UI is visible in staging.**
+1. **Check service FIRST** - Run `node scripts/sprint-service.js SXX`
+2. **Never mix engines** - Intelligence in OS, Multi-tenant in SaaS
+3. **OS is tenant-agnostic** - Receives context via API params
+4. **SaaS calls OS via API** - Use `uprClient`
+5. **Commit with service prefix** - `feat(os/sXX):` or `feat(saas/sXX):`
+6. **Update tracker** - Keep `.claude/SPRINT_TRACKER.md` current
 
-For every feature, TC MUST verify:
-1. Route exists in `app/` directory
-2. Navigation link exists in Sidebar.tsx or Header.tsx
-3. Component renders without TypeScript errors
-4. Feature is accessible via UI navigation
+---
 
-**If a feature has no UI surface, it must be explicitly documented as "Backend-only" in Notion.**
+## INSTRUCTION TEMPLATE FOR FOUNDER
+
+To start a sprint, tell TC:
+
+```
+/start S48
+
+Additional context:
+- Focus on [specific aspect]
+- Priority: [high/medium/low]
+- Dependencies: [any blockers]
+```
+
+Or for a range:
+
+```
+/start S48-S52
+
+This is Phase 0-1: Security + Config Foundation
+Execute in order, respect architecture boundaries.
+```
