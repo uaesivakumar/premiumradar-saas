@@ -307,94 +307,13 @@ export type SignalMatchPredicate = (
 ) => boolean;
 
 // =============================================================================
-// Default Values (Banking Only - Other Verticals Need OS Config)
+// NO HARDCODED DEFAULTS
 // =============================================================================
-
-/**
- * Default sales context for Banking Employee Banking in UAE
- * This is the ONLY hardcoded default - others require OS config
- */
-export const DEFAULT_SALES_CONTEXT: SalesContext = {
-  id: 'default',
-  userId: 'demo-user',
-  vertical: 'banking',
-  subVertical: 'employee-banking',
-  region: {
-    country: 'UAE',
-    city: 'Dubai',
-  },
-  salesConfig: {
-    targetCompanySize: ['mid-market', 'enterprise', 'large-enterprise'],
-    signalSensitivities: {
-      'hiring-expansion': 'high',
-      'office-opening': 'medium',
-      'market-entry': 'medium',
-      'funding-round': 'medium',
-    },
-    productKPIs: [
-      {
-        product: 'Payroll Accounts',
-        target: 20,
-        current: 8,
-        unit: 'accounts',
-        period: 'quarterly',
-      },
-      {
-        product: 'Employee Benefits',
-        target: 500000,
-        current: 210000,
-        unit: 'AED',
-        period: 'quarterly',
-      },
-    ],
-  },
-  // No verticalConfig = must be loaded from OS
-  createdAt: new Date(),
-  updatedAt: new Date(),
-};
-
-/**
- * Default Banking Vertical Config (temporary until OS provides it)
- * This is a PLACEHOLDER - production should load from OS
- */
-export const DEFAULT_BANKING_CONFIG: VerticalConfig = {
-  vertical: 'banking',
-  radarTarget: 'companies',
-  subVerticals: [
-    {
-      id: 'employee-banking',
-      name: 'Employee Banking',
-      description: 'Payroll, salary accounts, employee benefits',
-      relevantSignalTypes: ['hiring-expansion', 'headcount-jump', 'office-opening', 'subsidiary-creation'],
-      defaultKPIs: [
-        { product: 'Payroll Accounts', defaultTarget: 20, unit: 'accounts', period: 'quarterly' },
-      ],
-    },
-    {
-      id: 'corporate-banking',
-      name: 'Corporate Banking',
-      description: 'Treasury, trade finance, corporate loans',
-      relevantSignalTypes: ['funding-round', 'merger-acquisition', 'expansion-announcement', 'project-award'],
-      defaultKPIs: [
-        { product: 'Corporate Accounts', defaultTarget: 10, unit: 'accounts', period: 'quarterly' },
-      ],
-    },
-  ],
-  allowedSignalTypes: [
-    'hiring-expansion',
-    'office-opening',
-    'market-entry',
-    'project-award',
-    'headcount-jump',
-    'subsidiary-creation',
-    'leadership-hiring',
-    'funding-round',
-    'merger-acquisition',
-    'expansion-announcement',
-  ],
-  scoringFactors: [],
-  playbooks: [],
-  regions: [
-    { country: 'UAE', cities: ['Dubai', 'Abu Dhabi'], territories: [] },
-  ],
-};
+// All vertical configurations are stored in the database and managed via Super-Admin.
+// Use the /api/admin/vertical-config endpoint to fetch configurations.
+//
+// If no config is found for a vertical/sub-vertical/region combination,
+// the system returns "Coming Soon" message to the user.
+//
+// To seed the Banking/Employee Banking/UAE config, run:
+//   npx ts-node scripts/seeds/banking-employee-uae.ts

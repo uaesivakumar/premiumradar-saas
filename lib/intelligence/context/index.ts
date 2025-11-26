@@ -49,10 +49,12 @@ export type {
 } from './types';
 
 export {
-  DEFAULT_SALES_CONTEXT,
-  DEFAULT_BANKING_CONFIG,
   VERTICAL_RADAR_TARGETS,
 } from './types';
+
+// NOTE: DEFAULT_SALES_CONTEXT and DEFAULT_BANKING_CONFIG have been removed.
+// All vertical configs are now stored in the database and fetched via API.
+// See /api/admin/vertical-config
 
 // Provider functions
 export {

@@ -15,7 +15,6 @@ import type {
   SalesConfig,
   SalesSignal,
 } from '@/lib/intelligence/context/types';
-import { DEFAULT_SALES_CONTEXT } from '@/lib/intelligence/context/types';
 import {
   createSalesContext,
   updateSalesContext,
@@ -23,6 +22,36 @@ import {
   getSubVerticalsForVertical,
   isValidSubVertical,
 } from '@/lib/intelligence/context/SalesContextProvider';
+
+// =============================================================================
+// Initial Context (Empty - must be configured via onboarding or API)
+// =============================================================================
+
+/**
+ * Creates an empty initial context
+ * User must select vertical/sub-vertical/region during onboarding
+ * or the context must be loaded from API/database
+ */
+function createInitialContext(): SalesContext {
+  const now = new Date();
+  return {
+    id: 'initial',
+    userId: '',
+    vertical: 'banking', // Default vertical for demo, but verticalConfig will be null
+    subVertical: 'employee-banking',
+    region: {
+      country: 'UAE',
+      city: 'Dubai',
+    },
+    salesConfig: {
+      signalSensitivities: {},
+      productKPIs: [],
+    },
+    // verticalConfig is undefined - MUST be loaded from API
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 // =============================================================================
 // Store Types
@@ -60,8 +89,8 @@ interface SalesContextState {
 export const useSalesContextStore = create<SalesContextState>()(
   persist(
     (set, get) => ({
-      // Initial state
-      context: DEFAULT_SALES_CONTEXT,
+      // Initial state - empty context, must be configured
+      context: createInitialContext(),
       isLoaded: false,
 
       // Set vertical (resets sub-vertical if invalid)
@@ -115,10 +144,11 @@ export const useSalesContextStore = create<SalesContextState>()(
         });
       },
 
-      // Reset to default context
+      // Reset to initial context (must be reconfigured)
       resetContext: () => {
         set({
-          context: { ...DEFAULT_SALES_CONTEXT, updatedAt: new Date() },
+          context: createInitialContext(),
+          isLoaded: false,
         });
       },
 

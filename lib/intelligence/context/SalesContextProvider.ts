@@ -33,8 +33,6 @@ import type {
   RadarTarget,
 } from './types';
 import {
-  DEFAULT_SALES_CONTEXT,
-  DEFAULT_BANKING_CONFIG,
   VERTICAL_RADAR_TARGETS,
 } from './types';
 
@@ -139,10 +137,13 @@ export function hiringSignalsRelevant(vertical: Vertical): boolean {
 
 /**
  * Get allowed signal types for a context
- * Returns from OS config if available, otherwise defaults for banking
+ * Returns from verticalConfig if loaded, otherwise returns empty array
+ *
+ * IMPORTANT: verticalConfig must be loaded from the API before calling this.
+ * If no config is loaded, returns empty array and logs warning.
  */
 export function getAllowedSignalTypes(context: SalesContext): string[] {
-  // If OS config is loaded, use it
+  // If vertical config is loaded, use it
   if (context.verticalConfig) {
     // Find sub-vertical specific signals
     const subVerticalConfig = context.verticalConfig.subVerticals.find(
@@ -155,14 +156,12 @@ export function getAllowedSignalTypes(context: SalesContext): string[] {
     return context.verticalConfig.allowedSignalTypes;
   }
 
-  // No OS config - only Banking is supported without it
-  if (context.vertical !== 'banking') {
-    console.warn(`[SalesContext] No OS config for vertical: ${context.vertical}. Only banking signals available.`);
-    return [];
-  }
-
-  // Default banking signals (temporary until OS provides config)
-  return DEFAULT_BANKING_CONFIG.allowedSignalTypes;
+  // No config loaded - vertical not configured
+  console.warn(
+    `[SalesContext] No config loaded for ${context.vertical}/${context.subVertical}/${context.region.country}. ` +
+    `Fetch config from /api/admin/vertical-config first.`
+  );
+  return [];
 }
 
 /**
