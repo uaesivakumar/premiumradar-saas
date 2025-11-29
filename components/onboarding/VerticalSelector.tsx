@@ -1,17 +1,29 @@
 'use client';
 
 /**
- * VerticalSelector - Sprint S34
+ * VerticalSelector - Sprint S34 + S48 Enhancement
  * AI-first cinematic selection grid for industry verticals
  * SIVA explains each vertical with motion and tooltips
+ *
+ * S48 Enhancements:
+ * - Auto-suggest vertical based on email domain
+ * - Show "Recommended" badge for detected industry
+ * - Lock vertical after confirmation
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Sparkles, Building2, Landmark, Shield, Home, Briefcase, ChevronRight } from 'lucide-react';
+import { ArrowRight, Sparkles, Building2, Landmark, Shield, Home, Briefcase, ChevronRight, Zap } from 'lucide-react';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useOnboardingStore, VerticalId } from '@/lib/stores/onboarding-store';
+import {
+  getVerticalSuggestionFromEmail,
+  getSuggestionBadgeText,
+  getSuggestionBadgeColor,
+  lockUserVertical,
+  type VerticalSuggestion,
+} from '@/lib/auth/identity';
 
 interface VerticalConfig {
   id: VerticalId;
@@ -87,11 +99,37 @@ export function VerticalSelector() {
   const router = useRouter();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
-  const { setVertical, completeStep, setStep } = useOnboardingStore();
+  const { profile, setVertical, completeStep, setStep } = useOnboardingStore();
 
   const [selectedVertical, setSelectedVertical] = useState<VerticalId | null>(null);
   const [hoveredVertical, setHoveredVertical] = useState<VerticalId | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [suggestion, setSuggestion] = useState<VerticalSuggestion | null>(null);
+  const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
+
+  // S48: Load vertical suggestion based on email
+  useEffect(() => {
+    async function loadSuggestion() {
+      if (!profile.email) return;
+
+      setIsLoadingSuggestion(true);
+      try {
+        const result = await getVerticalSuggestionFromEmail(profile.email);
+        setSuggestion(result);
+
+        // Auto-select if high confidence
+        if (result.shouldAutoSelect && result.suggestedVertical) {
+          setSelectedVertical(result.suggestedVertical);
+        }
+      } catch (error) {
+        console.error('[VerticalSelector] Failed to get suggestion:', error);
+      } finally {
+        setIsLoadingSuggestion(false);
+      }
+    }
+
+    loadSuggestion();
+  }, [profile.email]);
 
   const activeVertical = VERTICALS.find(v => v.id === (hoveredVertical || selectedVertical));
 
@@ -104,6 +142,15 @@ export function VerticalSelector() {
 
     setIsSubmitting(true);
     setVertical(selectedVertical);
+
+    // S48: Lock the user to this vertical
+    // In production, use actual user ID from auth
+    const mockUserId = `user_${Date.now()}`;
+    try {
+      lockUserVertical(mockUserId, selectedVertical, 'user');
+    } catch (error) {
+      console.error('[VerticalSelector] Failed to lock vertical:', error);
+    }
 
     // Simulate loading intelligence modules
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -148,8 +195,25 @@ export function VerticalSelector() {
           transition={{ delay: 0.1 }}
           className="text-gray-400"
         >
-          I'll load specialized intelligence for your vertical
+          {isLoadingSuggestion
+            ? 'Analyzing your company...'
+            : suggestion?.message || "I'll load specialized intelligence for your vertical"}
         </motion.p>
+
+        {/* S48: Show detected industry info */}
+        {suggestion && suggestion.industry && !suggestion.isPersonalEmail && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20"
+          >
+            <Zap className="w-4 h-4 text-blue-400" />
+            <span className="text-sm text-blue-300">
+              Detected: {suggestion.industry} ({suggestion.confidence}% confidence)
+            </span>
+          </motion.div>
+        )}
       </div>
 
       {/* Vertical Grid */}
@@ -165,6 +229,9 @@ export function VerticalSelector() {
             vertical={vertical}
             isSelected={selectedVertical === vertical.id}
             isHovered={hoveredVertical === vertical.id}
+            isRecommended={suggestion?.suggestedVertical === vertical.id}
+            recommendedBadge={suggestion?.suggestedVertical === vertical.id ? getSuggestionBadgeText(suggestion) : null}
+            recommendedBadgeColor={suggestion?.suggestedVertical === vertical.id ? getSuggestionBadgeColor(suggestion) : ''}
             onClick={() => handleSelect(vertical.id)}
             onHover={() => setHoveredVertical(vertical.id)}
             onLeave={() => setHoveredVertical(null)}
@@ -278,6 +345,9 @@ interface VerticalCardProps {
   vertical: VerticalConfig;
   isSelected: boolean;
   isHovered: boolean;
+  isRecommended: boolean;
+  recommendedBadge: string | null;
+  recommendedBadgeColor: string;
   onClick: () => void;
   onHover: () => void;
   onLeave: () => void;
@@ -288,6 +358,9 @@ function VerticalCard({
   vertical,
   isSelected,
   isHovered,
+  isRecommended,
+  recommendedBadge,
+  recommendedBadgeColor,
   onClick,
   onHover,
   onLeave,
@@ -333,6 +406,18 @@ function VerticalCard({
       {/* Content */}
       <h3 className="text-lg font-semibold text-white mb-1">{vertical.name}</h3>
       <p className="text-sm text-gray-400">{vertical.tagline}</p>
+
+      {/* S48: Recommended badge */}
+      {isRecommended && recommendedBadge && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={`mt-3 inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${recommendedBadgeColor}`}
+        >
+          <Zap className="w-3 h-3" />
+          {recommendedBadge}
+        </motion.div>
+      )}
 
       {/* Selection indicator */}
       {isSelected && (
