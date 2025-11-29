@@ -387,6 +387,21 @@ export interface PersonaWrapperResult {
   toneInfo: { id: string; name: string; tone: string } | null;
   availableTones: { base: ToneType[]; outreach: OutreachToneType[] };
 
+  // Vertical-aware persona (SIVA switches dynamically based on salesContext)
+  verticalPersona: {
+    id: string;
+    name: string;
+    vertical: string;
+    subVertical: string | undefined;
+    baseTone: 'professional' | 'friendly' | 'concise' | 'detailed';
+    outreachTone: 'executive' | 'consultative';
+    communicationStyle: {
+      formality: 'formal' | 'semi-formal' | 'casual';
+      pace: 'fast' | 'measured' | 'thorough';
+      focus: 'data-driven' | 'relationship-focused' | 'outcome-focused';
+    };
+  };
+
   // Status
   isApplying: boolean;
   error: string | null;

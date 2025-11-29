@@ -46,3 +46,13 @@ export {
   getRecommendationPhrase,
   suggestTone,
 } from './PersonaEngine';
+
+// Vertical-Aware Personas
+// Banking persona ≠ Insurance persona ≠ Real Estate persona
+// SIVA switches personalities dynamically based on salesContext
+export {
+  getPersonaForVertical,
+  VERTICAL_PERSONAS,
+  PERSONA_DISPLAY_NAMES,
+  type VerticalPersona,
+} from './vertical-personas';
