@@ -128,3 +128,25 @@ export {
   sendCardExpiringEmail,
   handlePaymentFailure,
 } from './dunning';
+
+// Overage Alerts (S57)
+export {
+  DEFAULT_THRESHOLDS,
+  getWorkspaceAlerts,
+  getActiveAlerts,
+  createAlert,
+  acknowledgeAlert,
+  markNotificationSent,
+  checkUsageAndAlert,
+  getUsageWithAlerts,
+  generateAlertNotification,
+  clearAlerts,
+  cleanupOldAlerts,
+} from './overage-alerts';
+export type {
+  AlertLevel,
+  AlertResource,
+  OverageAlert,
+  AlertThreshold,
+  AlertNotification,
+} from './overage-alerts';
