@@ -56,9 +56,34 @@ Start executing sprints with architecture enforcement and Notion integration.
 
 ---
 
+## REPOSITORY PATHS (AUTO-SWITCH)
+
+```
+SAAS_REPO=~/Projects/UPR/premiumradar-saas
+OS_REPO=~/Projects/UPR/upr-os
+```
+
+**TC MUST automatically switch to the correct repository based on sprint service allocation. DO NOT ASK - just switch.**
+
+---
+
 ## EXECUTE THESE STEPS IN ORDER:
 
-### Step 1: Read Architecture (MANDATORY FIRST)
+### Step 0: AUTO-SWITCH REPOSITORY (MANDATORY FIRST)
+```bash
+# Determine service from sprint number
+node scripts/sprint-service.js S50  # Returns: OS or SaaS
+
+# If OS sprint and currently in SaaS repo:
+cd ~/Projects/UPR/upr-os && echo "Switched to UPR OS repository"
+
+# If SaaS sprint and currently in OS repo:
+cd ~/Projects/UPR/premiumradar-saas && echo "Switched to PremiumRadar SaaS repository"
+```
+
+**NEVER ASK which repo to use - automatically switch based on sprint allocation!**
+
+### Step 1: Read Architecture (MANDATORY)
 ```bash
 cat ARCHITECTURE.md
 cat .claude/SPRINT_TRACKER.md
@@ -77,7 +102,7 @@ This outputs:
 - Commit convention
 - Focus areas
 
-**STOP if you don't know which service you're working on!**
+**Auto-switch to correct repo if in wrong one!**
 
 ### Step 3: Read Master Context
 ```bash
