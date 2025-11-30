@@ -37,12 +37,12 @@
     "@types/pg": "^8.15.6",
     "@types/react": "^18.2.0",
     "autoprefixer": "^10.4.0",
-    "eslint": "^8.0.0",
-    "eslint-config-next": "^14.0.0",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "^16.0.5",
     "playwright": "^1.40.0",
     "postcss": "^8.4.0",
     "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "vitest": "^4.0.14"
   },
   "engines": {
     "node": ">=18.0.0"
