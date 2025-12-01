@@ -66,7 +66,7 @@ export function Sidebar({ isOpen, mobileOpen, onMobileClose, onToggle }: Sidebar
   const isRTL = locale === 'ar';
 
   const NavLink = ({ item }: { item: NavItem }) => {
-    const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+    const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
 
     return (
       <Link

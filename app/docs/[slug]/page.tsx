@@ -14,7 +14,7 @@ import { getDocPageBySlug, getDocCategory, DOC_CATEGORIES } from '@/lib/marketin
 
 export default function DocPage() {
   const params = useParams();
-  const slug = params.slug as string;
+  const slug = params?.slug as string;
 
   const page = getDocPageBySlug(slug);
 

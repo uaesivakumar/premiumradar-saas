@@ -13,7 +13,7 @@ import { IdentityForm } from '@/components/onboarding/IdentityForm';
 
 function WelcomeContent() {
   const searchParams = useSearchParams();
-  const step = searchParams.get('step');
+  const step = searchParams?.get('step');
 
   return (
     <OnboardingFrame step={step === 'identity' ? 'identity' : 'welcome'}>
