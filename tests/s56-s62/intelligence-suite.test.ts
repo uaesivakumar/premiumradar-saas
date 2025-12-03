@@ -805,14 +805,14 @@ describe('API Responses', () => {
 
   describe('Partial data', () => {
     it('should handle partial data with defaults', () => {
-      const rawResponse = {
+      const rawResponse: { personas: { personaId: string; name: string }[]; journeys?: unknown[] } = {
         personas: [{ personaId: 'p1', name: 'Test' }],
         // journeys missing
       };
 
       const normalized = {
         personas: rawResponse.personas || [],
-        journeys: (rawResponse as Record<string, unknown>).journeys || [],
+        journeys: rawResponse.journeys || [],
       };
 
       expect(normalized.personas.length).toBe(1);
