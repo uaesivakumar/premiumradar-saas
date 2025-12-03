@@ -221,8 +221,43 @@ const SAAS_SALES_BASE_PERSONA: VerticalPersona = {
 // PERSONA MATRIX
 // =============================================================================
 
+// =============================================================================
+// GENERIC FALLBACK PERSONA (P2 VERTICALISATION)
+// =============================================================================
+
+/**
+ * Generic sales persona used when vertical is unknown or not configured
+ */
+const GENERIC_SALES_PERSONA: VerticalPersona = {
+  id: 'generic-sales',
+  name: 'Sales Professional',
+  description: 'Versatile sales expert adaptable to any industry',
+  baseTone: 'professional',
+  outreachTone: 'consultative',
+  traits: [
+    { name: 'Adaptability', description: 'Quickly understand any industry', intensity: 0.85 },
+    { name: 'Solution-Focus', description: 'Identify and solve customer pain points', intensity: 0.9 },
+    { name: 'Empathy', description: 'Understand customer perspective', intensity: 0.85 },
+    { name: 'Value-Driven', description: 'Lead with value, not features', intensity: 0.9 },
+  ],
+  vocabulary: [
+    'solution', 'value', 'partnership', 'growth', 'opportunity',
+    'success', 'results', 'efficiency', 'innovation',
+  ],
+  avoidWords: [
+    'buy', 'purchase', 'cheap', 'discount', 'limited offer',
+    'act now', 'guaranteed', 'no risk',
+  ],
+  communicationStyle: {
+    formality: 'semi-formal',
+    pace: 'measured',
+    focus: 'outcome-focused',
+  },
+};
+
 /**
  * Get persona for a specific vertical/sub-vertical combination
+ * P2 VERTICALISATION: Updated with generic fallback
  */
 export function getPersonaForVertical(
   vertical: Vertical,
@@ -247,7 +282,8 @@ export function getPersonaForVertical(
       return SAAS_SALES_BASE_PERSONA;
 
     default:
-      return BANKING_BASE_PERSONA; // Fallback
+      console.warn(`[Persona] Unknown vertical: ${vertical}, using generic fallback`);
+      return GENERIC_SALES_PERSONA;
   }
 }
 

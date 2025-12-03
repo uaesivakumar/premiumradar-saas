@@ -50,14 +50,16 @@ import {
 
 describe('Vertical Config', () => {
   describe('VERTICAL_CONFIGS', () => {
-    it('should have all 6 verticals defined', () => {
+    /**
+     * P2 VERTICALISATION: Updated to use official 5 verticals
+     */
+    it('should have all 5 verticals defined', () => {
       const verticals: VerticalId[] = [
         'banking',
+        'insurance',
         'real-estate',
-        'consulting',
-        'technology',
-        'energy',
-        'healthcare',
+        'recruitment',
+        'saas-sales',
       ];
 
       verticals.forEach((v) => {
@@ -104,18 +106,24 @@ describe('Vertical Config', () => {
   });
 
   describe('getAllVerticals', () => {
+    /**
+     * P2 VERTICALISATION: Updated to 5 official verticals
+     */
     it('should return array of all vertical configs', () => {
       const verticals = getAllVerticals();
       expect(verticals).toBeInstanceOf(Array);
-      expect(verticals.length).toBe(6);
+      expect(verticals.length).toBe(5);
     });
   });
 
   describe('isValidVertical', () => {
+    /**
+     * P2 VERTICALISATION: Updated to use official verticals
+     */
     it('should return true for valid verticals', () => {
       expect(isValidVertical('banking')).toBe(true);
       expect(isValidVertical('real-estate')).toBe(true);
-      expect(isValidVertical('healthcare')).toBe(true);
+      expect(isValidVertical('insurance')).toBe(true);
     });
 
     it('should return false for invalid verticals', () => {

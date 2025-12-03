@@ -37,6 +37,9 @@ interface VerticalConfig {
   sivaMessage: string;
 }
 
+/**
+ * P2 VERTICALISATION: Updated to use official Vertical types
+ */
 const VERTICALS: VerticalConfig[] = [
   {
     id: 'banking',
@@ -50,48 +53,48 @@ const VERTICALS: VerticalConfig[] = [
     sivaMessage: "I'll help you identify banks ready for digital transformation and track their technology investments.",
   },
   {
-    id: 'fintech',
-    name: 'FinTech',
-    icon: <Building2 className="w-8 h-8" />,
-    color: '#7c3aed',
-    secondaryColor: '#a78bfa',
-    tagline: 'Innovation & funding signals',
-    description: 'Payment processors, neobanks, lending platforms. Monitor funding rounds, product launches, and partnership announcements.',
-    signals: ['Series funding', 'Product launches', 'Market expansion', 'Partnership deals'],
-    sivaMessage: "I'll track FinTech companies by funding stage, technology stack, and growth trajectory.",
-  },
-  {
     id: 'insurance',
     name: 'Insurance',
     icon: <Shield className="w-8 h-8" />,
     color: '#059669',
     secondaryColor: '#10b981',
-    tagline: 'InsurTech & claims signals',
-    description: 'Life, health, P&C insurance carriers. Track digital claims, InsurTech adoption, and customer experience initiatives.',
-    signals: ['Claims automation', 'InsurTech partnerships', 'Digital distribution', 'Underwriting AI'],
-    sivaMessage: "I'll identify insurers investing in digital transformation and customer experience improvements.",
+    tagline: 'Life event signals',
+    description: 'Life, health, group insurance. Track individuals with life events, salary changes, and insurance needs.',
+    signals: ['Life events', 'Salary changes', 'Job changes', 'Policy renewals'],
+    sivaMessage: "I'll help you find individuals with life events indicating insurance needs.",
   },
   {
-    id: 'real_estate',
+    id: 'real-estate',
     name: 'Real Estate',
     icon: <Home className="w-8 h-8" />,
     color: '#0891b2',
     secondaryColor: '#22d3ee',
-    tagline: 'PropTech & development signals',
-    description: 'Commercial & residential developers, REITs, property managers. Track new developments, PropTech adoption, and sustainability initiatives.',
-    signals: ['New developments', 'PropTech adoption', 'Green buildings', 'Smart property'],
-    sivaMessage: "I'll track real estate companies and their technology investments across the region.",
+    tagline: 'Buyer & family signals',
+    description: 'Residential sales, commercial leasing, property management. Find buyers with relocation and family growth signals.',
+    signals: ['Rental expiry', 'Relocation signals', 'Family growth', 'Income increase'],
+    sivaMessage: "I'll track buyers and families with housing needs across your territory.",
   },
   {
-    id: 'consulting',
-    name: 'Consulting',
+    id: 'recruitment',
+    name: 'Recruitment',
     icon: <Briefcase className="w-8 h-8" />,
+    color: '#7c3aed',
+    secondaryColor: '#a78bfa',
+    tagline: 'Talent & candidate signals',
+    description: 'Executive search, tech recruitment, volume hiring. Find candidates with job change and career growth signals.',
+    signals: ['Job search activity', 'Profile updates', 'Skill certifications', 'Contract endings'],
+    sivaMessage: "I'll help you discover candidates with career change signals and skills in demand.",
+  },
+  {
+    id: 'saas-sales',
+    name: 'SaaS Sales',
+    icon: <Building2 className="w-8 h-8" />,
     color: '#4f46e5',
     secondaryColor: '#818cf8',
-    tagline: 'Advisory & transformation signals',
-    description: 'Management consulting, strategy firms, system integrators. Monitor new practice areas, major wins, and digital capability building.',
-    signals: ['New practice launches', 'Major client wins', 'Digital services', 'Regional expansion'],
-    sivaMessage: "I'll help you understand the consulting landscape and identify key decision makers.",
+    tagline: 'Growth & technology signals',
+    description: 'Enterprise, mid-market, SMB software sales. Track companies with funding, tech stack changes, and expansion signals.',
+    signals: ['Funding rounds', 'Tech stack changes', 'Hiring expansion', 'Product launches'],
+    sivaMessage: "I'll track SaaS opportunities by company growth, technology adoption, and buying signals.",
   },
 ];
 

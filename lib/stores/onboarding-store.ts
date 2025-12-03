@@ -1,10 +1,13 @@
 /**
  * Onboarding Store - Sprint S32-S35
  * Manages onboarding state and user profile during signup flow
+ *
+ * P2 VERTICALISATION: Updated VerticalId to match official Vertical type
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { Vertical } from '@/lib/intelligence/context/types';
 
 export type OnboardingStep = 'welcome' | 'identity' | 'workspace' | 'vertical' | 'transition' | 'complete';
 
@@ -22,7 +25,8 @@ export interface Workspace {
   createdAt: string;
 }
 
-export type VerticalId = 'banking' | 'fintech' | 'insurance' | 'real_estate' | 'consulting';
+// P2 VERTICALISATION: Use the official Vertical type
+export type VerticalId = Vertical;
 
 export interface OnboardingState {
   // Current step

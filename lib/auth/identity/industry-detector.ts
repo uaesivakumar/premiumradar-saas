@@ -163,6 +163,7 @@ export async function detectIndustryFromDomain(domain: string): Promise<Industry
 /**
  * Fallback: Detect industry from domain keywords
  * Low confidence - only used when enrichment fails
+ * P2 VERTICALISATION: Updated to match official vertical types
  */
 function detectIndustryFromDomainHeuristic(domain: string): string | null {
   const lower = domain.toLowerCase();
@@ -183,14 +184,16 @@ function detectIndustryFromDomainHeuristic(domain: string): string | null {
     return 'real estate';
   }
 
-  // FinTech keywords
-  if (lower.includes('pay') || lower.includes('wallet') || lower.includes('fintech')) {
-    return 'fintech';
+  // SaaS/Tech keywords (formerly fintech)
+  if (lower.includes('pay') || lower.includes('wallet') || lower.includes('fintech') ||
+      lower.includes('tech') || lower.includes('software') || lower.includes('saas')) {
+    return 'saas';
   }
 
-  // Consulting keywords
-  if (lower.includes('consult') || lower.includes('advisory') || lower.includes('partners')) {
-    return 'consulting';
+  // Recruitment keywords (formerly consulting)
+  if (lower.includes('recruit') || lower.includes('staffing') || lower.includes('talent') ||
+      lower.includes('consult') || lower.includes('advisory') || lower.includes('hr')) {
+    return 'recruiting';
   }
 
   return null;

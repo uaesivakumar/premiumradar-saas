@@ -20,6 +20,9 @@ interface LoadingStep {
   duration: number;
 }
 
+/**
+ * P2 VERTICALISATION: Updated to use official Vertical types
+ */
 const VERTICAL_STEPS: Record<VerticalId, LoadingStep[]> = {
   banking: [
     { id: 'connect', label: 'Connecting to banking intelligence network', icon: <Database className="w-5 h-5" />, duration: 1200 },
@@ -27,38 +30,38 @@ const VERTICAL_STEPS: Record<VerticalId, LoadingStep[]> = {
     { id: 'compliance', label: 'Configuring regulatory intelligence', icon: <Shield className="w-5 h-5" />, duration: 1000 },
     { id: 'ai', label: 'Training SIVA on banking context', icon: <Brain className="w-5 h-5" />, duration: 1800 },
   ],
-  fintech: [
-    { id: 'connect', label: 'Connecting to FinTech data sources', icon: <Database className="w-5 h-5" />, duration: 1200 },
-    { id: 'funding', label: 'Loading funding & growth signals', icon: <Zap className="w-5 h-5" />, duration: 1500 },
-    { id: 'tech', label: 'Mapping technology stacks', icon: <Shield className="w-5 h-5" />, duration: 1200 },
-    { id: 'ai', label: 'Training SIVA on FinTech landscape', icon: <Brain className="w-5 h-5" />, duration: 1600 },
-  ],
   insurance: [
     { id: 'connect', label: 'Connecting to insurance intelligence', icon: <Database className="w-5 h-5" />, duration: 1200 },
-    { id: 'claims', label: 'Loading claims & InsurTech signals', icon: <Zap className="w-5 h-5" />, duration: 1400 },
-    { id: 'risk', label: 'Configuring risk assessment models', icon: <Shield className="w-5 h-5" />, duration: 1300 },
+    { id: 'signals', label: 'Loading life event signals', icon: <Zap className="w-5 h-5" />, duration: 1400 },
+    { id: 'risk', label: 'Configuring individual profiling', icon: <Shield className="w-5 h-5" />, duration: 1300 },
     { id: 'ai', label: 'Training SIVA on insurance context', icon: <Brain className="w-5 h-5" />, duration: 1700 },
   ],
-  real_estate: [
+  'real-estate': [
     { id: 'connect', label: 'Connecting to real estate intelligence', icon: <Database className="w-5 h-5" />, duration: 1200 },
-    { id: 'market', label: 'Loading market & development signals', icon: <Zap className="w-5 h-5" />, duration: 1500 },
-    { id: 'proptech', label: 'Mapping PropTech ecosystem', icon: <Shield className="w-5 h-5" />, duration: 1100 },
+    { id: 'market', label: 'Loading buyer & family signals', icon: <Zap className="w-5 h-5" />, duration: 1500 },
+    { id: 'proptech', label: 'Mapping territory data', icon: <Shield className="w-5 h-5" />, duration: 1100 },
     { id: 'ai', label: 'Training SIVA on real estate context', icon: <Brain className="w-5 h-5" />, duration: 1600 },
   ],
-  consulting: [
-    { id: 'connect', label: 'Connecting to consulting intelligence', icon: <Database className="w-5 h-5" />, duration: 1200 },
-    { id: 'advisory', label: 'Loading advisory & transformation signals', icon: <Zap className="w-5 h-5" />, duration: 1400 },
-    { id: 'network', label: 'Mapping decision-maker networks', icon: <Shield className="w-5 h-5" />, duration: 1300 },
-    { id: 'ai', label: 'Training SIVA on consulting landscape', icon: <Brain className="w-5 h-5" />, duration: 1600 },
+  recruitment: [
+    { id: 'connect', label: 'Connecting to talent intelligence', icon: <Database className="w-5 h-5" />, duration: 1200 },
+    { id: 'signals', label: 'Loading candidate signals', icon: <Zap className="w-5 h-5" />, duration: 1400 },
+    { id: 'network', label: 'Mapping talent networks', icon: <Shield className="w-5 h-5" />, duration: 1300 },
+    { id: 'ai', label: 'Training SIVA on recruitment context', icon: <Brain className="w-5 h-5" />, duration: 1600 },
+  ],
+  'saas-sales': [
+    { id: 'connect', label: 'Connecting to SaaS intelligence', icon: <Database className="w-5 h-5" />, duration: 1200 },
+    { id: 'funding', label: 'Loading funding & growth signals', icon: <Zap className="w-5 h-5" />, duration: 1500 },
+    { id: 'tech', label: 'Mapping technology stacks', icon: <Shield className="w-5 h-5" />, duration: 1200 },
+    { id: 'ai', label: 'Training SIVA on SaaS landscape', icon: <Brain className="w-5 h-5" />, duration: 1600 },
   ],
 };
 
 const VERTICAL_NAMES: Record<VerticalId, string> = {
   banking: 'Banking',
-  fintech: 'FinTech',
   insurance: 'Insurance',
-  real_estate: 'Real Estate',
-  consulting: 'Consulting',
+  'real-estate': 'Real Estate',
+  recruitment: 'Recruitment',
+  'saas-sales': 'SaaS Sales',
 };
 
 export function TransitionSequence() {

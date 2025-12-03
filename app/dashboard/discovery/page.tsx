@@ -4,6 +4,8 @@
  * Discovery Page
  *
  * Main discovery interface for finding and ranking companies.
+ *
+ * P2 VERTICALISATION: Now uses dynamic scoring weights based on sales context vertical.
  */
 
 import { useState, useEffect } from 'react';
@@ -12,6 +14,8 @@ import { QTLEEngine } from '@/lib/scoring';
 import type { BankingCompanyProfile, QTLEScore, BankingSignal } from '@/lib/scoring/types';
 import { BANKING_SIGNAL_LIBRARY } from '@/lib/scoring/banking-signals';
 import { GCC_REGIONAL_MULTIPLIERS } from '@/lib/scoring/regional-weights';
+import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
+import { getScoringWeightsForVertical, getUILabelsForVertical } from '@/lib/vertical';
 
 // Mock data for demo - in production this would come from the OS API
 const generateMockCompanies = (): BankingCompanyProfile[] => {
@@ -157,15 +161,15 @@ export default function DiscoveryPage() {
   const [scores, setScores] = useState<Map<string, QTLEScore>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
 
+  // P2 VERTICALISATION: Get vertical from sales context
+  const vertical = useSalesContextStore(selectVertical);
+  const scoringWeights = getScoringWeightsForVertical(vertical);
+  const uiLabels = getUILabelsForVertical(vertical);
+
   useEffect(() => {
-    // Initialize scoring engine with banking config
+    // P2 VERTICALISATION: Initialize scoring engine with vertical-specific weights
     const engine = new QTLEEngine({
-      weights: {
-        quality: 0.25,
-        timing: 0.30, // Higher timing weight for banking
-        likelihood: 0.25,
-        engagement: 0.20,
-      },
+      weights: scoringWeights,
       regionalMultipliers: GCC_REGIONAL_MULTIPLIERS,
       industryAdjustments: {
         Banking: {
@@ -189,7 +193,7 @@ export default function DiscoveryPage() {
     setScores(scoreMap);
 
     setIsLoading(false);
-  }, []);
+  }, [scoringWeights]);
 
   if (isLoading) {
     return (

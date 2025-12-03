@@ -4,6 +4,8 @@
  * SIVA Surface - Sprint S26-S30
  * Full-screen AI canvas - the pageless workspace
  * With Multi-Agent Orchestration & Reasoning Overlay
+ *
+ * P2 VERTICALISATION: Now uses dynamic content based on sales context vertical.
  */
 
 import { useEffect, useRef } from 'react';
@@ -11,6 +13,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, MessageSquare, Zap } from 'lucide-react';
 import { useSIVAStore } from '@/lib/stores/siva-store';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
+import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
+import { getQuickActionsForVertical, getVerticalDisplayName } from '@/lib/vertical';
 import { SIVAPersonaPanel } from './SIVAPersonaPanel';
 import { SIVAInputBar } from './SIVAInputBar';
 import { OutputObjectRenderer } from './OutputObjectRenderer';
@@ -22,6 +26,11 @@ export function SIVASurface() {
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // P2 VERTICALISATION: Get vertical-specific quick actions
+  const vertical = useSalesContextStore(selectVertical);
+  const quickActions = getQuickActionsForVertical(vertical);
+  const verticalName = getVerticalDisplayName(vertical);
 
   // Auto-scroll to latest content
   useEffect(() => {
@@ -121,30 +130,21 @@ export function SIVASurface() {
                 </span>
               </h1>
               <p className="text-gray-400 text-lg mb-8 max-w-md">
-                Your AI Sales Intelligence Assistant. Ask me to discover companies,
+                Your AI {verticalName} Sales Intelligence Assistant. Ask me to discover targets,
                 rank prospects, or craft outreach messages.
               </p>
 
-              {/* Quick Start Suggestions */}
+              {/* Quick Start Suggestions - P2 VERTICALISATION: Dynamic based on vertical */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl">
-                <QuickStartCard
-                  icon={<Zap className="w-5 h-5" />}
-                  title="Discover"
-                  description="Find banking companies with digital transformation signals"
-                  color={industryConfig.primaryColor}
-                />
-                <QuickStartCard
-                  icon={<MessageSquare className="w-5 h-5" />}
-                  title="Outreach"
-                  description="Draft a personalized email for Emirates NBD"
-                  color={industryConfig.secondaryColor}
-                />
-                <QuickStartCard
-                  icon={<Sparkles className="w-5 h-5" />}
-                  title="Analyze"
-                  description="Score and rank my top 5 banking prospects"
-                  color="#8B5CF6"
-                />
+                {quickActions.slice(0, 3).map((action, idx) => (
+                  <QuickStartCard
+                    key={action.label}
+                    icon={idx === 0 ? <Zap className="w-5 h-5" /> : idx === 1 ? <MessageSquare className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                    title={action.label}
+                    description={action.query}
+                    color={idx === 0 ? industryConfig.primaryColor : idx === 1 ? industryConfig.secondaryColor : "#8B5CF6"}
+                  />
+                ))}
               </div>
             </motion.div>
           )}

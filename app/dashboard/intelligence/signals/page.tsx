@@ -5,14 +5,20 @@
  * Sprint S62: Signal Correlation & Pattern Explorer
  *
  * Interactive laboratory for exploring signal correlations and patterns.
+ *
+ * P2 VERTICALISATION: Now uses dynamic vertical from sales context.
  */
 
 import { useSignalCorrelations, usePatternExplorer } from '@/lib/intelligence-suite';
 import { SignalLab, SignalTimeline, CorrelationHeatmap } from '@/components/signal-lab';
+import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
 
 export default function SignalsPage() {
-  const { rawSignals, correlations, isLoading: signalsLoading, error: signalsError } = useSignalCorrelations({ vertical: 'banking' });
-  const { patterns, isLoading: patternsLoading, error: patternsError } = usePatternExplorer({ vertical: 'banking' });
+  // P2 VERTICALISATION: Get vertical from sales context
+  const vertical = useSalesContextStore(selectVertical);
+
+  const { rawSignals, correlations, isLoading: signalsLoading, error: signalsError } = useSignalCorrelations({ vertical });
+  const { patterns, isLoading: patternsLoading, error: patternsError } = usePatternExplorer({ vertical });
 
   const isLoading = signalsLoading || patternsLoading;
   const error = signalsError || patternsError;

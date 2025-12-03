@@ -101,21 +101,26 @@ export function DiscoveryEmptyState({
   );
 }
 
+/**
+ * P2 VERTICALISATION: Updated icons for official Vertical types
+ */
 function getVerticalIcon(vertical?: VerticalId): string {
   if (!vertical) return '🔍';
 
   const icons: Record<VerticalId, string> = {
     banking: '🏦',
+    insurance: '🛡️',
     'real-estate': '🏠',
-    consulting: '💼',
-    technology: '💻',
-    energy: '⚡',
-    healthcare: '🏥',
+    recruitment: '👤',
+    'saas-sales': '💻',
   };
 
   return icons[vertical] || '🔍';
 }
 
+/**
+ * P2 VERTICALISATION: Updated descriptions for official Vertical types
+ */
 function getEmptyStateDescription(vertical?: VerticalId): string {
   if (!vertical) {
     return 'Select a vertical to start discovering companies that match your criteria.';
@@ -124,19 +129,17 @@ function getEmptyStateDescription(vertical?: VerticalId): string {
   const descriptions: Record<VerticalId, string> = {
     banking:
       'No banking opportunities have been discovered yet. Run auto-discovery to find companies with hiring signals and expansion indicators.',
+    insurance:
+      'No insurance prospects have been discovered yet. Configure your settings to find individuals with life event signals.',
     'real-estate':
-      'No real estate prospects have been discovered yet. Configure your territory to start finding potential buyers and sellers.',
-    consulting:
-      'No consulting opportunities have been discovered yet. Set up your focus areas to find companies seeking advisory services.',
-    technology:
-      'No technology prospects have been discovered yet. Run discovery to find companies with technology adoption signals.',
-    energy:
-      'No energy sector companies have been discovered yet. Configure discovery to find companies with relevant signals.',
-    healthcare:
-      'No healthcare opportunities have been discovered yet. Set up discovery to find organizations with healthcare needs.',
+      'No real estate prospects have been discovered yet. Configure your territory to start finding potential buyers and families.',
+    recruitment:
+      'No recruitment candidates have been discovered yet. Set up discovery to find candidates with job change signals.',
+    'saas-sales':
+      'No SaaS prospects have been discovered yet. Run discovery to find companies with technology adoption and growth signals.',
   };
 
-  return descriptions[vertical] || 'No companies have been discovered yet.';
+  return descriptions[vertical] || 'No prospects have been discovered yet.';
 }
 
 export default DiscoveryEmptyState;

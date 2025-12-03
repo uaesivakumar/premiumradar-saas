@@ -3,6 +3,8 @@
 /**
  * SIVA Input Bar - Sprint S26
  * Always-visible global command bar at the bottom of the AI Surface
+ *
+ * P2 VERTICALISATION: Now uses dynamic quick actions based on sales context vertical.
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -10,18 +12,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles, Mic, Paperclip, Command } from 'lucide-react';
 import { useSIVAStore, AgentType } from '@/lib/stores/siva-store';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
-
-const QUICK_ACTIONS = [
-  { label: 'Find companies', query: 'Find banking companies in UAE with digital transformation signals', agent: 'discovery' as AgentType },
-  { label: 'Rank prospects', query: 'Rank my top prospects by Q/T/L/E score', agent: 'ranking' as AgentType },
-  { label: 'Draft outreach', query: 'Write an outreach email for Emirates NBD', agent: 'outreach' as AgentType },
-  { label: 'Show demo', query: 'Show me a demo of the discovery flow', agent: 'demo' as AgentType },
-];
+import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
+import { getQuickActionsForVertical } from '@/lib/vertical';
 
 export function SIVAInputBar() {
   const { inputValue, setInputValue, submitQuery, state } = useSIVAStore();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
+
+  // P2 VERTICALISATION: Get vertical from sales context
+  const vertical = useSalesContextStore(selectVertical);
+  const quickActions = getQuickActionsForVertical(vertical);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [showQuickActions, setShowQuickActions] = useState(false);
@@ -84,7 +85,7 @@ export function SIVAInputBar() {
             <div className="bg-slate-800/90 backdrop-blur-xl rounded-2xl border border-white/10 p-3 shadow-2xl">
               <p className="text-xs text-gray-400 mb-2 px-2">Quick actions</p>
               <div className="grid grid-cols-2 gap-2">
-                {QUICK_ACTIONS.map((action) => (
+                {quickActions.map((action) => (
                   <button
                     key={action.label}
                     onClick={() => handleQuickAction(action.query)}

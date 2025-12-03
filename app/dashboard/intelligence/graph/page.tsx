@@ -5,14 +5,20 @@
  * Sprint S60: Intelligence Graph
  *
  * Visual representation of entity relationships in the intelligence network.
+ *
+ * P2 VERTICALISATION: Now uses dynamic vertical from sales context.
  */
 
 import { useState } from 'react';
 import { useIntelligenceGraph } from '@/lib/intelligence-suite';
 import { IntelligenceGraph, GraphControls, GraphLegend } from '@/components/intelligence-graph';
+import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
 
 export default function GraphPage() {
-  const { data, isLoading, error } = useIntelligenceGraph({ vertical: 'banking' });
+  // P2 VERTICALISATION: Get vertical from sales context
+  const vertical = useSalesContextStore(selectVertical);
+
+  const { data, isLoading, error } = useIntelligenceGraph({ vertical });
   const [zoom, setZoom] = useState(1);
 
   if (isLoading) {

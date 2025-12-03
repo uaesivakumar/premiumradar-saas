@@ -9,13 +9,14 @@
 // VERTICALS
 // =============================================================================
 
-export type VerticalId =
-  | 'banking'
-  | 'real-estate'
-  | 'consulting'
-  | 'technology'
-  | 'energy'
-  | 'healthcare';
+/**
+ * P2 VERTICALISATION: Aligning VerticalId with Vertical from sales context.
+ * This ensures consistent vertical types across the application.
+ */
+import type { Vertical } from '../intelligence/context/types';
+
+// Re-export Vertical as VerticalId for backward compatibility
+export type VerticalId = Vertical;
 
 export interface VerticalConfig {
   id: VerticalId;
@@ -346,6 +347,10 @@ export interface DashboardAPIResponse {
 // VERTICAL CONFIGS
 // =============================================================================
 
+/**
+ * P2 VERTICALISATION: Updated configs to match Vertical type from sales context.
+ * Uses the official verticals: banking, insurance, real-estate, recruitment, saas-sales
+ */
 export const VERTICAL_CONFIGS: Record<VerticalId, VerticalConfig> = {
   banking: {
     id: 'banking',
@@ -363,11 +368,25 @@ export const VERTICAL_CONFIGS: Record<VerticalId, VerticalConfig> = {
     defaultMetrics: ['hiring-expansion', 'headcount-jump', 'office-opening', 'funding-round'],
     signalTypes: ['hiring', 'expansion', 'funding', 'market-entry', 'project-award'],
   },
+  insurance: {
+    id: 'insurance',
+    name: 'Insurance',
+    icon: '🛡️',
+    color: '#059669',
+    description: 'Insurance and life coverage intelligence',
+    subVerticals: [
+      { id: 'life-insurance', name: 'Life Insurance', description: 'Individual life policies' },
+      { id: 'group-insurance', name: 'Group Insurance', description: 'Corporate employee benefits' },
+      { id: 'health-insurance', name: 'Health Insurance', description: 'Medical coverage' },
+    ],
+    defaultMetrics: ['life-event', 'salary-change', 'job-change', 'family-event'],
+    signalTypes: ['life-event', 'salary-change', 'job-change', 'policy-expiry'],
+  },
   'real-estate': {
     id: 'real-estate',
     name: 'Real Estate',
     icon: '🏠',
-    color: '#059669',
+    color: '#7c3aed',
     description: 'Real estate and property intelligence',
     subVerticals: [
       { id: 'residential-sales', name: 'Residential Sales', description: 'Home sales to families' },
@@ -377,60 +396,32 @@ export const VERTICAL_CONFIGS: Record<VerticalId, VerticalConfig> = {
     defaultMetrics: ['rental-expiry', 'relocation', 'family-growth', 'job-relocation'],
     signalTypes: ['rental-expiry', 'relocation', 'family-growth', 'property-search'],
   },
-  consulting: {
-    id: 'consulting',
-    name: 'Consulting',
-    icon: '💼',
-    color: '#7c3aed',
-    description: 'Professional services and consulting intelligence',
-    subVerticals: [
-      { id: 'management-consulting', name: 'Management Consulting', description: 'Strategy, operations' },
-      { id: 'it-consulting', name: 'IT Consulting', description: 'Technology advisory' },
-      { id: 'hr-consulting', name: 'HR Consulting', description: 'Talent, organizational' },
-    ],
-    defaultMetrics: ['project-award', 'transformation', 'leadership-change', 'expansion'],
-    signalTypes: ['project-award', 'digital-transformation', 'leadership-change', 'restructuring'],
-  },
-  technology: {
-    id: 'technology',
-    name: 'Technology',
-    icon: '💻',
+  recruitment: {
+    id: 'recruitment',
+    name: 'Recruitment',
+    icon: '👤',
     color: '#0891b2',
-    description: 'Technology and software intelligence',
+    description: 'Talent acquisition and recruitment intelligence',
     subVerticals: [
-      { id: 'saas-sales', name: 'SaaS Sales', description: 'Software subscriptions' },
-      { id: 'enterprise-software', name: 'Enterprise Software', description: 'Large-scale deployments' },
-      { id: 'cloud-services', name: 'Cloud Services', description: 'Infrastructure, platforms' },
+      { id: 'executive-search', name: 'Executive Search', description: 'C-level recruitment' },
+      { id: 'tech-recruitment', name: 'Tech Recruitment', description: 'IT and tech roles' },
+      { id: 'mass-recruitment', name: 'Mass Recruitment', description: 'Volume hiring' },
+    ],
+    defaultMetrics: ['job-posting', 'layoff-announcement', 'skill-trending', 'hiring-expansion'],
+    signalTypes: ['job-posting', 'layoff-announcement', 'skill-trending', 'company-growth'],
+  },
+  'saas-sales': {
+    id: 'saas-sales',
+    name: 'SaaS Sales',
+    icon: '💻',
+    color: '#ea580c',
+    description: 'SaaS and software sales intelligence',
+    subVerticals: [
+      { id: 'enterprise-sales', name: 'Enterprise Sales', description: 'Large enterprise deals' },
+      { id: 'mid-market-sales', name: 'Mid-Market Sales', description: 'Mid-sized companies' },
+      { id: 'smb-sales', name: 'SMB Sales', description: 'Small business' },
     ],
     defaultMetrics: ['tech-stack-change', 'funding-round', 'hiring-expansion', 'product-launch'],
     signalTypes: ['tech-stack-change', 'funding', 'product-launch', 'partnership'],
-  },
-  energy: {
-    id: 'energy',
-    name: 'Energy',
-    icon: '⚡',
-    color: '#ea580c',
-    description: 'Energy and utilities intelligence',
-    subVerticals: [
-      { id: 'oil-gas', name: 'Oil & Gas', description: 'Upstream, downstream' },
-      { id: 'renewables', name: 'Renewables', description: 'Solar, wind, hydro' },
-      { id: 'utilities', name: 'Utilities', description: 'Power, water, gas distribution' },
-    ],
-    defaultMetrics: ['project-award', 'expansion', 'regulatory-change', 'sustainability-initiative'],
-    signalTypes: ['project-award', 'regulatory', 'sustainability', 'infrastructure'],
-  },
-  healthcare: {
-    id: 'healthcare',
-    name: 'Healthcare',
-    icon: '🏥',
-    color: '#dc2626',
-    description: 'Healthcare and life sciences intelligence',
-    subVerticals: [
-      { id: 'hospitals', name: 'Hospitals', description: 'Hospital systems, clinics' },
-      { id: 'pharma', name: 'Pharmaceuticals', description: 'Drug manufacturers' },
-      { id: 'medtech', name: 'MedTech', description: 'Medical devices, diagnostics' },
-    ],
-    defaultMetrics: ['facility-expansion', 'leadership-change', 'funding-round', 'clinical-trial'],
-    signalTypes: ['facility-expansion', 'clinical-trial', 'regulatory-approval', 'partnership'],
   },
 };

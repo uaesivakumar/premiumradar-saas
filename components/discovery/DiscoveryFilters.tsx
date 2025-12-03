@@ -29,13 +29,15 @@ interface DiscoveryFiltersProps {
   hasActiveFilters: boolean;
 }
 
+/**
+ * P2 VERTICALISATION: Updated to use official Vertical types
+ */
 const VERTICALS: { id: VerticalId; name: string; icon: string }[] = [
   { id: 'banking', name: 'Banking', icon: '🏦' },
+  { id: 'insurance', name: 'Insurance', icon: '🛡️' },
   { id: 'real-estate', name: 'Real Estate', icon: '🏠' },
-  { id: 'consulting', name: 'Consulting', icon: '💼' },
-  { id: 'technology', name: 'Technology', icon: '💻' },
-  { id: 'energy', name: 'Energy', icon: '⚡' },
-  { id: 'healthcare', name: 'Healthcare', icon: '🏥' },
+  { id: 'recruitment', name: 'Recruitment', icon: '👤' },
+  { id: 'saas-sales', name: 'SaaS Sales', icon: '💻' },
 ];
 
 const SIZES: { id: CompanySizeCategory; label: string }[] = [

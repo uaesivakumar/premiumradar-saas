@@ -92,7 +92,10 @@ export const PERSONAL_EMAIL_DOMAINS = [
   'tutanota.com',
 ] as const;
 
-// Industry to vertical mapping
+/**
+ * P2 VERTICALISATION: Updated to use official Vertical types
+ * Maps detected industry strings to the 5 official verticals
+ */
 export const INDUSTRY_TO_VERTICAL: Record<string, VerticalId> = {
   // Banking
   'banking': 'banking',
@@ -103,15 +106,16 @@ export const INDUSTRY_TO_VERTICAL: Record<string, VerticalId> = {
   'private banking': 'banking',
   'corporate banking': 'banking',
 
-  // FinTech
-  'fintech': 'fintech',
-  'financial technology': 'fintech',
-  'payments': 'fintech',
-  'digital payments': 'fintech',
-  'neobank': 'fintech',
-  'lending': 'fintech',
-  'cryptocurrency': 'fintech',
-  'blockchain': 'fintech',
+  // SaaS Sales (FinTech and tech companies)
+  'fintech': 'saas-sales',
+  'financial technology': 'saas-sales',
+  'payments': 'saas-sales',
+  'digital payments': 'saas-sales',
+  'neobank': 'saas-sales',
+  'software': 'saas-sales',
+  'saas': 'saas-sales',
+  'technology': 'saas-sales',
+  'enterprise software': 'saas-sales',
 
   // Insurance
   'insurance': 'insurance',
@@ -122,21 +126,23 @@ export const INDUSTRY_TO_VERTICAL: Record<string, VerticalId> = {
   'reinsurance': 'insurance',
 
   // Real Estate
-  'real estate': 'real_estate',
-  'property': 'real_estate',
-  'commercial real estate': 'real_estate',
-  'residential real estate': 'real_estate',
-  'proptech': 'real_estate',
-  'property management': 'real_estate',
-  'reit': 'real_estate',
+  'real estate': 'real-estate',
+  'property': 'real-estate',
+  'commercial real estate': 'real-estate',
+  'residential real estate': 'real-estate',
+  'proptech': 'real-estate',
+  'property management': 'real-estate',
+  'reit': 'real-estate',
 
-  // Consulting
-  'consulting': 'consulting',
-  'management consulting': 'consulting',
-  'strategy consulting': 'consulting',
-  'it consulting': 'consulting',
-  'advisory': 'consulting',
-  'professional services': 'consulting',
+  // Recruitment (Consulting and staffing)
+  'consulting': 'recruitment',
+  'management consulting': 'recruitment',
+  'staffing': 'recruitment',
+  'recruiting': 'recruitment',
+  'human resources': 'recruitment',
+  'talent acquisition': 'recruitment',
+  'headhunting': 'recruitment',
+  'executive search': 'recruitment',
 };
 
 // Confidence thresholds
