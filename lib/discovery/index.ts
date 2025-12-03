@@ -90,3 +90,124 @@ export {
   sortResults,
   formatMatchReason,
 } from './discovery-engine';
+
+// =============================================================================
+// S55: DISCOVERY UI EXPORTS
+// =============================================================================
+
+// S55 Types
+export type {
+  // Discovery Item
+  DiscoveryListItem,
+  CompanyBasicInfo,
+  CompanySizeCategory,
+  CompanyLocationInfo,
+  DiscoveryScoreBreakdown,
+  EvidenceMetricsSummary,
+  SignalMetrics,
+  FreshnessStatus,
+  // Evidence Panel
+  EvidencePanelData,
+  ProviderData,
+  CategoryData,
+  TimelineEntry,
+  FreshnessData,
+  EvidenceTableItem,
+  // Signal Impact Panel
+  SignalImpactData,
+  SignalImpactCategory,
+  SignalImpactPanelData,
+  // Object Graph Mini
+  ObjectGraphMiniData,
+  GraphNeighborNode,
+  GraphEdgeData,
+  // Score Breakdown
+  ScoreBreakdownData,
+  ScoreComponentData,
+  ScoreWeightsData,
+  ScoreFactorData,
+  // Company Profile Card
+  CompanyProfileCardData,
+  CompanyProfileDetails,
+  CompanyIntelligenceData,
+  ActivityEntry,
+  VerticalContextData,
+  OSObjectStateData,
+  // Filters
+  DiscoveryUIFilter,
+  DiscoveryDateRange,
+  DiscoverySortOption,
+  // Stats
+  DiscoveryStatsData,
+  IndustryStatCount,
+  SizeStatCount,
+  FreshnessStatCount,
+  ScoreRangeStatCount,
+  // Config
+  VerticalDiscoveryConfigData,
+  // API Responses
+  DiscoveryListAPIResponse,
+  CompanyProfileAPIResponse,
+  EvidenceSummaryAPIResponse,
+  SignalImpactAPIResponse,
+  ScoreBreakdownAPIResponse,
+  ObjectGraphAPIResponse,
+} from './types';
+
+// S55 Fetchers
+export {
+  fetchDiscoveryList,
+  fetchEvidenceSummary,
+  fetchObjectGraphMini,
+  fetchSignalImpacts,
+  fetchScoreBreakdown,
+  fetchCompanyProfile,
+  fetchFullDiscoveryData,
+} from './ui-fetchers';
+
+export type { FullDiscoveryData } from './ui-fetchers';
+
+// S55 Transformers
+export {
+  transformDiscoveryResponse,
+  buildEvidenceSummary,
+  buildSignalList,
+  buildGraphMini,
+  buildScoreBreakdown,
+  buildCompanyProfileCard,
+} from './ui-transformers';
+
+export type {
+  OSDiscoveryResponse,
+  OSEvidenceResponse,
+  OSSignalResponse,
+  OSGraphResponse,
+  OSScoreResponse,
+  OSProfileResponse,
+} from './ui-transformers';
+
+// S55 Hooks
+export {
+  useDiscoveryList,
+  useDiscoveryFilters,
+  useCompanyProfile,
+  useEvidenceSummary,
+  useSignalImpacts,
+  useScoreBreakdown,
+  useObjectGraphMini,
+  useFullDiscoveryData,
+  useSelectedCompany,
+} from './ui-hooks';
+
+export type {
+  UseDiscoveryListOptions,
+  UseDiscoveryListReturn,
+  UseDiscoveryFiltersReturn,
+  UseCompanyProfileReturn,
+  UseEvidenceSummaryReturn,
+  UseSignalImpactsReturn,
+  UseScoreBreakdownReturn,
+  UseObjectGraphMiniReturn,
+  UseFullDiscoveryDataReturn,
+  UseSelectedCompanyReturn,
+} from './ui-hooks';
