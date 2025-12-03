@@ -1,10 +1,14 @@
 /**
  * Onboarding Store - Sprint S32-S35
  * Manages onboarding state and user profile during signup flow
+ *
+ * VERTICAL SYNC: On completeOnboarding(), syncs selectedVertical to
+ * sales-context-store so dashboard/SIVA surfaces use correct vertical.
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useSalesContextStore } from './sales-context-store';
 
 export type OnboardingStep = 'welcome' | 'identity' | 'workspace' | 'vertical' | 'transition' | 'complete';
 
@@ -104,6 +108,36 @@ export const useOnboardingStore = create<OnboardingState>()(
       },
 
       completeOnboarding: () => {
+        const { selectedVertical, profile } = get();
+
+        // VERTICAL SYNC: Bridge onboarding store → sales-context-store
+        // This ensures dashboard/SIVA surfaces use the user-selected vertical
+        if (selectedVertical) {
+          const salesStore = useSalesContextStore.getState();
+
+          // Map onboarding VerticalId to sales context Vertical type
+          const verticalMapping: Record<string, string> = {
+            'banking': 'banking',
+            'fintech': 'fintech',
+            'insurance': 'insurance',
+            'real_estate': 'real-estate',
+            'consulting': 'consulting',
+          };
+
+          const mappedVertical = verticalMapping[selectedVertical] || selectedVertical;
+          salesStore.setVertical(mappedVertical as Parameters<typeof salesStore.setVertical>[0]);
+
+          // Also sync region from profile if available
+          if (profile.region) {
+            salesStore.setRegion({
+              country: profile.region,
+              city: '',
+            });
+          }
+
+          console.log(`[Onboarding] Synced vertical to sales context: ${mappedVertical}`);
+        }
+
         set({
           isComplete: true,
           currentStep: 'complete',

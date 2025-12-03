@@ -4,6 +4,9 @@
  * Discovery Page
  *
  * Main discovery interface for finding and ranking companies.
+ *
+ * VERTICAL FIX: Now reads vertical from sales-context-store
+ * and loads vertical-specific data/config accordingly.
  */
 
 import { useState, useEffect } from 'react';
@@ -12,6 +15,8 @@ import { QTLEEngine } from '@/lib/scoring';
 import type { BankingCompanyProfile, QTLEScore, BankingSignal } from '@/lib/scoring/types';
 import { BANKING_SIGNAL_LIBRARY } from '@/lib/scoring/banking-signals';
 import { GCC_REGIONAL_MULTIPLIERS } from '@/lib/scoring/regional-weights';
+import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
+import type { Vertical } from '@/lib/intelligence/context/types';
 
 // Mock data for demo - in production this would come from the OS API
 const generateMockCompanies = (): BankingCompanyProfile[] => {
@@ -152,14 +157,12 @@ const generateMockCompanies = (): BankingCompanyProfile[] => {
   return companies;
 };
 
-export default function DiscoveryPage() {
-  const [companies, setCompanies] = useState<BankingCompanyProfile[]>([]);
-  const [scores, setScores] = useState<Map<string, QTLEScore>>(new Map());
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Initialize scoring engine with banking config
-    const engine = new QTLEEngine({
+/**
+ * Get vertical-specific scoring engine configuration
+ */
+function getVerticalScoringConfig(vertical: Vertical) {
+  const configs: Record<Vertical, object> = {
+    'banking': {
       weights: {
         quality: 0.25,
         timing: 0.30, // Higher timing weight for banking
@@ -174,9 +177,106 @@ export default function DiscoveryPage() {
           baseWeight: 1.15,
         },
       },
-    });
+    },
+    'insurance': {
+      weights: {
+        quality: 0.30,
+        timing: 0.25,
+        likelihood: 0.25,
+        engagement: 0.20,
+      },
+      regionalMultipliers: GCC_REGIONAL_MULTIPLIERS,
+      industryAdjustments: {
+        Insurance: {
+          qualitySignals: ['claims-ratio', 'customer-retention'],
+          timingSignals: ['policy-renewal-cycle', 'regulatory-changes'],
+          baseWeight: 1.10,
+        },
+      },
+    },
+    'real-estate': {
+      weights: {
+        quality: 0.20,
+        timing: 0.35, // Timing very important in real estate
+        likelihood: 0.25,
+        engagement: 0.20,
+      },
+      regionalMultipliers: GCC_REGIONAL_MULTIPLIERS,
+      industryAdjustments: {
+        RealEstate: {
+          qualitySignals: ['property-value-trend', 'location-score'],
+          timingSignals: ['lease-expiry', 'market-cycle'],
+          baseWeight: 1.20,
+        },
+      },
+    },
+    'recruitment': {
+      weights: {
+        quality: 0.25,
+        timing: 0.25,
+        likelihood: 0.30, // Higher likelihood weight for recruitment
+        engagement: 0.20,
+      },
+      regionalMultipliers: GCC_REGIONAL_MULTIPLIERS,
+      industryAdjustments: {
+        Recruitment: {
+          qualitySignals: ['hiring-velocity', 'company-growth'],
+          timingSignals: ['budget-cycle', 'project-kickoff'],
+          baseWeight: 1.10,
+        },
+      },
+    },
+    'saas-sales': {
+      weights: {
+        quality: 0.25,
+        timing: 0.25,
+        likelihood: 0.25,
+        engagement: 0.25, // Balanced for SaaS
+      },
+      regionalMultipliers: GCC_REGIONAL_MULTIPLIERS,
+      industryAdjustments: {
+        SaaS: {
+          qualitySignals: ['tech-stack-fit', 'budget-indicators'],
+          timingSignals: ['contract-renewal', 'funding-round'],
+          baseWeight: 1.15,
+        },
+      },
+    },
+  };
+
+  return configs[vertical] || configs['banking'];
+}
+
+/**
+ * Get vertical display name
+ */
+function getVerticalDisplayName(vertical: Vertical): string {
+  const names: Record<Vertical, string> = {
+    'banking': 'Banking',
+    'insurance': 'Insurance',
+    'real-estate': 'Real Estate',
+    'recruitment': 'Recruitment',
+    'saas-sales': 'SaaS Sales',
+  };
+  return names[vertical] || vertical;
+}
+
+export default function DiscoveryPage() {
+  // Read vertical from sales context (synced from onboarding)
+  const vertical = useSalesContextStore(selectVertical);
+
+  const [companies, setCompanies] = useState<BankingCompanyProfile[]>([]);
+  const [scores, setScores] = useState<Map<string, QTLEScore>>(new Map());
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Initialize scoring engine with vertical-specific config
+    const verticalConfig = getVerticalScoringConfig(vertical);
+    const engine = new QTLEEngine(verticalConfig);
 
     // Generate mock data
+    // Note: Currently only banking has full mock data
+    // Other verticals will show banking data as placeholder until OS integration
     const mockCompanies = generateMockCompanies();
     setCompanies(mockCompanies);
 
@@ -189,7 +289,7 @@ export default function DiscoveryPage() {
     setScores(scoreMap);
 
     setIsLoading(false);
-  }, []);
+  }, [vertical]); // Re-run when vertical changes
 
   if (isLoading) {
     return (
@@ -200,12 +300,26 @@ export default function DiscoveryPage() {
   }
 
   return (
-    <DiscoveryView
-      companies={companies}
-      scores={scores}
-      onCompanySelect={(company) => {
-        console.log('Selected company:', company.name);
-      }}
-    />
+    <div className="flex flex-col h-full">
+      {/* Vertical indicator */}
+      <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500">Discovery for:</span>
+          <span className="px-2 py-0.5 text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+            {getVerticalDisplayName(vertical)}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <DiscoveryView
+          companies={companies}
+          scores={scores}
+          onCompanySelect={(company) => {
+            console.log('Selected company:', company.name);
+          }}
+        />
+      </div>
+    </div>
   );
 }
