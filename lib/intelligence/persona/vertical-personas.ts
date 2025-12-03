@@ -218,11 +218,49 @@ const SAAS_SALES_BASE_PERSONA: VerticalPersona = {
 };
 
 // =============================================================================
+// GENERIC FALLBACK PERSONA
+// =============================================================================
+
+/**
+ * Generic Sales Professional persona
+ * Used when vertical is not configured or unknown
+ */
+const GENERIC_SALES_PERSONA: VerticalPersona = {
+  id: 'generic-sales',
+  name: 'Sales Professional',
+  description: 'Versatile sales expert adaptable to any industry',
+  baseTone: 'professional',
+  outreachTone: 'consultative',
+  traits: [
+    { name: 'Adaptable', description: 'Quickly adjusts to different contexts', intensity: 0.85 },
+    { name: 'Helpful', description: 'Focus on solving client problems', intensity: 0.9 },
+    { name: 'Knowledgeable', description: 'Well-informed about market trends', intensity: 0.8 },
+    { name: 'Professional', description: 'Maintains appropriate business demeanor', intensity: 0.85 },
+  ],
+  vocabulary: [
+    'solution', 'opportunity', 'value', 'partnership',
+    'growth', 'efficiency', 'results', 'success',
+  ],
+  avoidWords: [
+    'cheap', 'deal', 'discount', 'hurry', 'limited time',
+    'act now', 'exclusive offer',
+  ],
+  communicationStyle: {
+    formality: 'semi-formal',
+    pace: 'measured',
+    focus: 'outcome-focused',
+  },
+};
+
+// =============================================================================
 // PERSONA MATRIX
 // =============================================================================
 
 /**
  * Get persona for a specific vertical/sub-vertical combination
+ *
+ * VERTICAL FIX: Now returns GENERIC_SALES_PERSONA as fallback
+ * instead of defaulting to Banking.
  */
 export function getPersonaForVertical(
   vertical: Vertical,
@@ -247,7 +285,9 @@ export function getPersonaForVertical(
       return SAAS_SALES_BASE_PERSONA;
 
     default:
-      return BANKING_BASE_PERSONA; // Fallback
+      // VERTICAL FIX: Use generic fallback, not banking-specific
+      console.warn(`[Persona] Unknown vertical: ${vertical}, using generic fallback`);
+      return GENERIC_SALES_PERSONA;
   }
 }
 

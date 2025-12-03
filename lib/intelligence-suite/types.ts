@@ -17,10 +17,11 @@
  * All data is fetched from UPR OS via API calls.
  */
 
-import type { VerticalId } from '../dashboard/types';
+import type { Vertical } from '../intelligence/context/types';
 
-// Re-export VerticalId for use by other modules
-export type { VerticalId };
+// Re-export Vertical as VerticalId for backward compatibility
+export type VerticalId = Vertical;
+export type { Vertical };
 
 // =============================================================================
 // INTELLIGENCE CORE TYPES

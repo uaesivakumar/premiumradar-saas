@@ -9,7 +9,7 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils/cn';
-import type { VerticalId } from '@/lib/dashboard/types';
+import type { Vertical } from '@/lib/intelligence/context/types';
 import { useScoreInsights } from '@/lib/intelligence-suite/hooks';
 import { ScoreExplanationPanel } from './ScoreExplanationPanel';
 
@@ -17,7 +17,7 @@ interface IntelligenceSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   objectId: string | null;
-  vertical: VerticalId;
+  vertical: Vertical;
 }
 
 export function IntelligenceSidebar({

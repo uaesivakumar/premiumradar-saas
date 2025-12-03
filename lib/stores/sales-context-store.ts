@@ -24,24 +24,31 @@ import {
 } from '@/lib/intelligence/context/SalesContextProvider';
 
 // =============================================================================
-// Initial Context (Empty - must be configured via onboarding or API)
+// Initial Context (Unconfigured - must be set via onboarding sync)
 // =============================================================================
 
 /**
- * Creates an empty initial context
- * User must select vertical/sub-vertical/region during onboarding
- * or the context must be loaded from API/database
+ * Creates an unconfigured initial context.
+ *
+ * IMPORTANT: This is a FALLBACK only. The VerticalSyncProvider in
+ * dashboard layout will sync the user-selected vertical from
+ * onboarding-store on mount.
+ *
+ * The `isUserConfigured` flag tracks whether vertical was explicitly
+ * set by the user during onboarding.
  */
 function createInitialContext(): SalesContext {
   const now = new Date();
   return {
-    id: 'initial',
+    id: 'unconfigured',
     userId: '',
-    vertical: 'banking', // Default vertical for demo, but verticalConfig will be null
+    // Fallback values - will be overwritten by VerticalSyncProvider
+    // when user has completed onboarding with a vertical selection
+    vertical: 'banking',
     subVertical: 'employee-banking',
     region: {
-      country: 'UAE',
-      city: 'Dubai',
+      country: '',
+      city: '',
     },
     salesConfig: {
       signalSensitivities: {},
@@ -63,6 +70,9 @@ interface SalesContextState {
 
   // Loading state
   isLoaded: boolean;
+
+  // User configuration state - tracks if vertical was explicitly set
+  isUserConfigured: boolean;
 
   // Actions
   setVertical: (vertical: Vertical) => void;
@@ -89,11 +99,13 @@ interface SalesContextState {
 export const useSalesContextStore = create<SalesContextState>()(
   persist(
     (set, get) => ({
-      // Initial state - empty context, must be configured
+      // Initial state - unconfigured context, will be synced from onboarding
       context: createInitialContext(),
       isLoaded: false,
+      isUserConfigured: false,
 
       // Set vertical (resets sub-vertical if invalid)
+      // Marks context as user-configured
       setVertical: (vertical: Vertical) => {
         const { context } = get();
         const validSubVerticals = getSubVerticalsForVertical(vertical);
@@ -108,6 +120,7 @@ export const useSalesContextStore = create<SalesContextState>()(
             vertical,
             subVertical: newSubVertical,
           }),
+          isUserConfigured: true,  // Mark as configured when vertical is explicitly set
         });
       },
 
@@ -149,12 +162,13 @@ export const useSalesContextStore = create<SalesContextState>()(
         set({
           context: createInitialContext(),
           isLoaded: false,
+          isUserConfigured: false,
         });
       },
 
-      // Set full context
+      // Set full context (marks as user configured)
       setContext: (context: SalesContext) => {
-        set({ context, isLoaded: true });
+        set({ context, isLoaded: true, isUserConfigured: true });
       },
 
       // Filter signals by current context
@@ -179,6 +193,7 @@ export const useSalesContextStore = create<SalesContextState>()(
       name: 'sales-context-storage',
       partialize: (state) => ({
         context: state.context,
+        isUserConfigured: state.isUserConfigured,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -205,3 +220,4 @@ export const selectVertical = (state: SalesContextState) => state.context.vertic
 export const selectSubVertical = (state: SalesContextState) => state.context.subVertical;
 export const selectRegion = (state: SalesContextState) => state.context.region;
 export const selectSalesConfig = (state: SalesContextState) => state.context.salesConfig;
+export const selectIsUserConfigured = (state: SalesContextState) => state.isUserConfigured;

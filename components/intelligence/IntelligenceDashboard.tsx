@@ -9,8 +9,8 @@
 
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils/cn';
-import type { VerticalId } from '@/lib/dashboard/types';
 import type { IntelligenceTimeRange } from '@/lib/intelligence-suite/types';
+import type { Vertical } from '@/lib/intelligence/context/types';
 import { useIntelligence } from '@/lib/intelligence-suite/hooks';
 import {
   buildPersonaRanking,
@@ -29,7 +29,7 @@ import { IntelligenceTabs } from './IntelligenceTabs';
 import { IntelligenceSidebar } from './IntelligenceSidebar';
 
 interface IntelligenceDashboardProps {
-  vertical: VerticalId;
+  vertical: Vertical;
   className?: string;
 }
 
