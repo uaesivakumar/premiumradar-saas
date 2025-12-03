@@ -6,7 +6,7 @@
  * This is the SINGLE source of truth for vertical-specific strings.
  */
 
-import type { Vertical } from '@/lib/intelligence/context/types';
+import type { Vertical } from '../intelligence/context/types';
 
 // =============================================================================
 // VERTICAL DISPLAY NAMES
