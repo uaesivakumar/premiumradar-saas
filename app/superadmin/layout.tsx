@@ -97,13 +97,17 @@ export default function SuperAdminLayout({
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Skip layout for login page
-  if (pathname === '/superadmin/login') {
-    return <>{children}</>;
-  }
+  // Check if this is the login page
+  const isLoginPage = pathname === '/superadmin/login';
 
-  // Verify session on mount
+  // Verify session on mount (skip for login page)
   useEffect(() => {
+    // Skip session verification for login page
+    if (isLoginPage) {
+      setIsLoading(false);
+      return;
+    }
+
     async function verifySession() {
       try {
         const response = await fetch('/api/superadmin/session');
@@ -130,7 +134,7 @@ export default function SuperAdminLayout({
     // Refresh session info every minute
     const interval = setInterval(verifySession, 60000);
     return () => clearInterval(interval);
-  }, [router]);
+  }, [router, isLoginPage]);
 
   async function handleLogout() {
     setIsLoggingOut(true);
@@ -142,6 +146,12 @@ export default function SuperAdminLayout({
     }
   }
 
+  // For login page, render children directly without admin layout
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
+
+  // Show loading state while verifying session
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
