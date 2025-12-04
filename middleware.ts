@@ -1,11 +1,13 @@
 /**
- * Middleware - Sprint S36
+ * Middleware - Sprint S36 + S72 (Super Admin Security)
  * Route protection and onboarding enforcement
  *
  * Rules:
  * - Unauthenticated users → redirect to /login
  * - Incomplete onboarding → redirect to correct onboarding step
  * - Complete onboarding → allow dashboard access
+ * - /superadmin/* → requires Super Admin session (founder-only)
+ * - /dashboard/admin/* → redirect to /superadmin (hidden)
  */
 
 import { NextResponse } from 'next/server';
@@ -23,6 +25,9 @@ const ONBOARDING_STEPS = ['welcome', 'identity', 'workspace', 'vertical', 'trans
 // Public routes that don't require any authentication
 const PUBLIC_ROUTES = ['/', '/pricing', '/docs', '/legal', '/api'];
 
+// Super Admin session cookie name
+const SUPER_ADMIN_COOKIE = 'pr_superadmin_session';
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -33,6 +38,31 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/static') ||
     pathname.includes('.')
   ) {
+    return NextResponse.next();
+  }
+
+  // ==========================================================================
+  // SUPER ADMIN PROTECTION (CRITICAL SECURITY)
+  // ==========================================================================
+
+  // Block access to old /dashboard/admin routes - redirect to 404
+  // This prevents hackers from even knowing admin exists
+  if (pathname.startsWith('/dashboard/admin')) {
+    // Return 404 to hide the existence of admin routes
+    return NextResponse.rewrite(new URL('/404', request.url));
+  }
+
+  // Protect /superadmin routes (except login page)
+  if (pathname.startsWith('/superadmin') && pathname !== '/superadmin/login') {
+    const sessionCookie = request.cookies.get(SUPER_ADMIN_COOKIE);
+
+    if (!sessionCookie) {
+      // No session - redirect to super admin login
+      return NextResponse.redirect(new URL('/superadmin/login', request.url));
+    }
+
+    // Session exists - let the page verify it (can't decrypt in edge middleware)
+    // The page will handle session validation
     return NextResponse.next();
   }
 

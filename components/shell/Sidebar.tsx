@@ -52,7 +52,7 @@ const navItems: NavItem[] = [
 ];
 
 const bottomItems: NavItem[] = [
-  { label: 'Admin', labelAr: 'الإدارة', href: '/dashboard/admin', icon: <Shield size={20} /> },
+  // Admin removed - Super Admin is now at hidden /superadmin route (founder-only)
   { label: 'Settings', labelAr: 'الإعدادات', href: '/dashboard/settings', icon: <Settings size={20} /> },
   { label: 'Help', labelAr: 'المساعدة', href: '/dashboard/help', icon: <HelpCircle size={20} /> },
 ];
