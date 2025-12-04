@@ -329,31 +329,54 @@ const BANKING_EMPLOYEE_UAE_CONFIG: VerticalConfigData = {
   },
 
   // =========================================================================
-  // ENRICHMENT
+  // DATA SOURCES
+  // Discovery: SERP + LLM finds companies from hiring news
+  // Enrichment: Apollo gets headcount, contacts
   // =========================================================================
   enrichmentSources: [
+    // DISCOVERY SOURCES (find companies)
     {
-      id: 'apollo',
-      name: 'Apollo',
-      type: 'apollo',
+      id: 'serp-news',
+      name: 'SERP News Discovery',
+      type: 'custom',
       enabled: true,
       priority: 1,
-      fields: ['company_size', 'headcount', 'revenue', 'industry', 'technologies'],
+      fields: ['hiring_news', 'expansion_signals', 'company_discovery'],
+      description: 'Search hiring news to discover companies actively expanding',
+    },
+    {
+      id: 'llm-extraction',
+      name: 'LLM Company Extraction',
+      type: 'custom',
+      enabled: true,
+      priority: 2,
+      fields: ['company_names', 'signal_extraction', 'structured_data'],
+      description: 'Extract company names and signals from news using LLM',
+    },
+    // ENRICHMENT SOURCES (enrich discovered companies)
+    {
+      id: 'apollo',
+      name: 'Apollo Enrichment',
+      type: 'apollo',
+      enabled: true,
+      priority: 3,
+      fields: ['company_size', 'headcount', 'revenue', 'industry', 'hr_contacts'],
+      description: 'Enrich with headcount and HR decision maker contacts',
     },
     {
       id: 'linkedin',
       name: 'LinkedIn',
       type: 'linkedin',
       enabled: true,
-      priority: 2,
+      priority: 4,
       fields: ['employee_count', 'growth_rate', 'job_openings', 'decision_makers'],
     },
     {
       id: 'crunchbase',
       name: 'Crunchbase',
       type: 'crunchbase',
-      enabled: true,
-      priority: 3,
+      enabled: false,
+      priority: 5,
       fields: ['funding', 'investors', 'acquisitions', 'news'],
     },
   ],

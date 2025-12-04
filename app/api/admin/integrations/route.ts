@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate provider
-    const validProviders: IntegrationProvider[] = ['apollo', 'serp', 'linkedin', 'crunchbase'];
+    const validProviders: IntegrationProvider[] = ['apollo', 'serp', 'linkedin', 'crunchbase', 'openai'];
     if (!validProviders.includes(provider)) {
       return NextResponse.json(
         { success: false, error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` },

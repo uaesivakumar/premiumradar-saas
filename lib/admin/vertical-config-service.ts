@@ -62,6 +62,7 @@ export interface EnrichmentSourceConfig {
   enabled: boolean;
   priority: number;
   fields: string[];
+  description?: string; // Optional description for documentation
 }
 
 export interface OutreachChannelConfig {

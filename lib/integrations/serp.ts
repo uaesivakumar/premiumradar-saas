@@ -430,3 +430,60 @@ export async function searchTopHiringCompanies(options?: {
     num: 20,
   });
 }
+
+/**
+ * Discover companies using SERP + LLM
+ * This is the primary discovery method (replaces Apollo search)
+ *
+ * NOTE: Queries must find NEWS about SPECIFIC companies hiring,
+ * not generic "top jobs" or "industries hiring" articles.
+ */
+export async function discoverCompanies(options: {
+  region: string;
+  city?: string;
+  industry?: string;
+  limit?: number;
+}): Promise<SerpSearchResult & { rawResults: SerpNewsResult[] }> {
+  const region = options.region;
+  const city = options.city || 'Dubai';
+
+  // Build search queries that find SPECIFIC companies hiring (not generic job articles)
+  const queries = [
+    // Company-specific hiring news
+    `"company announces" OR "company expands" OR "company hires" ${city} ${region}`,
+    `"new employees" OR "workforce expansion" OR "hiring spree" ${region}`,
+    `"announced hiring" OR "to hire" OR "recruits" ${city}`,
+    // Tech and large companies specifically (these usually make news)
+    `tech company expands ${region} hiring 2024 2025`,
+    `multinational opens office ${region} employees`,
+  ].filter(Boolean) as string[];
+
+  const allNews: SerpNewsResult[] = [];
+
+  // Execute searches (limit API calls)
+  for (const query of queries.slice(0, 2)) {
+    try {
+      const result = await searchNews(query, {
+        location: options.city
+          ? `${options.city},${options.region}`
+          : `Dubai,${options.region}`,
+        timeRange: 'm', // Last month
+        num: 15,
+      });
+      allNews.push(...result.news);
+    } catch (error) {
+      console.warn(`[SERP Discovery] Query failed: ${query}`, error);
+    }
+  }
+
+  // Deduplicate by URL
+  const uniqueNews = allNews.filter((news, index, self) =>
+    index === self.findIndex(n => n.link === news.link)
+  );
+
+  return {
+    news: uniqueNews.slice(0, options.limit || 30),
+    rawResults: uniqueNews,
+    total: uniqueNews.length,
+  };
+}

@@ -200,3 +200,107 @@ GET /api/admin/vertical-config?vertical=banking&subVertical=employee-banking&reg
 
 **Signals are sales triggers, NOT life events.**
 **Banking only. Everything else is Coming Soon.**
+
+---
+
+## SIVA Multi-Vertical Architecture (APPROVED)
+
+**Decision Date**: December 4, 2025
+**Status**: FINAL ARCHITECTURE
+
+### Core Principle
+
+```
+Vertical     = WHAT industry the salesperson works in
+Sub-Vertical = WHO the salesperson is (their role)
+Persona      = HOW the salesperson thinks (their brain)
+
+Therefore: Persona MUST be stored per Sub-Vertical in Super Admin.
+```
+
+### Why Persona Per Sub-Vertical (Not Vertical)
+
+| Vertical | Sub-Verticals (Each needs different persona!) |
+|----------|-----------------------------------------------|
+| Banking | Employee Banking, Corporate Banking, SME Banking |
+| Insurance | Individual, Corporate, Health |
+| Recruitment | Tech Talent, Executive Search |
+
+**EB persona ⊥ Corporate Banking persona** — they are NOT interchangeable.
+
+### Persona Controls Everything SIVA Does
+
+- Edge Cases (blockers, boosters)
+- Timing Rules (calendar, signal freshness)
+- Contact Priority (who to target)
+- Outreach Doctrine (always/never rules)
+- Target Entity Type (company vs individual)
+- Decision Chains (thresholds, logic)
+
+### Architecture
+
+```
+Super Admin
+└── Sub-Vertical
+    ├── Config (signals, weights, thresholds)
+    └── 🧠 Persona (per sub-vertical)
+        ├── Identity & Mission
+        ├── Edge Cases
+        ├── Timing Rules
+        ├── Contact Priority
+        ├── Outreach Doctrine
+        └── Anti-Patterns
+
+UPR OS / SIVA
+└── Loads persona dynamically: PersonaService.get(sub_vertical_id)
+└── Tools use persona config (not hardcoded logic)
+```
+
+### Current State vs Target State
+
+| Aspect | Current | Target |
+|--------|---------|--------|
+| Persona location | Hardcoded in `siva-brain-spec-v1.md` | DB per sub-vertical |
+| Tools | Hardcoded EB logic | Load from `persona.{field}` |
+| Multi-vertical | ❌ EB-only | ✅ Any sub-vertical |
+
+### Reference
+
+Full architecture document: `docs/SIVA_MULTI_VERTICAL_ARCHITECTURE.md`
+
+---
+
+## UPR OS Integration
+
+### SIVA is NOT UPR OS
+
+| Term | What It Is |
+|------|------------|
+| **UPR OS** | The operating system platform |
+| **SIVA** | The intelligent agent INSIDE UPR OS |
+| **Persona** | The brain configuration per sub-vertical |
+
+### Active API Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/os/score` | QTLE scoring |
+| `POST /api/os/rank` | Profile-based ranking |
+| `POST /api/agent-core/v1/tools/*` | Individual SIVA tools |
+
+### Required Context for Every SIVA Call
+
+```typescript
+{
+  vertical: "banking",
+  sub_vertical: "employee_banking",
+  region: "UAE"
+}
+```
+
+SIVA loads persona from sub_vertical and applies all rules dynamically.
+
+### Reference
+
+- SIVA API Contract: `docs/SIVA_API_CONTRACT.md`
+- Vertical Intelligence Report: `docs/SIVA_MULTI_VERTICAL_ARCHITECTURE.md`

@@ -133,13 +133,13 @@ async function apolloRequest<T>(
 
 /**
  * Search for companies in Apollo
+ * Uses /organizations/search endpoint (available on Basic plan)
  */
 export async function searchCompanies(params: ApolloSearchParams): Promise<ApolloSearchResult> {
   const response = await apolloRequest<{
     organizations?: ApolloCompany[];
-    accounts?: ApolloCompany[];
-    pagination?: { total_entries: number; page: number; per_page: number };
-  }>('/mixed_companies/search', 'POST', {
+    pagination?: { total_entries: number; page: number; per_page: number; total_pages: number };
+  }>('/organizations/search', 'POST', {
     organization_locations: params.organization_locations,
     organization_industry_tag_ids: params.organization_industry_tag_ids,
     organization_num_employees_ranges: params.organization_num_employees_ranges,
@@ -148,7 +148,7 @@ export async function searchCompanies(params: ApolloSearchParams): Promise<Apoll
     per_page: params.per_page || 25,
   });
 
-  const companies = response.organizations || response.accounts || [];
+  const companies = response.organizations || [];
 
   return {
     companies,
@@ -197,6 +197,7 @@ export async function searchUAEEmployers(options?: {
 
 /**
  * Search for contacts (HR/Finance decision makers for EB)
+ * Uses /people/search endpoint (available on Basic plan)
  */
 export async function searchContacts(params: {
   organizationId?: string;
@@ -207,10 +208,9 @@ export async function searchContacts(params: {
   perPage?: number;
 }): Promise<ApolloContact[]> {
   const response = await apolloRequest<{
-    contacts?: ApolloContact[];
     people?: ApolloContact[];
-  }>('/mixed_people/search', 'POST', {
-    q_organization_domains: params.organizationId ? undefined : undefined,
+    pagination?: { total_entries: number };
+  }>('/people/search', 'POST', {
     organization_ids: params.organizationId ? [params.organizationId] : undefined,
     person_titles: params.titles || ['HR Director', 'Chief People Officer', 'VP Human Resources', 'Head of HR', 'HR Manager', 'Finance Director', 'CFO'],
     person_seniorities: params.seniorities || ['director', 'vp', 'c_suite', 'owner', 'partner'],
@@ -218,7 +218,7 @@ export async function searchContacts(params: {
     per_page: params.perPage || 10,
   });
 
-  return response.contacts || response.people || [];
+  return response.people || [];
 }
 
 /**

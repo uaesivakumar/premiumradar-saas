@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     await query(CREATE_TABLE_SQL);
 
     // Verify table exists
-    const result = await query(`
+    const result = await query<{ column_name: string; data_type: string }>(`
       SELECT column_name, data_type
       FROM information_schema.columns
       WHERE table_name = 'api_integrations'
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'api_integrations table created/verified successfully',
-      columns: result.map((r: { column_name: string; data_type: string }) => r.column_name),
+      columns: result.map(r => r.column_name),
     });
   } catch (error) {
     console.error('[Migration] api_integrations error:', error);

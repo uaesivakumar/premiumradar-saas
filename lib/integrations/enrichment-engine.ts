@@ -29,8 +29,13 @@ import {
 import {
   getCompanySignals,
   searchTopHiringCompanies,
+  discoverCompanies,
   type ExtractedSignal,
 } from './serp';
+import {
+  extractCompaniesFromNews,
+  type ExtractedCompany,
+} from './llm-extractor';
 import {
   getVerticalConfigCached,
   type VerticalConfig,
@@ -234,6 +239,12 @@ function filterSignalsByConfig(
 
 /**
  * Search and enrich entities using vertical config
+ *
+ * ARCHITECTURE (IMPORTANT):
+ * - SERP + LLM = PRIMARY for DISCOVERY (find companies from hiring news)
+ * - Apollo = ONLY for ENRICHMENT (headcount, contacts AFTER discovery)
+ *
+ * This is NOT a fallback system. SERP+LLM discovers, Apollo enriches.
  */
 export async function searchAndEnrich(
   params: EnrichmentSearchParams
@@ -276,129 +287,129 @@ export async function searchAndEnrich(
     ? params.regions.flatMap(r => regionToCities[r] || [r])
     : regionToCities[params.region] || ['Dubai'];
 
-  // 4. Fetch data from enabled sources
+  // 4. DISCOVERY using SERP + LLM (PRIMARY - not fallback!)
+  // Employee Banking discovery: Find companies hiring in UAE from news
   const entities: EnrichedEntity[] = [];
-  let apolloCompanies: ApolloCompany[] = [];
+  let discoveredCompanies: ExtractedCompany[] = [];
 
-  // Check if Apollo is enabled
-  const apolloSource = enabledSources.find((s: EnrichmentSourceConfig) => s.type === 'apollo');
-  if (apolloSource) {
-    console.log('[Enrichment] Fetching from Apollo...');
-    sourcesUsed.push('apollo');
+  // Check if SERP discovery is enabled
+  const serpSource = enabledSources.find((s: EnrichmentSourceConfig) =>
+    s.id === 'serp-news' || s.type === 'custom' && s.fields?.includes('hiring_news')
+  );
+  const llmSource = enabledSources.find((s: EnrichmentSourceConfig) =>
+    s.id === 'llm-extraction' || s.type === 'custom' && s.fields?.includes('company_names')
+  );
+
+  // ALWAYS use SERP + LLM for discovery if enabled
+  if (serpSource || llmSource) {
+    console.log('[Enrichment] STEP 1: SERP + LLM DISCOVERY (Primary)...');
+    console.log(`[Enrichment] Searching hiring news for ${params.subVertical} in ${params.region}...`);
 
     try {
-      const apolloResult = await searchUAEEmployers({
-        minEmployees: params.minHeadcount || 50,
-        maxEmployees: params.maxHeadcount,
-        perPage: params.limit || 25,
+      // Search news for hiring companies - EB specific keywords
+      const serpResult = await discoverCompanies({
+        region: params.region,
+        city: targetCities[0],
+        industry: params.subVertical, // employee-banking
+        limit: 50,
       });
-      apolloCompanies = apolloResult.companies;
-      console.log(`[Enrichment] Apollo returned ${apolloCompanies.length} companies`);
+
+      console.log(`[Enrichment] SERP found ${serpResult.news.length} news articles`);
+      sourcesUsed.push('serp');
+
+      if (serpResult.news.length > 0) {
+        // Use LLM to extract company names from news
+        const llmResult = await extractCompaniesFromNews(serpResult.news, {
+          vertical: params.vertical,
+          subVertical: params.subVertical, // CRITICAL: EB-specific extraction
+          region: params.region,
+          maxCompanies: params.limit || 25,
+        });
+
+        discoveredCompanies = llmResult.companies;
+        console.log(`[Enrichment] LLM extracted ${discoveredCompanies.length} companies with hiring signals`);
+
+        if (discoveredCompanies.length > 0) {
+          sourcesUsed.push('llm');
+        }
+      }
     } catch (error) {
-      console.error('[Enrichment] Apollo failed:', error);
+      console.error('[Enrichment] SERP + LLM discovery failed:', error);
     }
   }
 
-  // 5. Enrich with SERP signals (if enabled)
-  const serpEnabled = enabledSources.some((s: EnrichmentSourceConfig) =>
-    s.type === 'custom' && s.id === 'serp-news'
-  );
+  // 5. ENRICHMENT using Apollo (Secondary - enriches discovered companies)
+  // Apollo adds: headcount, growth metrics, contacts
+  const apolloSource = enabledSources.find((s: EnrichmentSourceConfig) => s.type === 'apollo');
 
-  console.log('[Enrichment] Enriching with signals...');
+  console.log('[Enrichment] STEP 2: Apollo ENRICHMENT (Secondary)...');
+  console.log(`[Enrichment] Enriching ${discoveredCompanies.length} discovered companies with Apollo data...`);
 
-  const enrichmentPromises = apolloCompanies.slice(0, params.limit || 25).map(async (company) => {
-    // Get hiring signals from Apollo
-    const apolloSignals = getHiringSignals(company);
+  // Process discovered companies and enrich with Apollo
+  for (const company of discoveredCompanies.slice(0, params.limit || 25)) {
+    // Filter signals by config (only EB-relevant signals)
+    const filteredSignals = filterSignalsByConfig(company.signals, config);
+    signalCount += filteredSignals.length;
 
-    // Get news signals from SERP (if enabled)
-    let serpSignals: ExtractedSignal[] = [];
-    if (serpEnabled) {
+    // Try to enrich with Apollo if enabled
+    let apolloData: ApolloCompany | null = null;
+    if (apolloSource && company.domain) {
       try {
-        const allSignals = await getCompanySignals(company.name);
-        // Filter signals based on vertical config
-        serpSignals = filterSignalsByConfig(allSignals, config);
-        signalCount += serpSignals.length;
-        if (serpSignals.length > 0) sourcesUsed.push('serp');
+        apolloData = await enrichCompany(company.domain);
+        if (apolloData && !sourcesUsed.includes('apollo')) {
+          sourcesUsed.push('apollo');
+        }
       } catch (error) {
-        console.warn(`[Enrichment] SERP failed for ${company.name}:`, error);
+        console.warn(`[Enrichment] Apollo enrichment failed for ${company.name}:`, error);
       }
     }
 
-    // Get HR contact (if needed for this vertical)
-    let hrContact: ApolloContact | undefined;
-    if (verticalConfig.radarTarget === 'companies') {
-      try {
-        const contacts = await searchHRContacts(company.name);
-        hrContact = contacts[0];
-      } catch (error) {
-        // Continue without contact
-      }
-    }
-
-    // Check region match
-    const companyCity = company.city?.toLowerCase() || '';
-    const regionMatch = targetCities.some(city =>
-      companyCity.includes(city.toLowerCase())
-    );
-
-    // Calculate score using vertical config
+    // Calculate score using discovered signals + Apollo data
     const { score, breakdown } = calculateScore(
       {
-        headcount: company.estimated_num_employees || company.employee_count || 0,
-        headcountGrowth: company.employee_growth_6_months || 0,
-        openJobs: company.num_open_jobs,
-        hiringVelocity: company.hiring_velocity,
+        headcount: apolloData?.estimated_num_employees || company.headcount || 0,
+        headcountGrowth: apolloData?.employee_growth_6_months || 0,
+        openJobs: apolloData?.num_open_jobs || company.hiringCount,
+        hiringVelocity: apolloData?.hiring_velocity,
       },
-      serpSignals,
-      regionMatch,
+      filteredSignals,
+      true, // Region match assumed since we searched by region
       config
     );
 
-    // Apply minimum score filter
-    if (params.minScore && score < params.minScore) {
-      return null;
-    }
-
-    const baseData = toEBEmployer(company);
+    if (params.minScore && score < params.minScore) continue;
 
     const enrichedEntity: EnrichedEntity = {
-      id: baseData.id,
-      name: baseData.name,
+      id: apolloData?.id || `serp-${company.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`,
+      name: company.name,
       type: verticalConfig.radarTarget === 'companies' ? 'company' : 'individual',
-      industry: baseData.industry,
-      size: baseData.size,
-      headcount: baseData.headcount,
-      headcountGrowth: baseData.headcountGrowth,
-      region: baseData.region,
-      city: baseData.city,
-      description: baseData.description,
-      website: baseData.website,
-      linkedIn: baseData.linkedIn,
+      industry: apolloData?.industry || company.industry,
+      size: (apolloData?.estimated_num_employees || company.headcount || 0) >= 1000 ? 'enterprise' :
+            (apolloData?.estimated_num_employees || company.headcount || 0) >= 200 ? 'mid-market' : 'smb',
+      headcount: apolloData?.estimated_num_employees || company.headcount,
+      headcountGrowth: apolloData?.employee_growth_6_months,
+      region: params.region,
+      city: apolloData?.city || company.city || targetCities[0],
+      description: apolloData?.description || `${company.name} - discovered via hiring signals in ${params.region}`,
+      website: apolloData?.website_url || (company.domain ? `https://${company.domain}` : undefined),
+      linkedIn: apolloData?.linkedin_url,
       score,
       scoreBreakdown: breakdown,
-      signals: serpSignals,
-      decisionMaker: hrContact ? {
-        name: hrContact.name || `${hrContact.first_name} ${hrContact.last_name}`,
-        title: hrContact.title || 'Decision Maker',
-        email: hrContact.email,
-        linkedin: hrContact.linkedin_url,
-      } : undefined,
-      freshness: determineFreshness(serpSignals),
-      dataSources: [...new Set(sourcesUsed)],
+      signals: filteredSignals,
+      freshness: determineFreshness(filteredSignals),
+      dataSources: apolloData ? ['serp', 'llm', 'apollo'] : ['serp', 'llm'],
       lastEnriched: new Date(),
     };
 
-    return enrichedEntity;
-  });
-
-  const enrichedResults = await Promise.all(enrichmentPromises);
-  entities.push(...enrichedResults.filter((e): e is EnrichedEntity => e !== null));
+    entities.push(enrichedEntity);
+  }
 
   // 6. Sort by score
   entities.sort((a, b) => b.score - a.score);
 
   const duration = Date.now() - startTime;
   console.log(`[Enrichment] Complete in ${duration}ms: ${entities.length} entities, ${signalCount} signals`);
+  console.log(`[Enrichment] Sources used: ${sourcesUsed.join(', ')}`);
 
   return {
     entities,

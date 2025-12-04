@@ -17,7 +17,7 @@ import { query, queryOne, insert } from '@/lib/db';
 // TYPES
 // =============================================================================
 
-export type IntegrationProvider = 'apollo' | 'serp' | 'linkedin' | 'crunchbase';
+export type IntegrationProvider = 'apollo' | 'serp' | 'linkedin' | 'crunchbase' | 'openai';
 
 export interface ApiIntegration {
   id: string;

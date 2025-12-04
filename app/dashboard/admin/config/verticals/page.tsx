@@ -116,6 +116,125 @@ interface DefaultKPI {
 }
 
 // =============================================================================
+// Persona Types (v3.0 - Sprint 71)
+// =============================================================================
+
+interface PersonaConfig {
+  persona_name: string;
+  persona_role?: string;
+  persona_organization?: string;
+  entity_type: 'company' | 'individual' | 'family';
+  primary_mission?: string;
+  core_goal?: string;
+  north_star_metric?: string;
+  core_belief?: string;
+  contact_priority_rules: {
+    tiers: Array<{
+      size_min?: number;
+      size_max?: number | null;
+      titles: string[];
+      priority: number;
+      reason?: string;
+    }>;
+    boost_conditions?: Array<{
+      condition: string;
+      add_titles: string[];
+    }>;
+  };
+  edge_cases: {
+    blockers: Array<{
+      type: 'company_name' | 'sector' | 'status';
+      values: string[];
+      multiplier: number;
+      reason?: string;
+    }>;
+    boosters: Array<{
+      type: 'license_type' | 'signal_recency' | 'industry';
+      values?: string[];
+      condition?: string;
+      multiplier: number;
+      reason?: string;
+    }>;
+  };
+  timing_rules: {
+    calendar: Array<{
+      period: string;
+      months?: number[];
+      dynamic?: boolean;
+      multiplier: number;
+      reason?: string;
+    }>;
+    signal_freshness: Array<{
+      days_max: number;
+      multiplier: number;
+      label: string;
+    }>;
+  };
+  outreach_doctrine: {
+    always: string[];
+    never: string[];
+    tone: 'professional' | 'casual' | 'formal';
+    formality: 'formal' | 'semi-formal' | 'informal';
+    channels: string[];
+  };
+  quality_standards: {
+    min_confidence: number;
+    contact_cooldown_days: number;
+    always?: string[];
+    never?: string[];
+  };
+  anti_patterns?: Array<{
+    mistake: string;
+    wrong: string;
+    correct: string;
+  }>;
+  confidence_gates?: Array<{
+    condition: string;
+    action: string;
+  }>;
+}
+
+const DEFAULT_PERSONA: PersonaConfig = {
+  persona_name: '',
+  entity_type: 'company',
+  contact_priority_rules: {
+    tiers: [
+      { size_min: 0, size_max: 50, titles: ['Founder', 'COO'], priority: 1 },
+      { size_min: 50, size_max: 500, titles: ['HR Director', 'HR Manager'], priority: 1 },
+      { size_min: 500, size_max: null, titles: ['Payroll Manager', 'Benefits Coordinator'], priority: 1 },
+    ],
+  },
+  edge_cases: {
+    blockers: [],
+    boosters: [],
+  },
+  timing_rules: {
+    calendar: [
+      { period: 'Q1', months: [1, 2], multiplier: 1.3, reason: 'New budgets' },
+      { period: 'Ramadan', dynamic: true, multiplier: 0.3, reason: 'Business slowdown' },
+      { period: 'Summer', months: [7, 8], multiplier: 0.7, reason: 'Vacation season' },
+      { period: 'Q4', months: [12], multiplier: 0.6, reason: 'Budget freeze' },
+    ],
+    signal_freshness: [
+      { days_max: 7, multiplier: 1.5, label: 'HOT' },
+      { days_max: 14, multiplier: 1.2, label: 'WARM' },
+      { days_max: 30, multiplier: 1.0, label: 'RECENT' },
+    ],
+  },
+  outreach_doctrine: {
+    always: [],
+    never: [],
+    tone: 'professional',
+    formality: 'formal',
+    channels: ['email', 'linkedin'],
+  },
+  quality_standards: {
+    min_confidence: 70,
+    contact_cooldown_days: 90,
+  },
+};
+
+// =============================================================================
 // Constants
 // =============================================================================
 
@@ -525,9 +644,10 @@ function ConfigModal({
     radarTarget: config?.radarTarget || 'companies',
     isActive: config?.isActive ?? true,
     config: config?.config || createDefaultConfig(),
+    persona: (config as VerticalConfig & { persona?: PersonaConfig })?.persona || { ...DEFAULT_PERSONA },
   });
 
-  const [activeTab, setActiveTab] = useState<'basic' | 'signals' | 'scoring' | 'enrichment' | 'json'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'signals' | 'scoring' | 'enrichment' | 'persona' | 'json'>('basic');
 
   function createDefaultConfig(): VerticalConfigData {
     return {
@@ -557,6 +677,7 @@ function ConfigModal({
     { id: 'signals' as const, label: 'Signals' },
     { id: 'scoring' as const, label: 'Scoring' },
     { id: 'enrichment' as const, label: 'Enrichment' },
+    { id: 'persona' as const, label: '🧠 Persona' },
     { id: 'json' as const, label: 'JSON' },
   ];
 
@@ -614,6 +735,10 @@ function ConfigModal({
             <EnrichmentTab formData={formData} setFormData={setFormData} />
           )}
 
+          {activeTab === 'persona' && (
+            <PersonaTab formData={formData} setFormData={setFormData} />
+          )}
+
           {activeTab === 'json' && (
             <JsonTab formData={formData} setFormData={setFormData} />
           )}
@@ -652,6 +777,7 @@ interface FormData {
   radarTarget: 'companies' | 'individuals' | 'families' | 'candidates';
   isActive: boolean;
   config: VerticalConfigData;
+  persona: PersonaConfig; // v3.0: Persona config
 }
 
 function BasicInfoTab({
@@ -1026,6 +1152,583 @@ function EnrichmentTab({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Persona Tab Component (v3.0 - Sprint 71)
+// =============================================================================
+
+function PersonaTab({
+  formData,
+  setFormData,
+}: {
+  formData: FormData;
+  setFormData: React.Dispatch<React.SetStateAction<FormData>>;
+}) {
+  const [activeSection, setActiveSection] = useState<'identity' | 'contact' | 'edge' | 'timing' | 'outreach' | 'quality'>('identity');
+
+  const updatePersona = (updates: Partial<PersonaConfig>) => {
+    setFormData((prev) => ({
+      ...prev,
+      persona: { ...prev.persona, ...updates },
+    }));
+  };
+
+  const sections = [
+    { id: 'identity' as const, label: 'Identity & Mission', icon: '👤' },
+    { id: 'contact' as const, label: 'Contact Priority', icon: '📞' },
+    { id: 'edge' as const, label: 'Edge Cases', icon: '⚠️' },
+    { id: 'timing' as const, label: 'Timing Rules', icon: '📅' },
+    { id: 'outreach' as const, label: 'Outreach Doctrine', icon: '📧' },
+    { id: 'quality' as const, label: 'Quality Standards', icon: '✓' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-gray-500">
+        Configure the SIVA persona for this sub-vertical. This defines HOW SIVA thinks as this sales role.
+      </p>
+
+      {/* Section Navigation */}
+      <div className="flex gap-2 flex-wrap">
+        {sections.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => setActiveSection(section.id)}
+            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+              activeSection === section.id
+                ? 'bg-purple-100 border-purple-300 text-purple-700'
+                : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+            }`}
+          >
+            {section.icon} {section.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Identity & Mission Section */}
+      {activeSection === 'identity' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Identity & Mission</h3>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Persona Name *</label>
+              <input
+                type="text"
+                value={formData.persona.persona_name}
+                onChange={(e) => updatePersona({ persona_name: e.target.value })}
+                placeholder="EB Sales Officer"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Entity Type *</label>
+              <select
+                value={formData.persona.entity_type}
+                onChange={(e) => updatePersona({ entity_type: e.target.value as PersonaConfig['entity_type'] })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="company">Company</option>
+                <option value="individual">Individual</option>
+                <option value="family">Family</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <input
+                type="text"
+                value={formData.persona.persona_role || ''}
+                onChange={(e) => updatePersona({ persona_role: e.target.value })}
+                placeholder="Senior Retail Banking Officer"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Organization</label>
+              <input
+                type="text"
+                value={formData.persona.persona_organization || ''}
+                onChange={(e) => updatePersona({ persona_organization: e.target.value })}
+                placeholder="Emirates NBD"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Primary Mission</label>
+            <textarea
+              value={formData.persona.primary_mission || ''}
+              onChange={(e) => updatePersona({ primary_mission: e.target.value })}
+              placeholder="Become the designated point of contact for companies to manage employee banking"
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Core Goal</label>
+            <textarea
+              value={formData.persona.core_goal || ''}
+              onChange={(e) => updatePersona({ core_goal: e.target.value })}
+              placeholder="Build long-term payroll relationships that enable cross-sell"
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">North Star Metric</label>
+            <input
+              type="text"
+              value={formData.persona.north_star_metric || ''}
+              onChange={(e) => updatePersona({ north_star_metric: e.target.value })}
+              placeholder="≥200 qualified companies per month with ≥70% mid/high-tier salary segments"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Contact Priority Section */}
+      {activeSection === 'contact' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Contact Priority Rules</h3>
+          <p className="text-sm text-gray-500">Define target titles by company size tier.</p>
+
+          {formData.persona.contact_priority_rules.tiers.map((tier, index) => (
+            <div key={index} className="bg-white p-3 rounded-lg border border-gray-200">
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Size Min</label>
+                  <input
+                    type="number"
+                    value={tier.size_min || 0}
+                    onChange={(e) => {
+                      const tiers = [...formData.persona.contact_priority_rules.tiers];
+                      tiers[index] = { ...tier, size_min: Number(e.target.value) };
+                      updatePersona({ contact_priority_rules: { ...formData.persona.contact_priority_rules, tiers } });
+                    }}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Size Max</label>
+                  <input
+                    type="number"
+                    value={tier.size_max || ''}
+                    placeholder="∞"
+                    onChange={(e) => {
+                      const tiers = [...formData.persona.contact_priority_rules.tiers];
+                      tiers[index] = { ...tier, size_max: e.target.value ? Number(e.target.value) : null };
+                      updatePersona({ contact_priority_rules: { ...formData.persona.contact_priority_rules, tiers } });
+                    }}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">Target Titles (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={tier.titles.join(', ')}
+                    onChange={(e) => {
+                      const tiers = [...formData.persona.contact_priority_rules.tiers];
+                      tiers[index] = { ...tier, titles: e.target.value.split(',').map(t => t.trim()).filter(Boolean) };
+                      updatePersona({ contact_priority_rules: { ...formData.persona.contact_priority_rules, tiers } });
+                    }}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => {
+              const tiers = [...formData.persona.contact_priority_rules.tiers, { size_min: 0, size_max: null, titles: [], priority: 1 }];
+              updatePersona({ contact_priority_rules: { ...formData.persona.contact_priority_rules, tiers } });
+            }}
+            className="text-sm text-blue-600 hover:text-blue-700"
+          >
+            + Add Tier
+          </button>
+        </div>
+      )}
+
+      {/* Edge Cases Section */}
+      {activeSection === 'edge' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Edge Cases</h3>
+
+          {/* Blockers */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">⛔ Blockers</h4>
+            {formData.persona.edge_cases.blockers.map((blocker, index) => (
+              <div key={index} className="bg-white p-3 rounded-lg border border-red-200 mb-2">
+                <div className="grid grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Type</label>
+                    <select
+                      value={blocker.type}
+                      onChange={(e) => {
+                        const blockers = [...formData.persona.edge_cases.blockers];
+                        blockers[index] = { ...blocker, type: e.target.value as 'company_name' | 'sector' | 'status' };
+                        updatePersona({ edge_cases: { ...formData.persona.edge_cases, blockers } });
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    >
+                      <option value="company_name">Company Name</option>
+                      <option value="sector">Sector</option>
+                      <option value="status">Status</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Values (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={blocker.values.join(', ')}
+                      onChange={(e) => {
+                        const blockers = [...formData.persona.edge_cases.blockers];
+                        blockers[index] = { ...blocker, values: e.target.value.split(',').map(v => v.trim()).filter(Boolean) };
+                        updatePersona({ edge_cases: { ...formData.persona.edge_cases, blockers } });
+                      }}
+                      placeholder="Etihad, Emirates, ADNOC"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Multiplier</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={blocker.multiplier}
+                      onChange={(e) => {
+                        const blockers = [...formData.persona.edge_cases.blockers];
+                        blockers[index] = { ...blocker, multiplier: Number(e.target.value) };
+                        updatePersona({ edge_cases: { ...formData.persona.edge_cases, blockers } });
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const blockers = [...formData.persona.edge_cases.blockers, { type: 'company_name' as const, values: [], multiplier: 0.1 }];
+                updatePersona({ edge_cases: { ...formData.persona.edge_cases, blockers } });
+              }}
+              className="text-sm text-red-600 hover:text-red-700"
+            >
+              + Add Blocker
+            </button>
+          </div>
+
+          {/* Boosters */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">🚀 Boosters</h4>
+            {formData.persona.edge_cases.boosters.map((booster, index) => (
+              <div key={index} className="bg-white p-3 rounded-lg border border-green-200 mb-2">
+                <div className="grid grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Type</label>
+                    <select
+                      value={booster.type}
+                      onChange={(e) => {
+                        const boosters = [...formData.persona.edge_cases.boosters];
+                        boosters[index] = { ...booster, type: e.target.value as 'license_type' | 'signal_recency' | 'industry' };
+                        updatePersona({ edge_cases: { ...formData.persona.edge_cases, boosters } });
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    >
+                      <option value="license_type">License Type</option>
+                      <option value="signal_recency">Signal Recency</option>
+                      <option value="industry">Industry</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Values (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={booster.values?.join(', ') || ''}
+                      onChange={(e) => {
+                        const boosters = [...formData.persona.edge_cases.boosters];
+                        boosters[index] = { ...booster, values: e.target.value.split(',').map(v => v.trim()).filter(Boolean) };
+                        updatePersona({ edge_cases: { ...formData.persona.edge_cases, boosters } });
+                      }}
+                      placeholder="Free Zone"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Multiplier</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={booster.multiplier}
+                      onChange={(e) => {
+                        const boosters = [...formData.persona.edge_cases.boosters];
+                        boosters[index] = { ...booster, multiplier: Number(e.target.value) };
+                        updatePersona({ edge_cases: { ...formData.persona.edge_cases, boosters } });
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const boosters = [...formData.persona.edge_cases.boosters, { type: 'license_type' as const, values: [], multiplier: 1.3 }];
+                updatePersona({ edge_cases: { ...formData.persona.edge_cases, boosters } });
+              }}
+              className="text-sm text-green-600 hover:text-green-700"
+            >
+              + Add Booster
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Timing Rules Section */}
+      {activeSection === 'timing' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Timing Rules</h3>
+
+          {/* Calendar Rules */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">📅 Calendar Periods</h4>
+            {formData.persona.timing_rules.calendar.map((rule, index) => (
+              <div key={index} className="bg-white p-3 rounded-lg border border-gray-200 mb-2">
+                <div className="grid grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Period</label>
+                    <input
+                      type="text"
+                      value={rule.period}
+                      onChange={(e) => {
+                        const calendar = [...formData.persona.timing_rules.calendar];
+                        calendar[index] = { ...rule, period: e.target.value };
+                        updatePersona({ timing_rules: { ...formData.persona.timing_rules, calendar } });
+                      }}
+                      placeholder="Q1"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Months (1-12)</label>
+                    <input
+                      type="text"
+                      value={rule.months?.join(', ') || ''}
+                      onChange={(e) => {
+                        const calendar = [...formData.persona.timing_rules.calendar];
+                        calendar[index] = { ...rule, months: e.target.value.split(',').map(m => Number(m.trim())).filter(Boolean) };
+                        updatePersona({ timing_rules: { ...formData.persona.timing_rules, calendar } });
+                      }}
+                      placeholder="1, 2"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Multiplier</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={rule.multiplier}
+                      onChange={(e) => {
+                        const calendar = [...formData.persona.timing_rules.calendar];
+                        calendar[index] = { ...rule, multiplier: Number(e.target.value) };
+                        updatePersona({ timing_rules: { ...formData.persona.timing_rules, calendar } });
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Reason</label>
+                    <input
+                      type="text"
+                      value={rule.reason || ''}
+                      onChange={(e) => {
+                        const calendar = [...formData.persona.timing_rules.calendar];
+                        calendar[index] = { ...rule, reason: e.target.value };
+                        updatePersona({ timing_rules: { ...formData.persona.timing_rules, calendar } });
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Signal Freshness */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">⏱️ Signal Freshness</h4>
+            {formData.persona.timing_rules.signal_freshness.map((rule, index) => (
+              <div key={index} className="bg-white p-3 rounded-lg border border-gray-200 mb-2">
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Days Max</label>
+                    <input
+                      type="number"
+                      value={rule.days_max}
+                      onChange={(e) => {
+                        const signal_freshness = [...formData.persona.timing_rules.signal_freshness];
+                        signal_freshness[index] = { ...rule, days_max: Number(e.target.value) };
+                        updatePersona({ timing_rules: { ...formData.persona.timing_rules, signal_freshness } });
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Multiplier</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={rule.multiplier}
+                      onChange={(e) => {
+                        const signal_freshness = [...formData.persona.timing_rules.signal_freshness];
+                        signal_freshness[index] = { ...rule, multiplier: Number(e.target.value) };
+                        updatePersona({ timing_rules: { ...formData.persona.timing_rules, signal_freshness } });
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Label</label>
+                    <input
+                      type="text"
+                      value={rule.label}
+                      onChange={(e) => {
+                        const signal_freshness = [...formData.persona.timing_rules.signal_freshness];
+                        signal_freshness[index] = { ...rule, label: e.target.value };
+                        updatePersona({ timing_rules: { ...formData.persona.timing_rules, signal_freshness } });
+                      }}
+                      placeholder="HOT"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Outreach Doctrine Section */}
+      {activeSection === 'outreach' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Outreach Doctrine</h3>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tone</label>
+              <select
+                value={formData.persona.outreach_doctrine.tone}
+                onChange={(e) => updatePersona({ outreach_doctrine: { ...formData.persona.outreach_doctrine, tone: e.target.value as 'professional' | 'casual' | 'formal' } })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="professional">Professional</option>
+                <option value="casual">Casual</option>
+                <option value="formal">Formal</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Formality</label>
+              <select
+                value={formData.persona.outreach_doctrine.formality}
+                onChange={(e) => updatePersona({ outreach_doctrine: { ...formData.persona.outreach_doctrine, formality: e.target.value as 'formal' | 'semi-formal' | 'informal' } })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="formal">Formal</option>
+                <option value="semi-formal">Semi-formal</option>
+                <option value="informal">Informal</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Channels (comma-separated)</label>
+            <input
+              type="text"
+              value={formData.persona.outreach_doctrine.channels.join(', ')}
+              onChange={(e) => updatePersona({ outreach_doctrine: { ...formData.persona.outreach_doctrine, channels: e.target.value.split(',').map(c => c.trim()).filter(Boolean) } })}
+              placeholder="email, linkedin"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">✓ Always Do (one per line)</label>
+            <textarea
+              value={formData.persona.outreach_doctrine.always.join('\n')}
+              onChange={(e) => updatePersona({ outreach_doctrine: { ...formData.persona.outreach_doctrine, always: e.target.value.split('\n').filter(Boolean) } })}
+              placeholder="Reference specific company signal&#10;Position as Point of Contact"
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">✗ Never Do (one per line)</label>
+            <textarea
+              value={formData.persona.outreach_doctrine.never.join('\n')}
+              onChange={(e) => updatePersona({ outreach_doctrine: { ...formData.persona.outreach_doctrine, never: e.target.value.split('\n').filter(Boolean) } })}
+              placeholder="Mention pricing&#10;Use pressure language"
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Quality Standards Section */}
+      {activeSection === 'quality' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Quality Standards</h3>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Min Confidence (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={formData.persona.quality_standards.min_confidence}
+                onChange={(e) => updatePersona({ quality_standards: { ...formData.persona.quality_standards, min_confidence: Number(e.target.value) } })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contact Cooldown (days)</label>
+              <input
+                type="number"
+                value={formData.persona.quality_standards.contact_cooldown_days}
+                onChange={(e) => updatePersona({ quality_standards: { ...formData.persona.quality_standards, contact_cooldown_days: Number(e.target.value) } })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview */}
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <h4 className="text-sm font-medium text-purple-900 mb-2">Persona Preview</h4>
+        <pre className="text-xs text-purple-800 overflow-x-auto max-h-32">
+          {JSON.stringify(formData.persona, null, 2)}
+        </pre>
       </div>
     </div>
   );
