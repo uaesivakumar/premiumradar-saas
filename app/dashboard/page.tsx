@@ -1,14 +1,17 @@
 'use client';
 
 /**
- * Dashboard Home - Sprint 4
- * Main dashboard with stats, recent activity, and AI insights
+ * Dashboard Home - EB Journey
+ * Main dashboard with EB-specific context, hero, and stats
  */
 
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useLocaleStore } from '@/lib/stores/locale-store';
+import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
+import { ContextBadge } from '@/components/dashboard/ContextBadge';
+import { EBHeroSection } from '@/components/dashboard/EBHeroSection';
 import {
   TrendingUp,
   Users,
@@ -23,8 +26,10 @@ export default function DashboardPage() {
   const { detectedIndustry } = useIndustryStore();
   const { locale } = useLocaleStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
+  const { vertical, subVertical, isLocked } = useSalesContext();
 
   const isRTL = locale === 'ar';
+  const isEmployeeBanking = vertical === 'banking' && subVertical === 'employee-banking';
 
   const stats = [
     {
@@ -91,6 +96,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Context Badge - Shows current role and territory */}
+      <ContextBadge />
+
+      {/* EB Hero Section - Shows EB-specific actions when in Employee Banking context */}
+      {isEmployeeBanking && <EBHeroSection />}
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">

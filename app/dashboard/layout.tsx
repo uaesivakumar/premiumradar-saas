@@ -1,18 +1,17 @@
 'use client';
 
 /**
- * Dashboard Layout - Sprint S26
- * Now uses SIVA Surface (pageless AI workspace)
+ * Dashboard Layout - EB Journey Fix
+ * Restored proper routing with AppShell + children
+ * SIVA Surface is now at /dashboard/siva
  */
 
-import { SIVASurface } from '@/components/siva';
+import { AppShell } from '@/components/shell/AppShell';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // S26: Replace traditional AppShell with SIVA Surface
-  // The pageless workspace is now the default authenticated experience
-  return <SIVASurface />;
+  return <AppShell>{children}</AppShell>;
 }
