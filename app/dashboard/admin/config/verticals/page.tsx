@@ -192,6 +192,16 @@ interface PersonaConfig {
     condition: string;
     action: string;
   }>;
+  success_patterns?: Array<{
+    pattern: string;
+    indicator: string;
+    action: string;
+  }>;
+  failure_patterns?: Array<{
+    pattern: string;
+    indicator: string;
+    recovery: string;
+  }>;
 }
 
 const DEFAULT_PERSONA: PersonaConfig = {
@@ -664,8 +674,26 @@ function ConfigModal({
   }
 
   const handleSave = () => {
+    // Basic validation
     if (!formData.name) {
       alert('Name is required');
+      return;
+    }
+
+    // Mandatory persona validation
+    if (!formData.persona.persona_name || formData.persona.persona_name.trim() === '') {
+      alert('⚠️ Persona Required\n\nNo persona found for this sub-vertical. Please create a persona first.\n\nSIVA cannot function without knowing HOW to think for this role.');
+      return;
+    }
+
+    // Validate persona has minimum required config
+    if (!formData.persona.entity_type) {
+      alert('⚠️ Persona Incomplete\n\nEntity type is required. Please select company, individual, or family.');
+      return;
+    }
+
+    if (!formData.persona.contact_priority_rules?.tiers?.length) {
+      alert('⚠️ Persona Incomplete\n\nAt least one contact priority tier is required.');
       return;
     }
 
@@ -1168,7 +1196,7 @@ function PersonaTab({
   formData: FormData;
   setFormData: React.Dispatch<React.SetStateAction<FormData>>;
 }) {
-  const [activeSection, setActiveSection] = useState<'identity' | 'contact' | 'edge' | 'timing' | 'outreach' | 'quality'>('identity');
+  const [activeSection, setActiveSection] = useState<'identity' | 'contact' | 'edge' | 'timing' | 'outreach' | 'quality' | 'antipatterns' | 'confidence' | 'patterns'>('identity');
 
   const updatePersona = (updates: Partial<PersonaConfig>) => {
     setFormData((prev) => ({
@@ -1184,6 +1212,9 @@ function PersonaTab({
     { id: 'timing' as const, label: 'Timing Rules', icon: '📅' },
     { id: 'outreach' as const, label: 'Outreach Doctrine', icon: '📧' },
     { id: 'quality' as const, label: 'Quality Standards', icon: '✓' },
+    { id: 'antipatterns' as const, label: 'Anti-Patterns', icon: '🚫' },
+    { id: 'confidence' as const, label: 'Confidence Gates', icon: '🔒' },
+    { id: 'patterns' as const, label: 'Success/Failure', icon: '📊' },
   ];
 
   return (
@@ -1719,6 +1750,318 @@ function PersonaTab({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Anti-Patterns Section */}
+      {activeSection === 'antipatterns' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Anti-Patterns</h3>
+          <p className="text-sm text-gray-500">Define common mistakes and their corrections to guide SIVA's behavior.</p>
+
+          {(formData.persona.anti_patterns || []).map((pattern, index) => (
+            <div key={index} className="bg-white p-3 rounded-lg border border-orange-200 mb-2">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-xs text-orange-600 font-medium">Anti-Pattern #{index + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const anti_patterns = [...(formData.persona.anti_patterns || [])];
+                    anti_patterns.splice(index, 1);
+                    updatePersona({ anti_patterns });
+                  }}
+                  className="text-red-500 hover:text-red-700 text-xs"
+                >
+                  Remove
+                </button>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Mistake (what goes wrong)</label>
+                  <input
+                    type="text"
+                    value={pattern.mistake}
+                    onChange={(e) => {
+                      const anti_patterns = [...(formData.persona.anti_patterns || [])];
+                      anti_patterns[index] = { ...pattern, mistake: e.target.value };
+                      updatePersona({ anti_patterns });
+                    }}
+                    placeholder="Contacting companies during budget freeze"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Wrong approach</label>
+                  <input
+                    type="text"
+                    value={pattern.wrong}
+                    onChange={(e) => {
+                      const anti_patterns = [...(formData.persona.anti_patterns || [])];
+                      anti_patterns[index] = { ...pattern, wrong: e.target.value };
+                      updatePersona({ anti_patterns });
+                    }}
+                    placeholder="Mass outreach in December"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Correct approach</label>
+                  <input
+                    type="text"
+                    value={pattern.correct}
+                    onChange={(e) => {
+                      const anti_patterns = [...(formData.persona.anti_patterns || [])];
+                      anti_patterns[index] = { ...pattern, correct: e.target.value };
+                      updatePersona({ anti_patterns });
+                    }}
+                    placeholder="Queue for Q1 follow-up when budgets reset"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => {
+              const anti_patterns = [...(formData.persona.anti_patterns || []), { mistake: '', wrong: '', correct: '' }];
+              updatePersona({ anti_patterns });
+            }}
+            className="text-sm text-orange-600 hover:text-orange-700"
+          >
+            + Add Anti-Pattern
+          </button>
+        </div>
+      )}
+
+      {/* Confidence Gates Section */}
+      {activeSection === 'confidence' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Confidence Gates</h3>
+          <p className="text-sm text-gray-500">Define conditions that must be met before SIVA takes action.</p>
+
+          {(formData.persona.confidence_gates || []).map((gate, index) => (
+            <div key={index} className="bg-white p-3 rounded-lg border border-blue-200 mb-2">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-xs text-blue-600 font-medium">Gate #{index + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const confidence_gates = [...(formData.persona.confidence_gates || [])];
+                    confidence_gates.splice(index, 1);
+                    updatePersona({ confidence_gates });
+                  }}
+                  className="text-red-500 hover:text-red-700 text-xs"
+                >
+                  Remove
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Condition</label>
+                  <input
+                    type="text"
+                    value={gate.condition}
+                    onChange={(e) => {
+                      const confidence_gates = [...(formData.persona.confidence_gates || [])];
+                      confidence_gates[index] = { ...gate, condition: e.target.value };
+                      updatePersona({ confidence_gates });
+                    }}
+                    placeholder="confidence < 50%"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Action</label>
+                  <input
+                    type="text"
+                    value={gate.action}
+                    onChange={(e) => {
+                      const confidence_gates = [...(formData.persona.confidence_gates || [])];
+                      confidence_gates[index] = { ...gate, action: e.target.value };
+                      updatePersona({ confidence_gates });
+                    }}
+                    placeholder="Request human review"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => {
+              const confidence_gates = [...(formData.persona.confidence_gates || []), { condition: '', action: '' }];
+              updatePersona({ confidence_gates });
+            }}
+            className="text-sm text-blue-600 hover:text-blue-700"
+          >
+            + Add Confidence Gate
+          </button>
+        </div>
+      )}
+
+      {/* Success/Failure Patterns Section */}
+      {activeSection === 'patterns' && (
+        <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium text-gray-900">Success & Failure Patterns</h3>
+          <p className="text-sm text-gray-500">Define patterns that indicate success or failure for learning.</p>
+
+          {/* Success Patterns */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-green-700">✅ Success Patterns</h4>
+            {(formData.persona.success_patterns || []).map((pattern, index) => (
+              <div key={index} className="bg-white p-3 rounded-lg border border-green-200 mb-2">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-xs text-green-600 font-medium">Success #{index + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const success_patterns = [...(formData.persona.success_patterns || [])];
+                      success_patterns.splice(index, 1);
+                      updatePersona({ success_patterns });
+                    }}
+                    className="text-red-500 hover:text-red-700 text-xs"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Pattern</label>
+                    <input
+                      type="text"
+                      value={pattern.pattern}
+                      onChange={(e) => {
+                        const success_patterns = [...(formData.persona.success_patterns || [])];
+                        success_patterns[index] = { ...pattern, pattern: e.target.value };
+                        updatePersona({ success_patterns });
+                      }}
+                      placeholder="Quick response"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Indicator</label>
+                    <input
+                      type="text"
+                      value={pattern.indicator}
+                      onChange={(e) => {
+                        const success_patterns = [...(formData.persona.success_patterns || [])];
+                        success_patterns[index] = { ...pattern, indicator: e.target.value };
+                        updatePersona({ success_patterns });
+                      }}
+                      placeholder="Reply within 24h"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Action</label>
+                    <input
+                      type="text"
+                      value={pattern.action}
+                      onChange={(e) => {
+                        const success_patterns = [...(formData.persona.success_patterns || [])];
+                        success_patterns[index] = { ...pattern, action: e.target.value };
+                        updatePersona({ success_patterns });
+                      }}
+                      placeholder="Prioritize follow-up"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const success_patterns = [...(formData.persona.success_patterns || []), { pattern: '', indicator: '', action: '' }];
+                updatePersona({ success_patterns });
+              }}
+              className="text-sm text-green-600 hover:text-green-700"
+            >
+              + Add Success Pattern
+            </button>
+          </div>
+
+          {/* Failure Patterns */}
+          <div className="space-y-2 mt-4">
+            <h4 className="text-sm font-medium text-red-700">❌ Failure Patterns</h4>
+            {(formData.persona.failure_patterns || []).map((pattern, index) => (
+              <div key={index} className="bg-white p-3 rounded-lg border border-red-200 mb-2">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-xs text-red-600 font-medium">Failure #{index + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const failure_patterns = [...(formData.persona.failure_patterns || [])];
+                      failure_patterns.splice(index, 1);
+                      updatePersona({ failure_patterns });
+                    }}
+                    className="text-red-500 hover:text-red-700 text-xs"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Pattern</label>
+                    <input
+                      type="text"
+                      value={pattern.pattern}
+                      onChange={(e) => {
+                        const failure_patterns = [...(formData.persona.failure_patterns || [])];
+                        failure_patterns[index] = { ...pattern, pattern: e.target.value };
+                        updatePersona({ failure_patterns });
+                      }}
+                      placeholder="No response"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Indicator</label>
+                    <input
+                      type="text"
+                      value={pattern.indicator}
+                      onChange={(e) => {
+                        const failure_patterns = [...(formData.persona.failure_patterns || [])];
+                        failure_patterns[index] = { ...pattern, indicator: e.target.value };
+                        updatePersona({ failure_patterns });
+                      }}
+                      placeholder="3+ attempts ignored"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Recovery</label>
+                    <input
+                      type="text"
+                      value={pattern.recovery}
+                      onChange={(e) => {
+                        const failure_patterns = [...(formData.persona.failure_patterns || [])];
+                        failure_patterns[index] = { ...pattern, recovery: e.target.value };
+                        updatePersona({ failure_patterns });
+                      }}
+                      placeholder="Move to nurture queue"
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const failure_patterns = [...(formData.persona.failure_patterns || []), { pattern: '', indicator: '', recovery: '' }];
+                updatePersona({ failure_patterns });
+              }}
+              className="text-sm text-red-600 hover:text-red-700"
+            >
+              + Add Failure Pattern
+            </button>
           </div>
         </div>
       )}

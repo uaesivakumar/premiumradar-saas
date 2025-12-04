@@ -165,6 +165,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Mandatory persona validation (S71-fix)
+    const persona = body.persona;
+    if (!persona || !persona.persona_name || persona.persona_name.trim() === '') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'PERSONA_REQUIRED',
+          message: 'No persona found for this sub-vertical. Please create a persona first. SIVA cannot function without knowing HOW to think for this role.',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!persona.entity_type) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'PERSONA_INCOMPLETE',
+          message: 'Entity type is required in persona config. Please select company, individual, or family.',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!persona.contact_priority_rules?.tiers?.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'PERSONA_INCOMPLETE',
+          message: 'At least one contact priority tier is required in persona config.',
+        },
+        { status: 400 }
+      );
+    }
+
     const config = await createVerticalConfig(parseResult.data);
 
     return NextResponse.json(
@@ -217,6 +252,32 @@ export async function PATCH(request: NextRequest) {
         { success: false, error: 'Config not found' },
         { status: 404 }
       );
+    }
+
+    // Mandatory persona validation on update (S71-fix)
+    if (body.persona) {
+      const persona = body.persona;
+      if (!persona.persona_name || persona.persona_name.trim() === '') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'PERSONA_REQUIRED',
+            message: 'Persona name cannot be empty. SIVA cannot function without knowing HOW to think for this role.',
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!persona.entity_type) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'PERSONA_INCOMPLETE',
+            message: 'Entity type is required in persona config.',
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const config = await updateVerticalConfig(id, body);
