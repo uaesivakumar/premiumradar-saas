@@ -3,52 +3,39 @@
 ## CRITICAL PRODUCT MODEL (READ FIRST)
 
 **PremiumRadar is NOT an industry-intelligence engine.**
-**PremiumRadar IS a sales enablement platform for different types of salespeople.**
+**PremiumRadar IS a sales enablement platform for salespeople.**
 
-All intelligence MUST obey: **Vertical → Sub-Vertical → Region** logic.
+### BANKING ONLY (For Now)
+
+**Only the Banking vertical is currently active.** All other verticals (Insurance, Real Estate, Recruitment, SaaS Sales) are **UI placeholders only** with no backend intelligence logic.
 
 ---
 
-## The Correct Hierarchy
+## Active Vertical: Banking
 
 ### 1. VERTICAL = Salesperson's Sector
-The sector in which the SALESPERSON works.
+The sector in which the SALESPERSON works (not the target company's industry).
 
-| Vertical | Radar Target | What They Sell To |
-|----------|--------------|-------------------|
-| Banking | **COMPANIES** | Businesses needing banking products |
-| Insurance | **INDIVIDUALS** | People needing insurance products |
-| Real Estate | **BUYERS/FAMILIES** | People buying/renting property |
-| Recruitment | **CANDIDATES** | Job seekers and hiring companies |
-| SaaS Sales | **COMPANIES** | Businesses needing software |
+| Vertical | Status | Radar Target |
+|----------|--------|--------------|
+| **Banking** | ✅ ACTIVE | Companies |
+| Insurance | 🔒 UI Placeholder | Individuals |
+| Real Estate | 🔒 UI Placeholder | Families |
+| Recruitment | 🔒 UI Placeholder | Candidates |
+| SaaS Sales | 🔒 UI Placeholder | Companies |
 
-### 2. SUB-VERTICAL = Salesperson's Role
-The specific function or product area the salesperson covers.
+### 2. SUB-VERTICAL = Salesperson's Role (Banking Only)
+The specific function or product area within Banking:
 
-**Banking Sub-Verticals:**
 | Sub-Vertical | Description |
 |--------------|-------------|
 | Employee Banking | Payroll, salary accounts, employee benefits |
 | Corporate Banking | Treasury, trade finance, corporate loans |
 | SME Banking | Small business accounts, working capital |
-| Retail Banking | Personal accounts, mortgages, cards |
-| Wealth Management | Private banking, investments |
-
-**Insurance Sub-Verticals:**
-| Sub-Vertical | Description |
-|--------------|-------------|
-| Life Insurance | Individual life policies |
-| Group Insurance | Corporate employee benefits |
-| Health Insurance | Medical coverage |
-
-**Real Estate Sub-Verticals:**
-| Sub-Vertical | Description |
-|--------------|-------------|
-| Residential Sales | Home sales to families |
-| Commercial Leasing | Office/retail space |
-| Property Management | Rental management |
 
 ### 3. REGION = Salesperson's Operating Territory
+Filters companies to the salesperson's territory:
+
 | Level | Examples |
 |-------|----------|
 | Country | UAE, India, US |
@@ -57,90 +44,64 @@ The specific function or product area the salesperson covers.
 
 ---
 
-## CRITICAL: Different Verticals Have Different Signals
+## Signals: Sales Opportunity Triggers ONLY
 
-### ⚠️ HIRING SIGNALS ARE ONLY FOR BANKING
+### CRITICAL: What Signals ARE
 
-| Vertical | Relevant Signals | NOT Relevant |
-|----------|------------------|--------------|
-| **Banking** | Hiring, expansion, office opening, funding, project awards | Life events, rental expiry |
-| **Insurance** | Life events, salary changes, job changes, family events | Hiring signals, office openings |
-| **Real Estate** | Rental expiry, relocation, family growth, job relocation | Hiring signals, funding rounds |
-| **Recruitment** | Hiring signals (different context), job postings | Life events, rental expiry |
+Signals are **sales opportunity triggers from OS**, representing actionable company events that indicate banking needs:
 
-### Signal Types Per Vertical
+| Signal Type | Meaning |
+|-------------|---------|
+| `hiring-expansion` | Company hiring = needs payroll accounts |
+| `headcount-jump` | Rapid growth = scaling banking needs |
+| `office-opening` | New office = new corporate accounts |
+| `market-entry` | Entering UAE = needs local bank |
+| `funding-round` | Capital raised = treasury needs |
+| `project-award` | New project = working capital needs |
+| `subsidiary-creation` | New entity = multi-entity banking |
 
-**Banking (targets COMPANIES):**
-- `hiring-expansion` ✅ Company hiring = needs payroll accounts
-- `office-opening` ✅ New office = new corporate accounts
-- `market-entry` ✅ Entering region = needs local bank
-- `funding-round` ✅ Capital raised = banking relationship
-- `project-award` ✅ New project = cash flow needs
+### CRITICAL: What Signals ARE NOT
 
-**Insurance (targets INDIVIDUALS):**
-- `life-event` ✅ Marriage, birth, retirement
-- `salary-change` ✅ Promotion = can afford better coverage
-- `job-change` ✅ New job = needs new benefits
-- `hiring-expansion` ❌ NOT RELEVANT
+PremiumRadar does **NOT** model:
+- ❌ Life events (marriage, birth, retirement)
+- ❌ Family events (new baby, family growth)
+- ❌ Individual relocations
+- ❌ Salary changes
+- ❌ Rental expiry
+- ❌ Tech adoption signals
+- ❌ Industry intelligence / market analysis
 
-**Real Estate (targets BUYERS/FAMILIES):**
-- `rental-expiry` ✅ Lease ending = buying opportunity
-- `relocation` ✅ Job relocation = needs housing
-- `family-growth` ✅ New baby = needs bigger home
-- `hiring-expansion` ❌ NOT RELEVANT
+These were **hallucinated in error** and have been removed.
 
 ---
 
-## PLUG-AND-PLAY ARCHITECTURE (CRITICAL)
-
-### Rule: Vertical-specific logic MUST NOT be hardcoded
+## Architecture: Banking-First Model
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    SaaS Frontend                         │
-│  ONLY selects: vertical | sub-vertical | region         │
-│  NO signal logic, NO reasoning rules, NO playbooks      │
+│  Selects: vertical | sub-vertical | region              │
+│  Shows "Coming Soon" for non-banking verticals          │
 └─────────────────────────────────────────────────────────┘
-                          ↓ sends selection
+                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │                       UPR OS                             │
-│  PURE ENGINES ONLY (no business rules)                  │
-│  FETCHES config from SaaS via API                       │
-│  APPLIES config to SIVA wrappers                        │
+│  Fetches config from SaaS API                           │
+│  Only Banking config exists                             │
 └─────────────────────────────────────────────────────────┘
-                          ↓ calls API
+                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │              PremiumRadar SaaS (this repo)              │
-│  STORES: all vertical configs in PostgreSQL             │
-│  EXPOSES: /api/admin/vertical-config                    │
-│  MANAGES: Super-Admin Panel for vertical editing        │
+│  Banking config in PostgreSQL                           │
+│  Returns "VERTICAL_NOT_CONFIGURED" for others           │
 └─────────────────────────────────────────────────────────┘
-                          ↓ returns config
+                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │                  SIVA Intelligence Layer                 │
-│  Intent → Evidence → Routing → Objects → Persona        │
-│  (uses config to decide signals, scoring, etc.)         │
+│  Banking signals only                                    │
+│  Banking personas only                                   │
+│  Banking prompts only                                    │
 └─────────────────────────────────────────────────────────┘
-```
-
-### Architectural Responsibility
-
-| Component | Responsibility | Contains Vertical Logic? |
-|-----------|----------------|--------------------------|
-| **SaaS Frontend** | Select vertical/sub-vertical/region, display results | ❌ NO |
-| **SaaS Admin Panel** | CRUD for vertical configs, seeded examples | ✅ YES (stores) |
-| **SaaS PostgreSQL** | Single source of truth for configs | ✅ YES (data) |
-| **UPR OS** | Pure engines, fetches config via API | ❌ NO |
-| **SIVA Wrappers** | Apply config to intelligence operations | ❌ NO (reads config) |
-
-### Runtime Flow
-
-```
-1. Frontend → sends vertical/subVertical/region
-2. OS → calls GET /api/admin/vertical-config?vertical=X&subVertical=Y&region=Z
-3. SaaS → returns config from PostgreSQL (with 5-min cache)
-4. OS → applies config inside SIVA wrappers
-5. SIVA → generates intelligence using config rules
 ```
 
 ---
@@ -150,21 +111,19 @@ The specific function or product area the salesperson covers.
 **Endpoint:** `/api/admin/vertical-config`
 
 ```typescript
-// GET - Fetch specific config
+// GET - Fetch Banking config (only one that works)
 GET /api/admin/vertical-config?vertical=banking&subVertical=employee-banking&region=UAE
 
-// Response when found
+// Response for Banking
 {
   "success": true,
   "data": {
-    "id": "uuid",
     "vertical": "banking",
     "subVertical": "employee-banking",
     "regionCountry": "UAE",
     "radarTarget": "companies",
     "config": {
       "allowedSignalTypes": ["hiring-expansion", "headcount-jump", ...],
-      "signalConfigs": [...],
       "scoringWeights": { "quality": 0.3, ... },
       "enrichmentSources": [...],
       "outreachChannels": [...],
@@ -173,7 +132,7 @@ GET /api/admin/vertical-config?vertical=banking&subVertical=employee-banking&reg
   }
 }
 
-// Response when NOT configured
+// Response for NON-BANKING verticals
 {
   "success": false,
   "error": "VERTICAL_NOT_CONFIGURED",
@@ -185,66 +144,59 @@ GET /api/admin/vertical-config?vertical=banking&subVertical=employee-banking&reg
 
 ## Current Implementation Status
 
-### ✅ Fully Implemented
-- Vertical config service with PostgreSQL storage
-- API endpoint `/api/admin/vertical-config`
-- Banking/Employee Banking/UAE seed script
-- Config caching (5-min TTL)
-- Zod validation for configs
-
-### ✅ Seeded (Ready to Use)
-- Banking vertical
-- Employee Banking sub-vertical
+### ✅ Active & Working
+- Banking vertical (ONLY)
+- Employee Banking / Corporate Banking / SME Banking sub-verticals
 - UAE region
-- All hiring/expansion signals
-- Scoring weights and factors
-- Regional weights (UAE, KSA, Qatar, etc.)
-- Enrichment sources (Apollo, LinkedIn, Crunchbase)
-- Outreach channels
-- Journey stages
+- Sales trigger signals (hiring, expansion, funding, etc.)
+- Scoring engine for banking
+- Pattern matching for banking
+- Deep persona for banking
+- SIVA prompts for banking
+- Dashboard components show "Coming Soon" for non-banking
 
-### 🚧 To Build
+### 🔒 UI Placeholders Only (No Backend Logic)
+- Insurance vertical
+- Real Estate vertical
+- Recruitment vertical
+- SaaS Sales vertical
+
+### 🚧 To Build (Future)
 - Super-Admin UI for vertical management
-- Non-banking vertical seeds
-
-### Seeding Banking Vertical
-
-```bash
-# Run the seed script
-npx ts-node scripts/seeds/banking-employee-uae.ts
-```
+- Additional vertical implementations (when ready)
 
 ---
 
 ## DO NOT DO
 
-1. ❌ Hardcode signal logic for verticals in SaaS
-2. ❌ Apply hiring signals to Insurance/Real Estate
-3. ❌ Create vertical-specific conditionals in SIVA
-4. ❌ Assume same signals work for all verticals
-5. ❌ Build industry-analysis features
+1. ❌ Create backend intelligence for non-banking verticals
+2. ❌ Add life event, family event, or relocation signals
+3. ❌ Model insurance/real-estate/recruitment signals
+4. ❌ Build industry-analysis features
+5. ❌ Assume signals work across verticals
+6. ❌ Hardcode vertical-specific logic in frontend
 
 ## DO
 
-1. ✅ Let OS decide which signals apply
-2. ✅ Load vertical rules from OS config
-3. ✅ Filter by salesperson's context (vertical/sub-vertical/region)
-4. ✅ Keep SaaS plug-and-play ready
-5. ✅ Ensure only Banking has hiring signals (for now)
+1. ✅ Only Banking has active intelligence
+2. ✅ All signals are sales triggers from OS
+3. ✅ Show "Coming Soon" for non-banking verticals
+4. ✅ Keep SaaS plug-and-play ready for future verticals
+5. ✅ Filter by salesperson's context (vertical/sub-vertical/region)
 
 ---
 
 ## Summary
 
-> **PremiumRadar helps salespeople find opportunities based on their ROLE (vertical/sub-vertical) and TERRITORY (region). Different verticals target different entities (companies vs individuals) with different signals. All rules come from OS configuration, NOT hardcoded in SaaS.**
+> **PremiumRadar currently supports Banking salespeople only. Intelligence includes hiring expansion, office openings, funding rounds, and other company-level sales triggers. Other verticals (Insurance, Real Estate, Recruitment, SaaS) are UI placeholders that show "Coming Soon" messages.**
 
-| Vertical | Targets | Key Signals |
-|----------|---------|-------------|
-| Banking | Companies | Hiring, expansion, funding |
-| Insurance | Individuals | Life events, salary changes |
-| Real Estate | Buyers/Families | Rental expiry, relocation |
-| Recruitment | Candidates | Job postings, hiring |
+| Aspect | Value |
+|--------|-------|
+| Active Vertical | Banking only |
+| Radar Target | Companies |
+| Signal Types | Sales triggers (hiring, expansion, funding) |
+| Non-Banking | UI placeholders, "Coming Soon" |
+| Source of Truth | OS config via API |
 
-**Hiring signals are ONLY for Banking.**
-**OS decides all vertical rules.**
-**SaaS is plug-and-play.**
+**Signals are sales triggers, NOT life events.**
+**Banking only. Everything else is Coming Soon.**

@@ -166,18 +166,19 @@ export function useIntentWrapper(): IntentWrapperResult {
         const normalized = normalizeQuery(resolvedQuery, intent, entities);
 
         // Inject Sales Context into normalized parameters
-        // This ensures all downstream operations respect Vertical/Sub-Vertical/Region
+        // This ensures all downstream operations respect Vertical/Sub-Vertical/Regions
+        const regionsStr = salesContext.regions.length > 0 ? salesContext.regions.join('+') : 'no-regions';
         normalized.parameters = {
           ...normalized.parameters,
           salesContext: {
             vertical: salesContext.vertical,
             subVertical: salesContext.subVertical,
-            region: salesContext.region,
+            regions: salesContext.regions,
           },
         };
 
         console.log(`[Intent] Normalized: "${normalized.normalized}"`);
-        console.log(`[Intent] Sales Context: ${salesContext.vertical}/${salesContext.subVertical}/${salesContext.region.country}`);
+        console.log(`[Intent] Sales Context: ${salesContext.vertical}/${salesContext.subVertical}/${regionsStr}`);
 
         // ─────────────────────────────────────────────────────────────────────
         // Step 5: Store in context memory and update state

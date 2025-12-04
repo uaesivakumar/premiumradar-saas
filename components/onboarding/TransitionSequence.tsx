@@ -1,9 +1,12 @@
 'use client';
 
 /**
- * TransitionSequence - Sprint S35
+ * TransitionSequence - Sprint S35 + EB Journey Update
  * Full-screen cinematic transition from onboarding to SIVA workspace
  * "Configuring your intelligence layer..."
+ *
+ * EB JOURNEY: Transfers onboarding context to SalesContext store
+ * and locks the subVertical to prevent switching.
  */
 
 import { useState, useEffect } from 'react';
@@ -12,6 +15,8 @@ import { useRouter } from 'next/navigation';
 import { Sparkles, Zap, Brain, Database, Shield, Check } from 'lucide-react';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useOnboardingStore, VerticalId } from '@/lib/stores/onboarding-store';
+import { useSalesContextStore } from '@/lib/stores/sales-context-store';
+import { createSalesContext } from '@/lib/intelligence/context/SalesContextProvider';
 
 interface LoadingStep {
   id: string;
@@ -68,7 +73,14 @@ export function TransitionSequence() {
   const router = useRouter();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
-  const { selectedVertical, profile, completeOnboarding } = useOnboardingStore();
+  const {
+    selectedVertical,
+    selectedSubVertical,
+    selectedRegions,
+    profile,
+    completeOnboarding,
+  } = useOnboardingStore();
+  const { setContext, lockSubVertical } = useSalesContextStore();
 
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [isComplete, setIsComplete] = useState(false);
@@ -98,6 +110,31 @@ export function TransitionSequence() {
   }, [steps]);
 
   const handleBegin = () => {
+    // EB JOURNEY: Transfer onboarding context to SalesContext store
+    if (selectedVertical && selectedSubVertical) {
+      // Create the SalesContext from onboarding selections
+      const salesContext = createSalesContext({
+        userId: profile.email || `user_${Date.now()}`,
+        vertical: selectedVertical,
+        subVertical: selectedSubVertical,
+        regions: selectedRegions.length > 0 ? selectedRegions : ['dubai'], // Default to Dubai if no selection
+        subVerticalLocked: true, // Lock on completion
+      });
+
+      // Set the context in the store
+      setContext(salesContext);
+
+      // Lock the subVertical to prevent switching
+      lockSubVertical();
+
+      console.log('[Transition] SalesContext created:', {
+        vertical: selectedVertical,
+        subVertical: selectedSubVertical,
+        regions: selectedRegions,
+        locked: true,
+      });
+    }
+
     completeOnboarding();
     router.push('/dashboard');
   };

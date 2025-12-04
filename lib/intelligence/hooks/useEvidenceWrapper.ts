@@ -68,7 +68,8 @@ export function useEvidenceWrapper(): EvidenceWrapperResult {
       const target = (object.data?.companyName as string) || object.title || 'Unknown';
 
       // Step 2: Log sales context (evidence is contextual)
-      console.log(`[Evidence] Collecting for ${target} in context: ${salesContext.vertical}/${salesContext.subVertical}/${salesContext.region.country}`);
+      const regionsStr = salesContext.regions.length > 0 ? salesContext.regions.join('+') : 'no-regions';
+      console.log(`[Evidence] Collecting for ${target} in context: ${salesContext.vertical}/${salesContext.subVertical}/${regionsStr}`);
 
       // Step 3: Collect evidence for target with context-relevant signals
       // The relevant signal types are derived from the salesperson's sub-vertical
@@ -114,7 +115,7 @@ export function useEvidenceWrapper(): EvidenceWrapperResult {
             salesContext: {
               vertical: salesContext.vertical,
               subVertical: salesContext.subVertical,
-              region: salesContext.region.country,
+              regions: salesContext.regions,
             },
           },
           signals: collection.evidence,

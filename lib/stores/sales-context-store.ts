@@ -3,6 +3,13 @@
  *
  * Zustand store for managing the salesperson's context.
  * This context filters ALL intelligence operations.
+ *
+ * CRITICAL: This represents the SALESPERSON's identity:
+ * - vertical: The salesperson's sector (banking only for now)
+ * - subVertical: The salesperson's role (employee-banking, corporate-banking, etc.)
+ * - regions: Multi-select territories (e.g., ['dubai', 'abu-dhabi'])
+ * - targetEntity: What the salesperson targets (companies for EB)
+ * - subVerticalLocked: Prevents switching after onboarding
  */
 
 import { create } from 'zustand';
@@ -11,9 +18,12 @@ import type {
   SalesContext,
   Vertical,
   SubVertical,
-  RegionContext,
   SalesConfig,
   SalesSignal,
+  RadarTarget,
+} from '@/lib/intelligence/context/types';
+import {
+  VERTICAL_RADAR_TARGETS,
 } from '@/lib/intelligence/context/types';
 import {
   createSalesContext,
@@ -21,28 +31,28 @@ import {
   filterSignalsByContext,
   getSubVerticalsForVertical,
   isValidSubVertical,
+  formatRegionsForDisplay,
+  buildContextBadge,
 } from '@/lib/intelligence/context/SalesContextProvider';
 
 // =============================================================================
-// Initial Context (Empty - must be configured via onboarding or API)
+// Initial Context (Empty - must be configured via onboarding)
 // =============================================================================
 
 /**
  * Creates an empty initial context
- * User must select vertical/sub-vertical/region during onboarding
- * or the context must be loaded from API/database
+ * User must select vertical/sub-vertical/regions during onboarding
  */
 function createInitialContext(): SalesContext {
   const now = new Date();
   return {
     id: 'initial',
     userId: '',
-    vertical: 'banking', // Default vertical for demo, but verticalConfig will be null
+    vertical: 'banking',
     subVertical: 'employee-banking',
-    region: {
-      country: 'UAE',
-      city: 'Dubai',
-    },
+    subVerticalLocked: false, // Not locked until onboarding complete
+    regions: [], // Empty - must be selected during onboarding
+    targetEntity: 'companies', // Banking targets companies
     salesConfig: {
       signalSensitivities: {},
       productKPIs: [],
@@ -67,12 +77,19 @@ interface SalesContextState {
   // Actions
   setVertical: (vertical: Vertical) => void;
   setSubVertical: (subVertical: SubVertical) => void;
-  setRegion: (region: RegionContext) => void;
+  setRegions: (regions: string[]) => void;
+  addRegion: (region: string) => void;
+  removeRegion: (region: string) => void;
   updateConfig: (config: Partial<SalesConfig>) => void;
   resetContext: () => void;
 
   // Full context update
   setContext: (context: SalesContext) => void;
+
+  // Lock management
+  lockSubVertical: () => void;
+  unlockSubVertical: () => void;
+  isLocked: () => boolean;
 
   // Signal filtering
   filterSignals: (signals: SalesSignal[]) => SalesSignal[];
@@ -80,6 +97,9 @@ interface SalesContextState {
   // Helpers
   getAvailableSubVerticals: () => SubVertical[];
   isValidContext: () => boolean;
+  hasValidRegions: () => boolean;
+  getContextBadge: () => string;
+  getRegionsDisplay: () => string;
 }
 
 // =============================================================================
@@ -93,29 +113,42 @@ export const useSalesContextStore = create<SalesContextState>()(
       context: createInitialContext(),
       isLoaded: false,
 
-      // Set vertical (resets sub-vertical if invalid)
+      // Set vertical (only if not locked)
       setVertical: (vertical: Vertical) => {
         const { context } = get();
-        const validSubVerticals = getSubVerticalsForVertical(vertical);
 
-        // If current sub-vertical is invalid for new vertical, reset to first valid
+        // Prevent vertical change if locked
+        if (context.subVerticalLocked) {
+          console.warn('[SalesContext] Cannot change vertical - context is locked');
+          return;
+        }
+
+        const validSubVerticals = getSubVerticalsForVertical(vertical);
         const newSubVertical = isValidSubVertical(vertical, context.subVertical)
           ? context.subVertical
           : validSubVerticals[0];
+
+        const targetEntity = VERTICAL_RADAR_TARGETS[vertical];
 
         set({
           context: updateSalesContext(context, {
             vertical,
             subVertical: newSubVertical,
+            targetEntity,
           }),
         });
       },
 
-      // Set sub-vertical
+      // Set sub-vertical (only if not locked)
       setSubVertical: (subVertical: SubVertical) => {
         const { context } = get();
 
-        // Validate sub-vertical belongs to current vertical
+        // Prevent sub-vertical change if locked
+        if (context.subVerticalLocked) {
+          console.warn('[SalesContext] Cannot change sub-vertical - context is locked');
+          return;
+        }
+
         if (!isValidSubVertical(context.vertical, subVertical)) {
           console.warn(`Invalid sub-vertical ${subVertical} for vertical ${context.vertical}`);
           return;
@@ -126,11 +159,33 @@ export const useSalesContextStore = create<SalesContextState>()(
         });
       },
 
-      // Set region
-      setRegion: (region: RegionContext) => {
+      // Set regions (multi-select)
+      setRegions: (regions: string[]) => {
         const { context } = get();
         set({
-          context: updateSalesContext(context, { region }),
+          context: updateSalesContext(context, { regions }),
+        });
+      },
+
+      // Add a single region
+      addRegion: (region: string) => {
+        const { context } = get();
+        if (!context.regions.includes(region)) {
+          set({
+            context: updateSalesContext(context, {
+              regions: [...context.regions, region],
+            }),
+          });
+        }
+      },
+
+      // Remove a single region
+      removeRegion: (region: string) => {
+        const { context } = get();
+        set({
+          context: updateSalesContext(context, {
+            regions: context.regions.filter(r => r !== region),
+          }),
         });
       },
 
@@ -144,7 +199,7 @@ export const useSalesContextStore = create<SalesContextState>()(
         });
       },
 
-      // Reset to initial context (must be reconfigured)
+      // Reset to initial context (for migration workflow)
       resetContext: () => {
         set({
           context: createInitialContext(),
@@ -152,9 +207,35 @@ export const useSalesContextStore = create<SalesContextState>()(
         });
       },
 
-      // Set full context
+      // Set full context (used after onboarding completes)
       setContext: (context: SalesContext) => {
         set({ context, isLoaded: true });
+      },
+
+      // Lock sub-vertical (called at end of onboarding)
+      lockSubVertical: () => {
+        const { context } = get();
+        set({
+          context: updateSalesContext(context, {
+            subVerticalLocked: true,
+          }),
+        });
+      },
+
+      // Unlock sub-vertical (for migration workflow - requires confirmation)
+      unlockSubVertical: () => {
+        const { context } = get();
+        set({
+          context: updateSalesContext(context, {
+            subVerticalLocked: false,
+          }),
+        });
+      },
+
+      // Check if context is locked
+      isLocked: () => {
+        const { context } = get();
+        return context.subVerticalLocked === true;
       },
 
       // Filter signals by current context
@@ -172,7 +253,26 @@ export const useSalesContextStore = create<SalesContextState>()(
       // Validate current context
       isValidContext: () => {
         const { context } = get();
-        return isValidSubVertical(context.vertical, context.subVertical);
+        return isValidSubVertical(context.vertical, context.subVertical) &&
+               context.regions.length > 0;
+      },
+
+      // Check if regions are valid
+      hasValidRegions: () => {
+        const { context } = get();
+        return context.regions.length > 0;
+      },
+
+      // Get context badge string
+      getContextBadge: () => {
+        const { context } = get();
+        return buildContextBadge(context);
+      },
+
+      // Get regions display string
+      getRegionsDisplay: () => {
+        const { context } = get();
+        return formatRegionsForDisplay(context.regions);
       },
     }),
     {
@@ -190,6 +290,18 @@ export const useSalesContextStore = create<SalesContextState>()(
           if (typeof state.context.updatedAt === 'string') {
             state.context.updatedAt = new Date(state.context.updatedAt);
           }
+          // Ensure regions is an array
+          if (!Array.isArray(state.context.regions)) {
+            state.context.regions = [];
+          }
+          // Ensure subVerticalLocked exists
+          if (state.context.subVerticalLocked === undefined) {
+            state.context.subVerticalLocked = false;
+          }
+          // Ensure targetEntity exists
+          if (!state.context.targetEntity) {
+            state.context.targetEntity = VERTICAL_RADAR_TARGETS[state.context.vertical];
+          }
         }
       },
     }
@@ -203,5 +315,11 @@ export const useSalesContextStore = create<SalesContextState>()(
 export const selectSalesContext = (state: SalesContextState) => state.context;
 export const selectVertical = (state: SalesContextState) => state.context.vertical;
 export const selectSubVertical = (state: SalesContextState) => state.context.subVertical;
-export const selectRegion = (state: SalesContextState) => state.context.region;
+export const selectRegions = (state: SalesContextState) => state.context.regions;
+export const selectTargetEntity = (state: SalesContextState) => state.context.targetEntity;
+export const selectIsLocked = (state: SalesContextState) => state.context.subVerticalLocked;
 export const selectSalesConfig = (state: SalesContextState) => state.context.salesConfig;
+
+// Legacy selector for backwards compatibility
+/** @deprecated Use selectRegions instead */
+export const selectRegion = (state: SalesContextState) => state.context.region;

@@ -98,12 +98,31 @@ export type SubVertical =
 
 /**
  * Region hierarchy: Country → City → Territory
+ * @deprecated Use regions: string[] in SalesContext for multi-region support
  */
 export interface RegionContext {
   country: string;        // UAE, India, US
   city?: string;          // Dubai, Chennai, Bangalore
   territory?: string;     // Dubai South, DIFC, Whitefield
 }
+
+/**
+ * UAE Region options for Employee Banking
+ * Used in onboarding multi-select
+ */
+export const UAE_REGIONS = [
+  'dubai',
+  'abu-dhabi',
+  'sharjah',
+  'northern-emirates',
+] as const;
+
+export type UAERegion = typeof UAE_REGIONS[number];
+
+/**
+ * Special "All UAE" option that selects all regions
+ */
+export const ALL_UAE_REGIONS: UAERegion[] = [...UAE_REGIONS];
 
 // =============================================================================
 // OS Configuration Types (Plug-and-Play)
@@ -167,6 +186,12 @@ export interface KPITemplate {
 /**
  * Complete Sales Context for a salesperson
  * This context filters ALL intelligence operations
+ *
+ * CRITICAL: This represents the SALESPERSON's identity, not the target.
+ * - vertical: The salesperson's sector (banking, insurance, etc.)
+ * - subVertical: The salesperson's role (employee-banking, corporate-banking, etc.)
+ * - regions: The salesperson's operating territories (multi-select)
+ * - targetEntity: What the salesperson targets (companies, individuals, etc.)
  */
 export interface SalesContext {
   // Identity
@@ -177,8 +202,14 @@ export interface SalesContext {
   vertical: Vertical;
   subVertical: SubVertical;
 
-  // Geographic scope
-  region: RegionContext;
+  // Lock state - prevents cross-vertical switching after onboarding
+  subVerticalLocked: boolean;
+
+  // Geographic scope - MULTI-REGION
+  regions: string[];  // e.g., ['dubai', 'abu-dhabi']
+
+  // Target entity type (derived from vertical, but stored for convenience)
+  targetEntity: RadarTarget;
 
   // Sales parameters
   salesConfig: SalesConfig;
@@ -189,6 +220,10 @@ export interface SalesContext {
   // Metadata
   createdAt: Date;
   updatedAt: Date;
+
+  // Legacy support - deprecated, use regions[] instead
+  /** @deprecated Use regions[] instead */
+  region?: RegionContext;
 }
 
 /**
@@ -289,13 +324,24 @@ export interface ContextFilter {
   // Must match
   vertical: Vertical;
   subVertical: SubVertical;
-  country: string;
+
+  // Multi-region filtering
+  regions: string[];  // e.g., ['dubai', 'abu-dhabi']
+
+  // Target entity type
+  targetEntity: RadarTarget;
 
   // Optional refinements
-  city?: string;
-  territory?: string;
   allowedSignalTypes?: string[];  // From OS config
   minConfidence?: number;
+
+  // Legacy support
+  /** @deprecated Use regions[] instead */
+  country?: string;
+  /** @deprecated Use regions[] instead */
+  city?: string;
+  /** @deprecated Use regions[] instead */
+  territory?: string;
 }
 
 /**

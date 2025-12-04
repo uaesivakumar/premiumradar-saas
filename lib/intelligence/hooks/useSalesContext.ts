@@ -4,7 +4,9 @@
  * React hook for accessing and managing the Sales Context.
  * This context filters ALL intelligence operations.
  *
- * Hierarchy: Vertical → Sub-Vertical → Region
+ * Hierarchy: Vertical → Sub-Vertical → Regions (multi-select)
+ *
+ * EB JOURNEY: Updated for multi-region support
  */
 
 'use client';
@@ -19,6 +21,7 @@ import type {
   SalesConfig,
   SalesSignal,
   ContextFilter,
+  RadarTarget,
 } from '@/lib/intelligence/context/types';
 import {
   createContextFilter,
@@ -26,6 +29,7 @@ import {
   getSubVerticalDisplayName,
   getAllowedSignalTypes,
   scoreSignalRelevance,
+  formatRegionsForDisplay,
 } from '@/lib/intelligence/context/SalesContextProvider';
 
 // =============================================================================
@@ -40,20 +44,35 @@ export interface UseSalesContextResult {
   // Convenience accessors
   vertical: Vertical;
   subVertical: SubVertical;
-  region: RegionContext;
+  regions: string[];                  // Multi-region array
+  targetEntity: RadarTarget;          // What the vertical targets
   salesConfig: SalesConfig;
+
+  // Lock state
+  isLocked: boolean;
 
   // Display names
   verticalName: string;
   subVerticalName: string;
-  regionName: string;
+  regionsDisplay: string;             // Formatted regions string
+  contextBadge: string;               // Full context badge
 
-  // Actions
+  // Actions - Vertical/SubVertical
   setVertical: (vertical: Vertical) => void;
   setSubVertical: (subVertical: SubVertical) => void;
-  setRegion: (region: RegionContext) => void;
+
+  // Actions - Regions (multi-select)
+  setRegions: (regions: string[]) => void;
+  addRegion: (region: string) => void;
+  removeRegion: (region: string) => void;
+
+  // Actions - Config
   updateConfig: (config: Partial<SalesConfig>) => void;
   resetContext: () => void;
+
+  // Actions - Lock management
+  lockSubVertical: () => void;
+  unlockSubVertical: () => void;
 
   // Filtering
   filterSignals: (signals: SalesSignal[]) => SalesSignal[];
@@ -64,6 +83,10 @@ export interface UseSalesContextResult {
   availableSubVerticals: SubVertical[];
   relevantSignalTypes: string[];
   isValidContext: boolean;
+  hasValidRegions: boolean;
+
+  /** @deprecated Use regions instead */
+  region?: RegionContext;
 }
 
 // =============================================================================
@@ -76,18 +99,28 @@ export function useSalesContext(): UseSalesContextResult {
   const isLoaded = useSalesContextStore((state) => state.isLoaded);
   const setVertical = useSalesContextStore((state) => state.setVertical);
   const setSubVertical = useSalesContextStore((state) => state.setSubVertical);
-  const setRegion = useSalesContextStore((state) => state.setRegion);
+  const setRegions = useSalesContextStore((state) => state.setRegions);
+  const addRegion = useSalesContextStore((state) => state.addRegion);
+  const removeRegion = useSalesContextStore((state) => state.removeRegion);
   const updateConfig = useSalesContextStore((state) => state.updateConfig);
   const resetContext = useSalesContextStore((state) => state.resetContext);
   const filterSignals = useSalesContextStore((state) => state.filterSignals);
   const getAvailableSubVerticals = useSalesContextStore((state) => state.getAvailableSubVerticals);
-  const isValidContext = useSalesContextStore((state) => state.isValidContext);
+  const isValidContextFn = useSalesContextStore((state) => state.isValidContext);
+  const hasValidRegionsFn = useSalesContextStore((state) => state.hasValidRegions);
+  const getContextBadge = useSalesContextStore((state) => state.getContextBadge);
+  const getRegionsDisplay = useSalesContextStore((state) => state.getRegionsDisplay);
+  const lockSubVertical = useSalesContextStore((state) => state.lockSubVertical);
+  const unlockSubVertical = useSalesContextStore((state) => state.unlockSubVertical);
+  const isLockedFn = useSalesContextStore((state) => state.isLocked);
 
   // Convenience accessors
   const vertical = context.vertical;
   const subVertical = context.subVertical;
-  const region = context.region;
+  const regions = context.regions;
+  const targetEntity = context.targetEntity;
   const salesConfig = context.salesConfig;
+  const isLocked = isLockedFn();
 
   // Display names
   const verticalName = useMemo(
@@ -100,12 +133,15 @@ export function useSalesContext(): UseSalesContextResult {
     [subVertical]
   );
 
-  const regionName = useMemo(() => {
-    const parts = [region.country];
-    if (region.city) parts.push(region.city);
-    if (region.territory) parts.push(region.territory);
-    return parts.join(' / ');
-  }, [region]);
+  const regionsDisplay = useMemo(
+    () => getRegionsDisplay(),
+    [regions] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const contextBadge = useMemo(
+    () => getContextBadge(),
+    [vertical, subVertical, regions] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Available sub-verticals
   const availableSubVerticals = useMemo(
@@ -139,20 +175,35 @@ export function useSalesContext(): UseSalesContextResult {
     // Convenience accessors
     vertical,
     subVertical,
-    region,
+    regions,
+    targetEntity,
     salesConfig,
+
+    // Lock state
+    isLocked,
 
     // Display names
     verticalName,
     subVerticalName,
-    regionName,
+    regionsDisplay,
+    contextBadge,
 
-    // Actions
+    // Actions - Vertical/SubVertical
     setVertical,
     setSubVertical,
-    setRegion,
+
+    // Actions - Regions
+    setRegions,
+    addRegion,
+    removeRegion,
+
+    // Actions - Config
     updateConfig,
     resetContext,
+
+    // Actions - Lock management
+    lockSubVertical,
+    unlockSubVertical,
 
     // Filtering
     filterSignals,
@@ -162,7 +213,11 @@ export function useSalesContext(): UseSalesContextResult {
     // Helpers
     availableSubVerticals,
     relevantSignalTypes,
-    isValidContext: isValidContext(),
+    isValidContext: isValidContextFn(),
+    hasValidRegions: hasValidRegionsFn(),
+
+    // Legacy support
+    region: context.region,
   };
 }
 
@@ -185,9 +240,18 @@ export function injectSalesContext<T extends Record<string, unknown>>(
 }
 
 /**
- * Extract region filter string for queries
+ * Extract region filter string for queries (multi-region)
  */
-export function getRegionFilterString(region: RegionContext): string {
+export function getRegionFilterString(regions: string[]): string {
+  if (regions.length === 0) return '';
+  if (regions.length === 4) return 'All UAE';
+  return regions.join(', ');
+}
+
+/**
+ * @deprecated Use formatRegionsForDisplay from SalesContextProvider instead
+ */
+export function getRegionFilterStringLegacy(region: RegionContext): string {
   const parts = [region.country];
   if (region.city) parts.push(region.city);
   if (region.territory) parts.push(region.territory);
@@ -195,7 +259,26 @@ export function getRegionFilterString(region: RegionContext): string {
 }
 
 /**
- * Check if a signal's region matches the context region
+ * Check if a signal's region matches any of the context regions (multi-region)
+ */
+export function regionMatchesAny(
+  signalRegion: string,
+  contextRegions: string[]
+): boolean {
+  if (contextRegions.length === 0) return true; // No region filter
+
+  const normalizedSignal = signalRegion.toLowerCase().replace(/-/g, '').replace(/_/g, '');
+
+  return contextRegions.some(region => {
+    const normalizedContext = region.toLowerCase().replace(/-/g, '').replace(/_/g, '');
+    return normalizedSignal.includes(normalizedContext) ||
+           normalizedContext.includes(normalizedSignal) ||
+           normalizedSignal === normalizedContext;
+  });
+}
+
+/**
+ * @deprecated Use regionMatchesAny for multi-region support
  */
 export function regionMatches(
   signalRegion: RegionContext,

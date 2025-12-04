@@ -41,26 +41,30 @@ import {
 // =============================================================================
 
 /**
- * Create a new SalesContext
+ * Create a new SalesContext with multi-region support
  */
 export function createSalesContext(
   options: {
     userId: string;
     vertical: Vertical;
     subVertical: SubVertical;
-    region: RegionContext;
+    regions: string[];  // Multi-region array e.g., ['dubai', 'abu-dhabi']
+    subVerticalLocked?: boolean;
     salesConfig?: Partial<SalesConfig>;
     verticalConfig?: VerticalConfig;
   }
 ): SalesContext {
   const now = new Date();
+  const targetEntity = VERTICAL_RADAR_TARGETS[options.vertical];
 
   return {
     id: `ctx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     userId: options.userId,
     vertical: options.vertical,
     subVertical: options.subVertical,
-    region: options.region,
+    subVerticalLocked: options.subVerticalLocked ?? false,
+    regions: options.regions,
+    targetEntity,
     salesConfig: {
       signalSensitivities: options.salesConfig?.signalSensitivities || {},
       productKPIs: options.salesConfig?.productKPIs || [],
@@ -158,7 +162,7 @@ export function getAllowedSignalTypes(context: SalesContext): string[] {
 
   // No config loaded - vertical not configured
   console.warn(
-    `[SalesContext] No config loaded for ${context.vertical}/${context.subVertical}/${context.region.country}. ` +
+    `[SalesContext] No config loaded for ${context.vertical}/${context.subVertical}/${context.regions.join(',')}. ` +
     `Fetch config from /api/admin/vertical-config first.`
   );
   return [];
@@ -176,22 +180,21 @@ export function isSignalTypeAllowed(
 }
 
 /**
- * Create a filter from SalesContext for querying
+ * Create a filter from SalesContext for querying (multi-region)
  */
 export function createContextFilter(context: SalesContext): ContextFilter {
   return {
     vertical: context.vertical,
     subVertical: context.subVertical,
-    country: context.region.country,
-    city: context.region.city,
-    territory: context.region.territory,
+    regions: context.regions,
+    targetEntity: context.targetEntity,
     allowedSignalTypes: getAllowedSignalTypes(context),
     minConfidence: 0.6,
   };
 }
 
 /**
- * Check if a signal matches the sales context
+ * Check if a signal matches the sales context (multi-region)
  */
 export function signalMatchesContext(
   signal: SalesSignal,
@@ -202,26 +205,26 @@ export function signalMatchesContext(
     return false;
   }
 
-  // 2. Region must match
-  if (signal.region.country !== context.region.country) {
+  // 2. Region must match one of the user's regions
+  // Signal region can be in format 'dubai', 'UAE-Dubai', or RegionContext
+  const signalRegion = signal.region.city?.toLowerCase() ||
+                       signal.region.country?.toLowerCase() ||
+                       '';
+  const signalRegionNormalized = signalRegion.replace('uae-', '').replace('uae_', '');
+
+  const matchesRegion = context.regions.some(region => {
+    const normalizedContextRegion = region.toLowerCase().replace(/-/g, '');
+    const normalizedSignalRegion = signalRegionNormalized.replace(/-/g, '');
+    return normalizedContextRegion === normalizedSignalRegion ||
+           normalizedContextRegion.includes(normalizedSignalRegion) ||
+           normalizedSignalRegion.includes(normalizedContextRegion);
+  });
+
+  if (!matchesRegion && context.regions.length > 0) {
     return false;
   }
 
-  // 3. City filter (if specified in context)
-  if (context.region.city && signal.region.city) {
-    if (signal.region.city !== context.region.city) {
-      return false;
-    }
-  }
-
-  // 4. Territory filter (if specified)
-  if (context.region.territory && signal.region.territory) {
-    if (signal.region.territory !== context.region.territory) {
-      return false;
-    }
-  }
-
-  // 5. Check confidence threshold
+  // 3. Check confidence threshold
   const sensitivity = context.salesConfig.signalSensitivities[signal.type] || 'medium';
   const minRelevance = sensitivityToThreshold(sensitivity);
 
@@ -464,4 +467,62 @@ export function getRadarTargetDescription(vertical: Vertical): string {
     'candidates': 'Job candidates and employers',
   };
   return descriptions[target];
+}
+
+// =============================================================================
+// Region Display Helpers
+// =============================================================================
+
+/**
+ * Region display names for UAE
+ */
+export const REGION_DISPLAY_NAMES: Record<string, string> = {
+  'dubai': 'Dubai',
+  'abu-dhabi': 'Abu Dhabi',
+  'sharjah': 'Sharjah',
+  'northern-emirates': 'Northern Emirates',
+};
+
+/**
+ * Get display name for a single region
+ */
+export function getRegionDisplayName(region: string): string {
+  return REGION_DISPLAY_NAMES[region] || region;
+}
+
+/**
+ * Format regions array for display (e.g., "Dubai + Abu Dhabi")
+ */
+export function formatRegionsForDisplay(regions: string[]): string {
+  if (regions.length === 0) return 'No regions';
+  if (regions.length === 4) return 'All UAE';
+
+  return regions
+    .map(r => getRegionDisplayName(r))
+    .join(' + ');
+}
+
+/**
+ * Build context badge string (e.g., "Banking → Employee Banking → Dubai + Abu Dhabi")
+ */
+export function buildContextBadge(context: SalesContext): string {
+  const vertical = getVerticalDisplayName(context.vertical);
+  const subVertical = getSubVerticalDisplayName(context.subVertical);
+  const regions = formatRegionsForDisplay(context.regions);
+
+  return `${vertical} → ${subVertical} → ${regions}`;
+}
+
+/**
+ * Check if context is locked (cannot switch sub-verticals)
+ */
+export function isContextLocked(context: SalesContext): boolean {
+  return context.subVerticalLocked === true;
+}
+
+/**
+ * Validate that regions array is not empty
+ */
+export function hasValidRegions(regions: string[]): boolean {
+  return Array.isArray(regions) && regions.length > 0;
 }

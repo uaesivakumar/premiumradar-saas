@@ -159,8 +159,9 @@ export function VerticalSelector() {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     completeStep('vertical');
-    setStep('transition');
-    router.push('/onboarding/transition');
+    // EB JOURNEY: Navigate to subVertical selection (not transition)
+    setStep('subVertical');
+    router.push('/onboarding/sub-vertical');
   };
 
   return (

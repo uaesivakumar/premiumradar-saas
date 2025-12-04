@@ -22,6 +22,8 @@ const STEP_LABELS: Record<OnboardingStep, string> = {
   identity: 'Identity',
   workspace: 'Workspace',
   vertical: 'Industry',
+  subVertical: 'Role',      // NEW: Sub-vertical selection
+  regions: 'Territory',     // NEW: Multi-region selection
   transition: 'Setup',
   complete: 'Complete',
 };

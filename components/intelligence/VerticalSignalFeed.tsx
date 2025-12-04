@@ -4,8 +4,8 @@
  * VerticalSignalFeed - Sprint P3
  * Real-time feed of vertical-specific signals
  *
- * Shows incoming signals relevant to the active vertical
- * with appropriate context and actions.
+ * BANKING ONLY - Other verticals show "Coming Soon" placeholder.
+ * Banking shows: Real-time company signals with actions.
  */
 
 import { useState, useEffect } from 'react';
@@ -338,15 +338,43 @@ export function VerticalSignalFeed() {
   const [filter, setFilter] = useState<'all' | 'critical' | 'high'>('all');
 
   useEffect(() => {
-    setSignals(MOCK_SIGNALS[vertical]);
+    // Only load signals for banking
+    if (vertical === 'banking') {
+      setSignals(MOCK_SIGNALS[vertical]);
+    } else {
+      setSignals([]);
+    }
   }, [vertical]);
+
+  // Only Banking is active - other verticals show Coming Soon
+  const isActive = vertical === 'banking';
+  const Icon = VERTICAL_ICONS[vertical];
+  const color = VERTICAL_COLORS[vertical];
+
+  if (!isActive) {
+    return (
+      <div className="bg-slate-900 rounded-xl border border-white/10 overflow-hidden">
+        <div className="p-4 border-b border-white/10">
+          <h3 className="text-white font-medium">Signal Feed</h3>
+        </div>
+        <div className="p-8 text-center">
+          <div className="mb-4">
+            <Icon className={`w-12 h-12 mx-auto text-${color}-400 opacity-50`} />
+          </div>
+          <h4 className="text-lg font-medium text-white mb-2">Coming Soon</h4>
+          <p className="text-sm text-gray-400 max-w-xs mx-auto">
+            Signal detection for this vertical is not yet available.
+            Currently only Banking signals are supported.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const filteredSignals = signals.filter(s => {
     if (filter === 'all') return true;
     return s.priority === filter;
   });
-
-  const color = VERTICAL_COLORS[vertical];
 
   return (
     <div className="bg-slate-900 rounded-xl border border-white/10 overflow-hidden">

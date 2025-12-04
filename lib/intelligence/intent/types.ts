@@ -175,16 +175,13 @@ export interface QueryParameters {
   compareEntities?: string[];
   // Output preferences
   outputFormat?: 'list' | 'table' | 'detailed' | 'summary';
-  // Sales Context (Vertical/Sub-Vertical/Region)
+  // Sales Context (Vertical/Sub-Vertical/Regions)
   // Injected by useIntentWrapper to filter all downstream operations
+  // EB JOURNEY: Updated for multi-region support
   salesContext?: {
     vertical: string;
     subVertical: string;
-    region: {
-      country: string;
-      city?: string;
-      territory?: string;
-    };
+    regions: string[];  // Multi-region array e.g., ['dubai', 'abu-dhabi']
   };
 }
 

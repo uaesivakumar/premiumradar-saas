@@ -2,27 +2,27 @@
  * Vertical Intelligence Library - Sprint P3
  * Deep Vertical Intelligence Packs
  *
+ * BANKING ONLY - Other verticals are UI placeholders.
  * Central export for all vertical-specific intelligence modules.
- * Provides unified access to signals, scoring, patterns, personas, and prompts.
  */
 
 // =============================================================================
 // RE-EXPORTS
 // =============================================================================
 
-// Signals
+// Signals (Banking only)
 export * from './signals';
 
 // Scoring
 export * from './scoring';
 
-// Patterns
+// Patterns (Banking only)
 export * from './patterns';
 
-// Personas
+// Personas (Banking only)
 export * from './personas';
 
-// Prompts
+// Prompts (Banking only)
 export * from './prompts';
 
 // Content (existing)
@@ -41,6 +41,7 @@ import { getPromptPack, buildSIVAPrompt, PROMPT_PACK_METADATA } from './prompts'
 
 /**
  * Complete vertical intelligence context
+ * Returns null for non-banking verticals
  */
 export interface VerticalIntelligenceContext {
   vertical: Vertical;
@@ -53,6 +54,8 @@ export interface VerticalIntelligenceContext {
 
 /**
  * Get complete intelligence context for a vertical
+ * Currently only returns full context for Banking
+ * Other verticals return empty/null values (UI placeholders)
  */
 export function getVerticalIntelligence(vertical: Vertical): VerticalIntelligenceContext {
   return {
@@ -66,20 +69,34 @@ export function getVerticalIntelligence(vertical: Vertical): VerticalIntelligenc
 }
 
 /**
+ * Check if a vertical has active backend intelligence
+ * Currently only Banking is active
+ */
+export function isVerticalActive(vertical: Vertical): boolean {
+  return vertical === 'banking';
+}
+
+/**
  * Analyze signals and return complete intelligence output
+ * Only works for Banking vertical
  */
 export interface IntelligenceOutput {
   score: ScoringResult;
   patternMatches: ReturnType<typeof matchPatterns>;
   persona: ReturnType<typeof getDeepPersona>;
-  sivaPrompt: string;
+  sivaPrompt: string | null;
 }
 
 export function analyzeWithIntelligence(
   vertical: Vertical,
   signals: SignalMatch[],
   task: string = 'Analyze this opportunity'
-): IntelligenceOutput {
+): IntelligenceOutput | null {
+  // Only Banking has active intelligence
+  if (!isVerticalActive(vertical)) {
+    return null;
+  }
+
   // Score the signals
   const engine = createScoringEngine(vertical);
   const score = engine.calculate({ vertical, signals });
@@ -117,13 +134,13 @@ export const VERTICAL_INTELLIGENCE_METADATA = {
     personas: DEEP_PERSONA_METADATA,
     prompts: PROMPT_PACK_METADATA,
   },
-  verticals: ['banking', 'insurance', 'real-estate', 'recruitment', 'saas-sales'] as Vertical[],
+  activeVerticals: ['banking'] as Vertical[],
+  placeholderVerticals: ['insurance', 'real-estate', 'recruitment', 'saas-sales'] as Vertical[],
   features: [
-    'Deep signal libraries (25-35 signals per vertical)',
-    'Vertical-specific scoring engines',
-    'Pattern matching for opportunity identification',
-    'Deep persona packs with industry knowledge',
-    'SIVA expert prompt packs',
-    'Intelligence dashboard components',
+    'Banking signal library (sales triggers from OS)',
+    'Banking-specific scoring engine',
+    'Banking pattern matching for opportunity identification',
+    'Banking deep persona with industry knowledge',
+    'Banking SIVA prompt pack',
   ],
 } as const;

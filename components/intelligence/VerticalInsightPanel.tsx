@@ -4,12 +4,8 @@
  * VerticalInsightPanel - Sprint P3
  * Displays vertical-specific intelligence insights
  *
- * Adapts content based on active vertical:
- * - Banking: Company signals, payroll opportunities
- * - Insurance: Life events, coverage gaps
- * - Real Estate: Buyer/seller signals, property matches
- * - Recruitment: Candidate availability, hiring needs
- * - SaaS Sales: Tech signals, buying intent
+ * BANKING ONLY - Other verticals show "Coming Soon" placeholder.
+ * Banking shows: Company signals, payroll opportunities
  */
 
 import { useMemo } from 'react';
@@ -310,6 +306,42 @@ export function VerticalInsightPanel() {
   const data = useMemo(() => getMockInsightData(vertical), [vertical]);
 
   const Icon = config.icon;
+
+  // Only Banking is active - other verticals show Coming Soon
+  const isActive = vertical === 'banking';
+
+  if (!isActive) {
+    return (
+      <div className="bg-slate-900 rounded-xl border border-white/10 overflow-hidden">
+        <div className={`p-4 ${config.bgColor} border-b border-white/10`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg ${config.bgColor} flex items-center justify-center`}>
+              <Icon className={`w-5 h-5 ${config.color}`} />
+            </div>
+            <div>
+              <h3 className="text-white font-medium">{config.title}</h3>
+              <p className="text-xs text-gray-400">
+                Targeting: {config.targetLabel}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="p-8 text-center">
+          <div className="mb-4">
+            <Icon className={`w-12 h-12 mx-auto ${config.color} opacity-50`} />
+          </div>
+          <h4 className="text-lg font-medium text-white mb-2">Coming Soon</h4>
+          <p className="text-sm text-gray-400 max-w-xs mx-auto">
+            We&apos;re expanding to {config.title.replace(' Intelligence', '')}!
+            Request early access to be notified when this vertical is available.
+          </p>
+          <button className={`mt-4 px-4 py-2 rounded-lg ${config.bgColor} ${config.color} text-sm font-medium hover:opacity-80 transition-opacity`}>
+            Request Early Access
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-900 rounded-xl border border-white/10 overflow-hidden">

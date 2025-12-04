@@ -62,11 +62,12 @@ function createTestContext(
   country: string,
   config?: VerticalConfig
 ): SalesContext {
+  // Create context with multi-region support (default to 'dubai' for UAE)
   const ctx = createSalesContext({
     userId: 'qa-test-user',
     vertical,
     subVertical,
-    region: { country, city: 'Dubai' },
+    regions: ['dubai'], // Multi-region array
   });
 
   if (config) {
@@ -85,19 +86,20 @@ function testIntentWrapper(context: SalesContext): TestResult {
   const salesContextInjected = {
     vertical: context.vertical,
     subVertical: context.subVertical,
-    region: context.region,
+    regions: context.regions,
   };
 
   const hasValidContext =
     salesContextInjected.vertical === 'banking' &&
     salesContextInjected.subVertical === 'employee-banking' &&
-    salesContextInjected.region.country === 'UAE';
+    salesContextInjected.regions.length > 0;
 
+  const regionsStr = context.regions.join('+');
   return {
     name: 'IntentWrapper - Sales Context Injection',
     passed: hasValidContext,
     details: hasValidContext
-      ? `Intent parameters include: ${context.vertical}/${context.subVertical}/${context.region.country}`
+      ? `Intent parameters include: ${context.vertical}/${context.subVertical}/${regionsStr}`
       : 'Sales context not properly configured',
     data: salesContextInjected,
   };
