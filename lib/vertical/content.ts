@@ -36,10 +36,10 @@ export interface QuickAction {
 
 const VERTICAL_QUICK_ACTIONS: Record<Vertical, QuickAction[]> = {
   'banking': [
-    { label: 'Find companies', query: 'Find banking companies in UAE with digital transformation signals', agent: 'discovery' },
-    { label: 'Rank prospects', query: 'Rank my top banking prospects by Q/T/L/E score', agent: 'ranking' },
-    { label: 'Draft outreach', query: 'Write an outreach email for a corporate banking prospect', agent: 'outreach' },
-    { label: 'Show demo', query: 'Show me a demo of the banking discovery flow', agent: 'demo' },
+    { label: 'Find Hiring Companies', query: 'Find employers in UAE with hiring expansion signals', agent: 'discovery' },
+    { label: 'Score EB Pipeline', query: 'Rank employers by payroll acquisition potential', agent: 'ranking' },
+    { label: 'Draft Payroll Outreach', query: 'Write a payroll-focused outreach for top hiring employers', agent: 'outreach' },
+    { label: 'Prioritize Employers', query: 'Prioritize employers based on headcount growth and hiring signals', agent: 'intelligence' },
   ],
   'insurance': [
     { label: 'Find prospects', query: 'Find insurance prospects with life event signals', agent: 'discovery' },
@@ -83,14 +83,14 @@ export interface VerticalPrompts {
 const VERTICAL_EXAMPLE_PROMPTS: Record<Vertical, VerticalPrompts> = {
   'banking': {
     en: [
-      'Find banking companies with digital transformation signals',
-      'Show me fintech competitors in my region',
-      'Analyze corporate banking expansion trends',
+      'Find employers with hiring expansion signals in UAE',
+      'Show me top companies for payroll acquisition',
+      'Rank employers by headcount growth',
     ],
     ar: [
-      'ابحث عن شركات مصرفية لديها إشارات التحول الرقمي',
-      'أظهر لي منافسي التقنية المالية في منطقتي',
-      'تحليل اتجاهات توسع البنوك للشركات',
+      'ابحث عن شركات توظف في الإمارات',
+      'أظهر لي أفضل الشركات لخدمات الرواتب',
+      'صنف الشركات حسب نمو عدد الموظفين',
     ],
   },
   'insurance': {
@@ -245,12 +245,12 @@ export interface UILabels {
 
 const VERTICAL_UI_LABELS: Record<Vertical, UILabels> = {
   'banking': {
-    dashboardTitle: 'Banking Intelligence',
-    dashboardSubtitle: 'Track corporate banking opportunities and digital transformation signals',
-    discoveryTitle: 'Banking Discovery',
-    discoverySubtitle: 'Find companies with banking product opportunities',
-    targetLabel: 'Companies',
-    signalLabel: 'Corporate Signals',
+    dashboardTitle: 'Employee Banking Intelligence',
+    dashboardSubtitle: 'Track hiring signals and payroll opportunities across UAE employers',
+    discoveryTitle: 'Employer Discovery',
+    discoverySubtitle: 'Find companies with hiring expansion and payroll potential',
+    targetLabel: 'Employers',
+    signalLabel: 'Hiring Signals',
   },
   'insurance': {
     dashboardTitle: 'Insurance Intelligence',
@@ -303,10 +303,10 @@ export interface PromptTemplate {
 
 const VERTICAL_PROMPT_TEMPLATES: Record<Vertical, PromptTemplate> = {
   'banking': {
-    discovery: 'Find companies with {signal} signals in {region}. Focus on corporate banking and employee banking opportunities.',
-    ranking: 'Rank these banking prospects by Q/T/L/E score. Prioritize companies with digital transformation initiatives.',
-    outreach: 'Write a professional outreach email for {company} focusing on their banking needs. Mention relevant signals: {signals}.',
-    intelligence: 'Analyze the banking market in {region}. Identify trends, key players, and opportunities.',
+    discovery: 'Find employers with {signal} signals in {region}. Focus on companies with hiring expansion and payroll acquisition potential.',
+    ranking: 'Rank these employers by payroll opportunity score. Prioritize companies with high headcount growth and hiring signals.',
+    outreach: 'Write a payroll-focused outreach email for {company} HR Director. Reference their hiring signals: {signals}. Focus on employee banking solutions.',
+    intelligence: 'Analyze employer hiring trends in {region}. Identify high-growth companies and payroll conversion opportunities.',
   },
   'insurance': {
     discovery: 'Find individuals with {signal} signals in {region}. Focus on life insurance and health coverage needs.',

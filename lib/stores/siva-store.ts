@@ -1,9 +1,17 @@
 /**
- * SIVA Store - Sprint S26
+ * SIVA Store - Sprint S26 + EB Journey Fix
  * Global state management for SIVA AI Surface
+ *
+ * NOW CONTEXT-AWARE:
+ * - Reads from SalesContextStore for vertical/subVertical/regions
+ * - Uses EB employer data when in Employee Banking mode
+ * - Implements drift guard to block non-EB responses
  */
 
 import { create } from 'zustand';
+import { useSalesContextStore } from './sales-context-store';
+import { generateEBEmployers, scoreEBEmployer, EB_SIGNAL_TYPES } from '@/lib/discovery/eb-employers';
+import type { EBCompanyData } from '@/components/discovery/EBDiscoveryCard';
 
 // SIVA's operational states
 export type SIVAState =
@@ -235,8 +243,57 @@ function detectAgent(query: string): AgentType {
   return 'discovery'; // Default
 }
 
-// Helper: Get reasoning steps for agent
+// =============================================================================
+// CONTEXT-AWARE HELPERS
+// =============================================================================
+
+/**
+ * Check if we're in Employee Banking mode
+ */
+function isEmployeeBankingMode(): boolean {
+  const context = useSalesContextStore.getState().context;
+  return context.vertical === 'banking' && context.subVertical === 'employee-banking';
+}
+
+/**
+ * Get current sales context
+ */
+function getSalesContext() {
+  return useSalesContextStore.getState().context;
+}
+
+/**
+ * Format regions for display
+ */
+function formatRegions(regions: string[]): string {
+  if (regions.length === 0) return 'UAE';
+  if (regions.length === 4) return 'All UAE';
+  return regions.map(r => r.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')).join(', ');
+}
+
+// Helper: Get reasoning steps for agent (CONTEXT-AWARE)
 function getReasoningSteps(agent: AgentType): ReasoningStep[] {
+  const isEB = isEmployeeBankingMode();
+
+  // EB-specific reasoning steps
+  if (isEB) {
+    const ebSteps: Record<AgentType, string[]> = {
+      discovery: ['Parsing query intent', 'Identifying hiring signals', 'Querying employer database', 'Filtering by headcount growth', 'Preparing employer cards'],
+      ranking: ['Loading employer data', 'Calculating hiring velocity', 'Analyzing payroll potential', 'Scoring EB opportunity', 'Ranking by payroll conversion likelihood'],
+      outreach: ['Analyzing target employer', 'Identifying HR decision maker', 'Detecting hiring signals', 'Personalizing payroll pitch', 'Optimizing for HR engagement'],
+      enrichment: ['Gathering employer firmographics', 'Mapping HR/Finance contacts', 'Detecting hiring patterns', 'Analyzing payroll signals'],
+      demo: ['Preparing EB demonstration', 'Loading employer data', 'Setting up journey visualization'],
+    };
+    return ebSteps[agent].map((title, i) => ({
+      id: `step-${i}`,
+      step: i + 1,
+      title,
+      description: title,
+      status: 'pending' as const,
+    }));
+  }
+
+  // Generic banking reasoning steps
   const baseSteps: Record<AgentType, string[]> = {
     discovery: ['Parsing query intent', 'Identifying search criteria', 'Querying company database', 'Filtering results', 'Preparing discovery cards'],
     ranking: ['Loading prospect data', 'Calculating Q scores', 'Calculating T scores', 'Calculating L scores', 'Calculating E scores', 'Ranking by composite'],
@@ -254,28 +311,243 @@ function getReasoningSteps(agent: AgentType): ReasoningStep[] {
   }));
 }
 
-// Helper: Generate output based on agent
-async function generateOutput(agent: AgentType, query: string): Promise<{
+// =============================================================================
+// EMPLOYEE BANKING OUTPUT GENERATION
+// =============================================================================
+
+/**
+ * Generate EB-specific output for discovery
+ */
+function generateEBDiscoveryOutput(query: string, agent: AgentType): {
   message: string;
   objects: Omit<OutputObject, 'id' | 'timestamp'>[];
-}> {
-  await sleep(500);
+} {
+  const context = getSalesContext();
+  const regions = context.regions;
+  const regionDisplay = formatRegions(regions);
 
+  // Get EB employers from the data layer
+  const employers = generateEBEmployers(regions)
+    .map(emp => ({ ...emp, score: scoreEBEmployer(emp) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  const topEmployer = employers[0];
+
+  return {
+    message: `I found ${employers.length} employers in ${regionDisplay} with strong hiring signals for payroll acquisition. ${topEmployer?.name} leads with ${topEmployer?.headcountGrowth}% headcount growth.`,
+    objects: [
+      {
+        type: 'discovery',
+        title: 'Employer Discovery Results',
+        data: {
+          companies: employers.map(emp => ({
+            name: emp.name,
+            industry: emp.industry,
+            score: emp.score,
+            signal: emp.signals[0]?.title || 'Hiring Expansion',
+            headcount: emp.headcount,
+            headcountGrowth: emp.headcountGrowth,
+            city: emp.city,
+          })),
+          query,
+          totalResults: employers.length,
+          context: 'employee-banking',
+          targetEntity: 'employers',
+        },
+        pinned: false,
+        expanded: true,
+        agent,
+      },
+    ],
+  };
+}
+
+/**
+ * Generate EB-specific output for ranking
+ */
+function generateEBRankingOutput(query: string, agent: AgentType): {
+  message: string;
+  objects: Omit<OutputObject, 'id' | 'timestamp'>[];
+} {
+  const context = getSalesContext();
+  const employers = generateEBEmployers(context.regions)
+    .map(emp => ({ ...emp, score: scoreEBEmployer(emp) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  return {
+    message: `I've ranked employers by payroll acquisition potential. ${employers[0]?.name} leads with a score of ${employers[0]?.score} based on hiring velocity and payroll opportunity signals.`,
+    objects: [
+      {
+        type: 'ranking',
+        title: 'Employer Rankings (Payroll Potential)',
+        data: {
+          rankings: employers.map((emp, idx) => ({
+            rank: idx + 1,
+            name: emp.name,
+            industry: emp.industry,
+            score: emp.score,
+            hiringSignals: emp.signals.length,
+            headcountGrowth: `${emp.headcountGrowth}%`,
+            headcount: emp.headcount,
+            topSignal: emp.signals[0]?.title || 'Hiring',
+          })),
+          context: 'employee-banking',
+          scoringMethod: 'EB Payroll Opportunity Score',
+        },
+        pinned: false,
+        expanded: true,
+        agent,
+      },
+    ],
+  };
+}
+
+/**
+ * Generate EB-specific output for outreach
+ */
+function generateEBOutreachOutput(query: string, agent: AgentType): {
+  message: string;
+  objects: Omit<OutputObject, 'id' | 'timestamp'>[];
+} {
+  const context = getSalesContext();
+  const employers = generateEBEmployers(context.regions)
+    .sort((a, b) => b.score - a.score);
+
+  // Try to find employer mentioned in query
+  const queryLower = query.toLowerCase();
+  let targetEmployer = employers.find(emp =>
+    queryLower.includes(emp.name.toLowerCase())
+  );
+
+  // Fallback to top employer
+  if (!targetEmployer) {
+    targetEmployer = employers[0];
+  }
+
+  const signals = targetEmployer?.signals || [];
+  const topSignal = signals[0];
+  const hrContact = targetEmployer?.decisionMaker;
+
+  return {
+    message: `I've drafted a payroll-focused outreach for ${targetEmployer?.name}'s ${hrContact?.title || 'HR Director'} highlighting their ${topSignal?.title || 'hiring expansion'}.`,
+    objects: [
+      {
+        type: 'outreach',
+        title: 'Payroll Outreach Draft',
+        data: {
+          company: targetEmployer?.name,
+          contact: hrContact?.name || 'HR Director',
+          contactTitle: hrContact?.title || 'Head of HR',
+          channel: 'email',
+          subject: `Payroll Solutions for ${targetEmployer?.name}'s Growing Workforce`,
+          body: `Dear ${hrContact?.name || 'HR Team'},
+
+I noticed ${targetEmployer?.name}'s impressive ${topSignal?.title?.toLowerCase() || 'growth'} - ${topSignal?.description || 'expanding your workforce significantly'}.
+
+Managing payroll for ${targetEmployer?.headcount?.toLocaleString() || 'thousands of'} employees (with ${targetEmployer?.headcountGrowth}% growth) requires a banking partner who understands scale.
+
+Our Employee Banking solutions include:
+• Seamless payroll processing for large workforces
+• Employee salary accounts with premium benefits
+• Dedicated relationship management for HR teams
+• Digital onboarding for new hires
+
+Would you be open to a brief call to discuss how we're helping similar ${targetEmployer?.industry || 'companies'} in the UAE streamline their employee banking?
+
+Best regards`,
+          signals: signals.map(s => s.title),
+          context: 'employee-banking',
+        },
+        pinned: false,
+        expanded: true,
+        agent,
+      },
+    ],
+  };
+}
+
+/**
+ * Generate EB-specific output for enrichment
+ */
+function generateEBEnrichmentOutput(query: string, agent: AgentType): {
+  message: string;
+  objects: Omit<OutputObject, 'id' | 'timestamp'>[];
+} {
+  const context = getSalesContext();
+  const employers = generateEBEmployers(context.regions);
+
+  // Try to find employer mentioned in query
+  const queryLower = query.toLowerCase();
+  let targetEmployer = employers.find(emp =>
+    queryLower.includes(emp.name.toLowerCase())
+  );
+
+  if (!targetEmployer) {
+    targetEmployer = employers.sort((a, b) => b.score - a.score)[0];
+  }
+
+  return {
+    message: `I've enriched ${targetEmployer?.name}'s profile with HR contacts, hiring patterns, and payroll intelligence.`,
+    objects: [
+      {
+        type: 'insight',
+        title: 'Employer Profile (EB Intelligence)',
+        data: {
+          company: targetEmployer?.name,
+          industry: targetEmployer?.industry,
+          location: `${targetEmployer?.city}, UAE`,
+          firmographic: {
+            employees: targetEmployer?.headcount?.toLocaleString() || 'N/A',
+            headcountGrowth: `${targetEmployer?.headcountGrowth}%`,
+            tier: targetEmployer?.bankingTier,
+          },
+          hrContact: targetEmployer?.decisionMaker,
+          signals: targetEmployer?.signals.map(s => ({
+            type: s.type,
+            title: s.title,
+            confidence: `${Math.round((s.confidence || 0.8) * 100)}%`,
+            source: s.source,
+          })),
+          payrollOpportunity: {
+            estimatedAccounts: targetEmployer?.headcount,
+            growthPotential: `${targetEmployer?.headcountGrowth}% annually`,
+            competitiveStatus: 'Open to proposals',
+          },
+          context: 'employee-banking',
+        },
+        pinned: false,
+        expanded: true,
+        agent,
+      },
+    ],
+  };
+}
+
+// =============================================================================
+// GENERIC BANKING OUTPUT (fallback for non-EB)
+// =============================================================================
+
+function generateGenericBankingOutput(agent: AgentType, query: string): {
+  message: string;
+  objects: Omit<OutputObject, 'id' | 'timestamp'>[];
+} {
   switch (agent) {
     case 'discovery':
       return {
-        message: `I found 5 banking companies in the UAE matching your criteria. Here are the top prospects with high digital transformation signals.`,
+        message: `I found 5 banking companies in the UAE matching your criteria.`,
         objects: [
           {
             type: 'discovery',
             title: 'Discovery Results',
             data: {
               companies: [
-                { name: 'Emirates NBD', industry: 'Banking', score: 92, signal: 'Digital transformation' },
+                { name: 'Emirates NBD', industry: 'Banking', score: 92, signal: 'Expansion plans' },
                 { name: 'ADCB', industry: 'Banking', score: 88, signal: 'Leadership change' },
-                { name: 'Mashreq', industry: 'Banking', score: 85, signal: 'Cloud migration' },
-                { name: 'FAB', industry: 'Banking', score: 82, signal: 'Expansion plans' },
-                { name: 'DIB', industry: 'Banking', score: 78, signal: 'Tech investment' },
+                { name: 'Mashreq', industry: 'Banking', score: 85, signal: 'Market growth' },
+                { name: 'FAB', industry: 'Banking', score: 82, signal: 'New initiatives' },
+                { name: 'DIB', industry: 'Banking', score: 78, signal: 'Investment' },
               ],
               query,
               totalResults: 5,
@@ -289,16 +561,16 @@ async function generateOutput(agent: AgentType, query: string): Promise<{
 
     case 'ranking':
       return {
-        message: `I've analyzed and ranked your prospects using Q/T/L/E scoring. Emirates NBD leads with a composite score of 92.`,
+        message: `I've analyzed and ranked your prospects. Emirates NBD leads with a composite score of 92.`,
         objects: [
           {
             type: 'ranking',
             title: 'Ranked Prospects',
             data: {
               rankings: [
-                { rank: 1, name: 'Emirates NBD', Q: 95, T: 88, L: 90, E: 94, total: 92 },
-                { rank: 2, name: 'ADCB', Q: 90, T: 92, L: 85, E: 86, total: 88 },
-                { rank: 3, name: 'Mashreq', Q: 88, T: 80, L: 88, E: 82, total: 85 },
+                { rank: 1, name: 'Emirates NBD', score: 92 },
+                { rank: 2, name: 'ADCB', score: 88 },
+                { rank: 3, name: 'Mashreq', score: 85 },
               ],
             },
             pinned: false,
@@ -310,17 +582,17 @@ async function generateOutput(agent: AgentType, query: string): Promise<{
 
     case 'outreach':
       return {
-        message: `I've drafted a personalized outreach message for Emirates NBD based on their digital transformation signals.`,
+        message: `I've drafted a personalized outreach message.`,
         objects: [
           {
             type: 'outreach',
             title: 'Outreach Draft',
             data: {
-              company: 'Emirates NBD',
+              company: 'Target Company',
               channel: 'email',
-              subject: 'Digital Banking Transformation Partnership',
-              body: `Dear Team,\n\nI noticed Emirates NBD's impressive digital transformation initiatives. Our AI-powered sales intelligence platform has helped similar institutions accelerate their digital journey.\n\nWould you be open to a brief conversation about how we're helping banks in the region?\n\nBest regards`,
-              signals: ['Digital transformation', 'Tech investment'],
+              subject: 'Partnership Opportunity',
+              body: `Dear Team,\n\nI noticed your company's growth initiatives. Would you be open to a brief conversation?\n\nBest regards`,
+              signals: ['Growth', 'Expansion'],
             },
             pinned: false,
             expanded: true,
@@ -331,16 +603,15 @@ async function generateOutput(agent: AgentType, query: string): Promise<{
 
     case 'enrichment':
       return {
-        message: `I've enriched the company profile with firmographic data, decision makers, and tech stack information.`,
+        message: `I've enriched the company profile with firmographic data and contacts.`,
         objects: [
           {
             type: 'insight',
             title: 'Enriched Profile',
             data: {
-              company: 'Emirates NBD',
-              firmographic: { employees: '10,000+', revenue: '$5B+', founded: 2007 },
-              decisionMakers: ['CEO: Shayne Nelson', 'CTO: Patrick Sullivan'],
-              techStack: ['Oracle', 'AWS', 'Salesforce'],
+              company: 'Target Company',
+              firmographic: { employees: 'N/A', revenue: 'N/A' },
+              decisionMakers: ['Contact information pending'],
             },
             pinned: false,
             expanded: true,
@@ -355,6 +626,81 @@ async function generateOutput(agent: AgentType, query: string): Promise<{
         objects: [],
       };
   }
+}
+
+// =============================================================================
+// DRIFT GUARD
+// =============================================================================
+
+/**
+ * Check if query contains forbidden terms for EB mode
+ * Returns true if query should be blocked/redirected
+ */
+function containsForbiddenTermsForEB(query: string): boolean {
+  const forbiddenTerms = [
+    'digital transformation',
+    'cloud migration',
+    'core banking',
+    'tier 1 bank',
+    'tier 2 bank',
+    'fintech',
+    'digital maturity',
+    'technology adoption',
+    'regulatory compliance',
+    'open banking',
+  ];
+
+  const queryLower = query.toLowerCase();
+  return forbiddenTerms.some(term => queryLower.includes(term));
+}
+
+/**
+ * Apply drift guard - redirect non-EB queries to EB context
+ */
+function applyEBDriftGuard(query: string): string {
+  // Redirect bank-focused queries to employer-focused
+  let redirectedQuery = query
+    .replace(/\bbank(s|ing)?\b/gi, 'employer')
+    .replace(/\bdigital transformation\b/gi, 'hiring expansion')
+    .replace(/\bQ\/T\/L\/E\b/gi, 'payroll opportunity')
+    .replace(/\bcloud migration\b/gi, 'workforce growth')
+    .replace(/\bcore banking\b/gi, 'payroll services');
+
+  return redirectedQuery;
+}
+
+// Helper: Generate output based on agent (CONTEXT-AWARE)
+async function generateOutput(agent: AgentType, query: string): Promise<{
+  message: string;
+  objects: Omit<OutputObject, 'id' | 'timestamp'>[];
+}> {
+  await sleep(500);
+
+  const isEB = isEmployeeBankingMode();
+
+  // If in EB mode, use EB-specific output
+  if (isEB) {
+    // Apply drift guard if needed
+    const processedQuery = containsForbiddenTermsForEB(query)
+      ? applyEBDriftGuard(query)
+      : query;
+
+    switch (agent) {
+      case 'discovery':
+        return generateEBDiscoveryOutput(processedQuery, agent);
+      case 'ranking':
+        return generateEBRankingOutput(processedQuery, agent);
+      case 'outreach':
+        return generateEBOutreachOutput(processedQuery, agent);
+      case 'enrichment':
+        return generateEBEnrichmentOutput(processedQuery, agent);
+      default:
+        return generateEBDiscoveryOutput(processedQuery, agent);
+    }
+  }
+
+  // Generic banking output (non-EB)
+  return generateGenericBankingOutput(agent, query);
 }
 
 function sleep(ms: number): Promise<void> {

@@ -45,7 +45,7 @@ export function SIVASurface() {
   const hasContent = messages.length > 0 || outputObjects.length > 0;
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-slate-950">
+    <div className="absolute inset-0 flex flex-col bg-slate-950">
       {/* Neural Mesh Background */}
       <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950" />
