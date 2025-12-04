@@ -1,17 +1,17 @@
 /**
- * SIVA Store - Sprint S26 + EB Journey Fix
+ * SIVA Store - Sprint S26 + Real Data Integration
  * Global state management for SIVA AI Surface
  *
- * NOW CONTEXT-AWARE:
+ * REAL DATA MODE:
  * - Reads from SalesContextStore for vertical/subVertical/regions
- * - Uses EB employer data when in Employee Banking mode
- * - Implements drift guard to block non-EB responses
+ * - Calls enrichment API for real Apollo + SERP data
+ * - Uses vertical config for signal types and scoring
+ * - Implements drift guard to block off-context responses
  */
 
 import { create } from 'zustand';
 import { useSalesContextStore } from './sales-context-store';
-import { generateEBEmployers, scoreEBEmployer, EB_SIGNAL_TYPES } from '@/lib/discovery/eb-employers';
-import type { EBCompanyData } from '@/components/discovery/EBDiscoveryCard';
+import type { EnrichedEntity, EnrichmentSearchResult } from '@/lib/integrations/enrichment-engine';
 
 // SIVA's operational states
 export type SIVAState =
@@ -312,48 +312,104 @@ function getReasoningSteps(agent: AgentType): ReasoningStep[] {
 }
 
 // =============================================================================
-// EMPLOYEE BANKING OUTPUT GENERATION
+// API HELPERS
 // =============================================================================
 
 /**
- * Generate EB-specific output for discovery
+ * Fetch enriched entities from the enrichment API
  */
-function generateEBDiscoveryOutput(query: string, agent: AgentType): {
+async function fetchEnrichedEntities(
+  vertical: string,
+  subVertical: string,
+  region: string,
+  regions: string[],
+  limit: number = 5
+): Promise<EnrichedEntity[]> {
+  try {
+    const response = await fetch('/api/enrichment/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vertical,
+        subVertical,
+        region,
+        regions: regions.length > 0 ? regions : undefined,
+        limit,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success && data.data?.entities) {
+      return data.data.entities;
+    }
+
+    console.warn('[SIVA] Enrichment API returned no entities:', data.error);
+    return [];
+  } catch (error) {
+    console.error('[SIVA] Failed to fetch enriched entities:', error);
+    return [];
+  }
+}
+
+// =============================================================================
+// CONTEXT-AWARE OUTPUT GENERATION
+// =============================================================================
+
+/**
+ * Generate discovery output using REAL data from enrichment API
+ */
+async function generateDiscoveryOutputReal(query: string, agent: AgentType): Promise<{
   message: string;
   objects: Omit<OutputObject, 'id' | 'timestamp'>[];
-} {
+}> {
   const context = getSalesContext();
-  const regions = context.regions;
+  const { vertical, subVertical, regions } = context;
   const regionDisplay = formatRegions(regions);
 
-  // Get EB employers from the data layer
-  const employers = generateEBEmployers(regions)
-    .map(emp => ({ ...emp, score: scoreEBEmployer(emp) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+  // Fetch REAL data from enrichment API
+  const entities = await fetchEnrichedEntities(
+    vertical,
+    subVertical,
+    regions[0] || 'UAE',
+    regions,
+    5
+  );
 
-  const topEmployer = employers[0];
+  if (entities.length === 0) {
+    return {
+      message: `No entities found matching your criteria. Please check that API integrations are configured in Super Admin → Integrations.`,
+      objects: [],
+    };
+  }
+
+  const topEntity = entities[0];
 
   return {
-    message: `I found ${employers.length} employers in ${regionDisplay} with strong hiring signals for payroll acquisition. ${topEmployer?.name} leads with ${topEmployer?.headcountGrowth}% headcount growth.`,
+    message: `I found ${entities.length} entities in ${regionDisplay} with strong signals. ${topEntity?.name} leads with a score of ${topEntity?.score} based on real hiring and expansion data.`,
     objects: [
       {
         type: 'discovery',
-        title: 'Employer Discovery Results',
+        title: 'Discovery Results',
         data: {
-          companies: employers.map(emp => ({
-            name: emp.name,
-            industry: emp.industry,
-            score: emp.score,
-            signal: emp.signals[0]?.title || 'Hiring Expansion',
-            headcount: emp.headcount,
-            headcountGrowth: emp.headcountGrowth,
-            city: emp.city,
+          companies: entities.map(e => ({
+            name: e.name,
+            industry: e.industry || 'Unknown',
+            score: e.score,
+            signal: e.signals[0]?.title || 'Active Signal',
+            headcount: e.headcount || 0,
+            headcountGrowth: e.headcountGrowth || 0,
+            city: e.city || 'UAE',
+            dataSources: e.dataSources,
           })),
           query,
-          totalResults: employers.length,
-          context: 'employee-banking',
-          targetEntity: 'employers',
+          totalResults: entities.length,
+          context: subVertical,
+          targetEntity: entities[0]?.type || 'company',
+          dataQuality: {
+            sources: entities[0]?.dataSources || [],
+            signalCount: entities.reduce((sum, e) => sum + e.signals.length, 0),
+          },
         },
         pinned: false,
         expanded: true,
@@ -364,37 +420,51 @@ function generateEBDiscoveryOutput(query: string, agent: AgentType): {
 }
 
 /**
- * Generate EB-specific output for ranking
+ * Generate ranking output using REAL data
  */
-function generateEBRankingOutput(query: string, agent: AgentType): {
+async function generateRankingOutputReal(query: string, agent: AgentType): Promise<{
   message: string;
   objects: Omit<OutputObject, 'id' | 'timestamp'>[];
-} {
+}> {
   const context = getSalesContext();
-  const employers = generateEBEmployers(context.regions)
-    .map(emp => ({ ...emp, score: scoreEBEmployer(emp) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+  const { vertical, subVertical, regions } = context;
+
+  const entities = await fetchEnrichedEntities(
+    vertical,
+    subVertical,
+    regions[0] || 'UAE',
+    regions,
+    5
+  );
+
+  if (entities.length === 0) {
+    return {
+      message: `No entities to rank. Please check API integrations.`,
+      objects: [],
+    };
+  }
 
   return {
-    message: `I've ranked employers by payroll acquisition potential. ${employers[0]?.name} leads with a score of ${employers[0]?.score} based on hiring velocity and payroll opportunity signals.`,
+    message: `I've ranked entities by opportunity score. ${entities[0]?.name} leads with a score of ${entities[0]?.score} based on real signals.`,
     objects: [
       {
         type: 'ranking',
-        title: 'Employer Rankings (Payroll Potential)',
+        title: 'Rankings by Opportunity Score',
         data: {
-          rankings: employers.map((emp, idx) => ({
+          rankings: entities.map((e, idx) => ({
             rank: idx + 1,
-            name: emp.name,
-            industry: emp.industry,
-            score: emp.score,
-            hiringSignals: emp.signals.length,
-            headcountGrowth: `${emp.headcountGrowth}%`,
-            headcount: emp.headcount,
-            topSignal: emp.signals[0]?.title || 'Hiring',
+            name: e.name,
+            industry: e.industry || 'Unknown',
+            score: e.score,
+            signalCount: e.signals.length,
+            headcountGrowth: `${e.headcountGrowth || 0}%`,
+            headcount: e.headcount || 0,
+            topSignal: e.signals[0]?.title || 'Signal',
+            scoreBreakdown: e.scoreBreakdown,
           })),
-          context: 'employee-banking',
-          scoringMethod: 'EB Payroll Opportunity Score',
+          context: subVertical,
+          scoringMethod: 'Vertical Config Score',
+          dataSources: entities[0]?.dataSources || [],
         },
         pinned: false,
         expanded: true,
@@ -405,60 +475,69 @@ function generateEBRankingOutput(query: string, agent: AgentType): {
 }
 
 /**
- * Generate EB-specific output for outreach
+ * Generate outreach output using REAL data
  */
-function generateEBOutreachOutput(query: string, agent: AgentType): {
+async function generateOutreachOutputReal(query: string, agent: AgentType): Promise<{
   message: string;
   objects: Omit<OutputObject, 'id' | 'timestamp'>[];
-} {
+}> {
   const context = getSalesContext();
-  const employers = generateEBEmployers(context.regions)
-    .sort((a, b) => b.score - a.score);
+  const { vertical, subVertical, regions } = context;
 
-  // Try to find employer mentioned in query
-  const queryLower = query.toLowerCase();
-  let targetEmployer = employers.find(emp =>
-    queryLower.includes(emp.name.toLowerCase())
+  const entities = await fetchEnrichedEntities(
+    vertical,
+    subVertical,
+    regions[0] || 'UAE',
+    regions,
+    5
   );
 
-  // Fallback to top employer
-  if (!targetEmployer) {
-    targetEmployer = employers[0];
+  // Try to find entity mentioned in query
+  const queryLower = query.toLowerCase();
+  let targetEntity = entities.find(e =>
+    queryLower.includes(e.name.toLowerCase())
+  );
+
+  // Fallback to top entity
+  if (!targetEntity) {
+    targetEntity = entities[0];
   }
 
-  const signals = targetEmployer?.signals || [];
+  if (!targetEntity) {
+    return {
+      message: `No entities found for outreach. Please check API integrations.`,
+      objects: [],
+    };
+  }
+
+  const signals = targetEntity.signals || [];
   const topSignal = signals[0];
-  const hrContact = targetEmployer?.decisionMaker;
+  const contact = targetEntity.decisionMaker;
 
   return {
-    message: `I've drafted a payroll-focused outreach for ${targetEmployer?.name}'s ${hrContact?.title || 'HR Director'} highlighting their ${topSignal?.title || 'hiring expansion'}.`,
+    message: `I've drafted an outreach for ${targetEntity.name}'s ${contact?.title || 'Decision Maker'} highlighting their ${topSignal?.title || 'recent activity'}.`,
     objects: [
       {
         type: 'outreach',
-        title: 'Payroll Outreach Draft',
+        title: 'Outreach Draft',
         data: {
-          company: targetEmployer?.name,
-          contact: hrContact?.name || 'HR Director',
-          contactTitle: hrContact?.title || 'Head of HR',
+          company: targetEntity.name,
+          contact: contact?.name || 'Decision Maker',
+          contactTitle: contact?.title || 'Key Contact',
           channel: 'email',
-          subject: `Payroll Solutions for ${targetEmployer?.name}'s Growing Workforce`,
-          body: `Dear ${hrContact?.name || 'HR Team'},
+          subject: `Partnership Opportunity for ${targetEntity.name}`,
+          body: `Dear ${contact?.name || 'Team'},
 
-I noticed ${targetEmployer?.name}'s impressive ${topSignal?.title?.toLowerCase() || 'growth'} - ${topSignal?.description || 'expanding your workforce significantly'}.
+I noticed ${targetEntity.name}'s impressive ${topSignal?.title?.toLowerCase() || 'growth'} - ${topSignal?.description || 'significant developments in your organization'}.
 
-Managing payroll for ${targetEmployer?.headcount?.toLocaleString() || 'thousands of'} employees (with ${targetEmployer?.headcountGrowth}% growth) requires a banking partner who understands scale.
+${targetEntity.headcount ? `Managing a workforce of ${targetEntity.headcount.toLocaleString()} employees` : 'Your organization'}${targetEntity.headcountGrowth ? ` (with ${targetEntity.headcountGrowth}% growth)` : ''} presents unique opportunities.
 
-Our Employee Banking solutions include:
-• Seamless payroll processing for large workforces
-• Employee salary accounts with premium benefits
-• Dedicated relationship management for HR teams
-• Digital onboarding for new hires
-
-Would you be open to a brief call to discuss how we're helping similar ${targetEmployer?.industry || 'companies'} in the UAE streamline their employee banking?
+Would you be open to a brief conversation to explore how we might support your growth?
 
 Best regards`,
           signals: signals.map(s => s.title),
-          context: 'employee-banking',
+          context: subVertical,
+          dataSources: targetEntity.dataSources,
         },
         pinned: false,
         expanded: true,
@@ -469,53 +548,66 @@ Best regards`,
 }
 
 /**
- * Generate EB-specific output for enrichment
+ * Generate enrichment output using REAL data
  */
-function generateEBEnrichmentOutput(query: string, agent: AgentType): {
+async function generateEnrichmentOutputReal(query: string, agent: AgentType): Promise<{
   message: string;
   objects: Omit<OutputObject, 'id' | 'timestamp'>[];
-} {
+}> {
   const context = getSalesContext();
-  const employers = generateEBEmployers(context.regions);
+  const { vertical, subVertical, regions } = context;
 
-  // Try to find employer mentioned in query
-  const queryLower = query.toLowerCase();
-  let targetEmployer = employers.find(emp =>
-    queryLower.includes(emp.name.toLowerCase())
+  const entities = await fetchEnrichedEntities(
+    vertical,
+    subVertical,
+    regions[0] || 'UAE',
+    regions,
+    5
   );
 
-  if (!targetEmployer) {
-    targetEmployer = employers.sort((a, b) => b.score - a.score)[0];
+  // Try to find entity mentioned in query
+  const queryLower = query.toLowerCase();
+  let targetEntity = entities.find(e =>
+    queryLower.includes(e.name.toLowerCase())
+  );
+
+  if (!targetEntity) {
+    targetEntity = entities[0];
+  }
+
+  if (!targetEntity) {
+    return {
+      message: `No entity found for enrichment. Please check API integrations.`,
+      objects: [],
+    };
   }
 
   return {
-    message: `I've enriched ${targetEmployer?.name}'s profile with HR contacts, hiring patterns, and payroll intelligence.`,
+    message: `I've enriched ${targetEntity.name}'s profile with contacts, signals, and opportunity intelligence.`,
     objects: [
       {
         type: 'insight',
-        title: 'Employer Profile (EB Intelligence)',
+        title: 'Entity Profile (Enriched)',
         data: {
-          company: targetEmployer?.name,
-          industry: targetEmployer?.industry,
-          location: `${targetEmployer?.city}, UAE`,
+          company: targetEntity.name,
+          industry: targetEntity.industry || 'Unknown',
+          location: `${targetEntity.city || 'UAE'}`,
           firmographic: {
-            employees: targetEmployer?.headcount?.toLocaleString() || 'N/A',
-            headcountGrowth: `${targetEmployer?.headcountGrowth}%`,
-            tier: targetEmployer?.bankingTier,
+            employees: targetEntity.headcount?.toLocaleString() || 'N/A',
+            headcountGrowth: `${targetEntity.headcountGrowth || 0}%`,
+            size: targetEntity.size,
           },
-          hrContact: targetEmployer?.decisionMaker,
-          signals: targetEmployer?.signals.map(s => ({
+          contact: targetEntity.decisionMaker,
+          signals: targetEntity.signals.map(s => ({
             type: s.type,
             title: s.title,
             confidence: `${Math.round((s.confidence || 0.8) * 100)}%`,
             source: s.source,
           })),
-          payrollOpportunity: {
-            estimatedAccounts: targetEmployer?.headcount,
-            growthPotential: `${targetEmployer?.headcountGrowth}% annually`,
-            competitiveStatus: 'Open to proposals',
-          },
-          context: 'employee-banking',
+          scoreBreakdown: targetEntity.scoreBreakdown,
+          dataSources: targetEntity.dataSources,
+          freshness: targetEntity.freshness,
+          context: subVertical,
         },
         pinned: false,
         expanded: true,
@@ -525,108 +617,6 @@ function generateEBEnrichmentOutput(query: string, agent: AgentType): {
   };
 }
 
-// =============================================================================
-// GENERIC BANKING OUTPUT (fallback for non-EB)
-// =============================================================================
-
-function generateGenericBankingOutput(agent: AgentType, query: string): {
-  message: string;
-  objects: Omit<OutputObject, 'id' | 'timestamp'>[];
-} {
-  switch (agent) {
-    case 'discovery':
-      return {
-        message: `I found 5 banking companies in the UAE matching your criteria.`,
-        objects: [
-          {
-            type: 'discovery',
-            title: 'Discovery Results',
-            data: {
-              companies: [
-                { name: 'Emirates NBD', industry: 'Banking', score: 92, signal: 'Expansion plans' },
-                { name: 'ADCB', industry: 'Banking', score: 88, signal: 'Leadership change' },
-                { name: 'Mashreq', industry: 'Banking', score: 85, signal: 'Market growth' },
-                { name: 'FAB', industry: 'Banking', score: 82, signal: 'New initiatives' },
-                { name: 'DIB', industry: 'Banking', score: 78, signal: 'Investment' },
-              ],
-              query,
-              totalResults: 5,
-            },
-            pinned: false,
-            expanded: true,
-            agent,
-          },
-        ],
-      };
-
-    case 'ranking':
-      return {
-        message: `I've analyzed and ranked your prospects. Emirates NBD leads with a composite score of 92.`,
-        objects: [
-          {
-            type: 'ranking',
-            title: 'Ranked Prospects',
-            data: {
-              rankings: [
-                { rank: 1, name: 'Emirates NBD', score: 92 },
-                { rank: 2, name: 'ADCB', score: 88 },
-                { rank: 3, name: 'Mashreq', score: 85 },
-              ],
-            },
-            pinned: false,
-            expanded: true,
-            agent,
-          },
-        ],
-      };
-
-    case 'outreach':
-      return {
-        message: `I've drafted a personalized outreach message.`,
-        objects: [
-          {
-            type: 'outreach',
-            title: 'Outreach Draft',
-            data: {
-              company: 'Target Company',
-              channel: 'email',
-              subject: 'Partnership Opportunity',
-              body: `Dear Team,\n\nI noticed your company's growth initiatives. Would you be open to a brief conversation?\n\nBest regards`,
-              signals: ['Growth', 'Expansion'],
-            },
-            pinned: false,
-            expanded: true,
-            agent,
-          },
-        ],
-      };
-
-    case 'enrichment':
-      return {
-        message: `I've enriched the company profile with firmographic data and contacts.`,
-        objects: [
-          {
-            type: 'insight',
-            title: 'Enriched Profile',
-            data: {
-              company: 'Target Company',
-              firmographic: { employees: 'N/A', revenue: 'N/A' },
-              decisionMakers: ['Contact information pending'],
-            },
-            pinned: false,
-            expanded: true,
-            agent,
-          },
-        ],
-      };
-
-    default:
-      return {
-        message: `Here's what I found for your request.`,
-        objects: [],
-      };
-  }
-}
 
 // =============================================================================
 // DRIFT GUARD
@@ -669,17 +659,16 @@ function applyEBDriftGuard(query: string): string {
   return redirectedQuery;
 }
 
-// Helper: Generate output based on agent (CONTEXT-AWARE)
+// Helper: Generate output based on agent using REAL DATA
 async function generateOutput(agent: AgentType, query: string): Promise<{
   message: string;
   objects: Omit<OutputObject, 'id' | 'timestamp'>[];
 }> {
-  await sleep(500);
+  const context = getSalesContext();
+  const hasVerticalConfig = context.vertical && context.subVertical;
 
-  const isEB = isEmployeeBankingMode();
-
-  // If in EB mode, use EB-specific output
-  if (isEB) {
+  // If we have vertical config, use REAL data from enrichment API
+  if (hasVerticalConfig) {
     // Apply drift guard if needed
     const processedQuery = containsForbiddenTermsForEB(query)
       ? applyEBDriftGuard(query)
@@ -687,20 +676,23 @@ async function generateOutput(agent: AgentType, query: string): Promise<{
 
     switch (agent) {
       case 'discovery':
-        return generateEBDiscoveryOutput(processedQuery, agent);
+        return generateDiscoveryOutputReal(processedQuery, agent);
       case 'ranking':
-        return generateEBRankingOutput(processedQuery, agent);
+        return generateRankingOutputReal(processedQuery, agent);
       case 'outreach':
-        return generateEBOutreachOutput(processedQuery, agent);
+        return generateOutreachOutputReal(processedQuery, agent);
       case 'enrichment':
-        return generateEBEnrichmentOutput(processedQuery, agent);
+        return generateEnrichmentOutputReal(processedQuery, agent);
       default:
-        return generateEBDiscoveryOutput(processedQuery, agent);
+        return generateDiscoveryOutputReal(processedQuery, agent);
     }
   }
 
-  // Generic banking output (non-EB)
-  return generateGenericBankingOutput(agent, query);
+  // Fallback for missing vertical config
+  return {
+    message: 'Please configure your vertical/sub-vertical context to access real data.',
+    objects: [],
+  };
 }
 
 function sleep(ms: number): Promise<void> {

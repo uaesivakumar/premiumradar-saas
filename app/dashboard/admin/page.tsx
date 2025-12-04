@@ -149,6 +149,12 @@ export default function AdminDashboardPage() {
               description="Manage industry verticals"
               href="/dashboard/admin/config/verticals"
             />
+            <ConfigCard
+              icon="🔑"
+              title="API Integrations"
+              description="Manage Apollo, SERP, and other API keys"
+              href="/dashboard/admin/config/integrations"
+            />
           </div>
         )}
       </div>
