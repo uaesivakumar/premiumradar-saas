@@ -398,7 +398,7 @@ export function createSessionCookie(session: SuperAdminSession): {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: SESSION_DURATION_HOURS * 60 * 60,
-      path: '/superadmin'
+      path: '/'  // Use root path so cookie is sent to /api/superadmin/* endpoints
     }
   };
 }
@@ -416,7 +416,7 @@ export function clearSessionCookie(): {
     value: '',
     options: {
       maxAge: 0,
-      path: '/superadmin'
+      path: '/'  // Must match the path used in createSessionCookie
     }
   };
 }
