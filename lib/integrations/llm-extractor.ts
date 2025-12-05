@@ -1,17 +1,29 @@
 /**
  * LLM Extractor Service
  *
- * Uses OpenAI to extract structured data from news/text:
+ * Uses UPR OS LLM Router (S51) for structured data extraction:
  * - Company names from hiring news
  * - Signal extraction (hiring count, expansion, etc.)
  * - Entity enrichment
  *
- * Used with SERP for company discovery without Apollo.
+ * Uses OS LLM router which handles:
+ * - Automatic model selection by task
+ * - Fallback chains
+ * - Cost optimization
+ * - Response caching
+ *
+ * Falls back to direct OpenAI if OS unavailable.
  */
 
 import { getIntegrationConfig, recordUsage, recordError } from './api-integrations';
 import { logSivaMetric, calculateOpenAICost } from '@/lib/siva/metrics';
+import { osClient, type LLMCompletionResult } from '@/lib/os/os-client';
 import type { SerpNewsResult, ExtractedSignal, SignalType } from './serp';
+
+// Track if OS is available (cached for performance)
+let osAvailable: boolean | null = null;
+let osCheckTime = 0;
+const OS_CHECK_INTERVAL_MS = 60000; // Check every minute
 
 // =============================================================================
 // TYPES
@@ -48,8 +60,74 @@ export interface LLMExtractionResult {
 
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
+// Default fallback model when OS is unavailable
+const FALLBACK_MODEL = 'gpt-4o-mini';
+
 /**
- * Make OpenAI API request
+ * Check if OS LLM router is available
+ */
+async function isOsAvailable(): Promise<boolean> {
+  const now = Date.now();
+
+  // Return cached result if recent
+  if (osAvailable !== null && now - osCheckTime < OS_CHECK_INTERVAL_MS) {
+    return osAvailable;
+  }
+
+  try {
+    const result = await osClient.llm.health();
+    osAvailable = result.success;
+    osCheckTime = now;
+    console.log(`[LLM] OS LLM router ${osAvailable ? 'available' : 'unavailable'}`);
+    return osAvailable;
+  } catch (error) {
+    osAvailable = false;
+    osCheckTime = now;
+    console.warn('[LLM] OS LLM router check failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Complete using OS LLM router (S51)
+ * Handles automatic model selection, fallback chains, caching
+ */
+async function osComplete(
+  messages: Array<{ role: string; content: string }>,
+  options?: {
+    task_type?: string;
+    vertical?: string;
+    temperature?: number;
+    max_tokens?: number;
+  }
+): Promise<LLMCompletionResult | null> {
+  try {
+    const result = await osClient.llm.complete({
+      messages,
+      task_type: options?.task_type || 'company_extraction',
+      vertical: options?.vertical || 'banking',
+      options: {
+        temperature: options?.temperature ?? 0.3,
+        max_tokens: options?.max_tokens ?? 2000,
+        use_cache: true,
+      },
+    });
+
+    if (result.success && result.data) {
+      console.log(`[LLM] OS completion success: model=${result.data.model}, cached=${result.data.cached}`);
+      return result.data;
+    }
+
+    console.warn('[LLM] OS completion failed:', result.error);
+    return null;
+  } catch (error) {
+    console.error('[LLM] OS completion error:', error);
+    return null;
+  }
+}
+
+/**
+ * Make OpenAI API request (fallback when OS unavailable)
  */
 async function openaiRequest<T>(
   endpoint: string,
@@ -132,7 +210,7 @@ export async function extractCompaniesFromNews(
     return {
       companies: [],
       totalExtracted: 0,
-      model: 'gpt-4o-mini',
+      model: 'none',
       tokensUsed: 0,
     };
   }
@@ -233,38 +311,86 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
 }`;
 
   const startTime = Date.now();
-  const model = 'gpt-4o-mini';
 
-  try {
-    const response = await openaiRequest<{
-      choices: Array<{
-        message: {
-          content: string;
-        };
-      }>;
-      usage?: {
-        total_tokens: number;
-        prompt_tokens?: number;
-        completion_tokens?: number;
-      };
-    }>('/chat/completions', {
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
+  // Try OS LLM router first (S51), fallback to direct OpenAI
+  let content: string = '';
+  let model: string = FALLBACK_MODEL;
+  let inputTokens: number = 0;
+  let outputTokens: number = 0;
+  let costCents: number = 0;
+  let responseTimeMs: number = 0;
+  let usedOS = false;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ];
+
+  // Check if OS is available
+  const useOS = await isOsAvailable();
+
+  if (useOS) {
+    // Use OS LLM router (handles model selection, fallback, caching)
+    console.log('[LLM] Using OS LLM router for company extraction');
+    const osResult = await osComplete(messages, {
+      task_type: 'company_extraction',
+      vertical: options?.vertical || 'banking',
       temperature: 0.3,
       max_tokens: 2000,
-      response_format: { type: 'json_object' },
     });
 
-    const responseTimeMs = Date.now() - startTime;
-    const inputTokens = response.usage?.prompt_tokens || 0;
-    const outputTokens = response.usage?.completion_tokens || 0;
-    const costCents = calculateOpenAICost(model, inputTokens, outputTokens);
+    if (osResult) {
+      content = osResult.content;
+      model = osResult.model;
+      inputTokens = osResult.usage.input_tokens;
+      outputTokens = osResult.usage.output_tokens;
+      responseTimeMs = osResult.latency_ms;
+      // OS tracks costs internally, but we can calculate for local metrics
+      costCents = calculateOpenAICost(model, inputTokens, outputTokens);
+      usedOS = true;
 
-    const content = response.choices[0]?.message?.content || '[]';
-    console.log('[LLM] Raw OpenAI response length:', content.length);
+      console.log(`[LLM] OS extraction complete: model=${model}, tokens=${inputTokens + outputTokens}, cached=${osResult.cached}`);
+    }
+  }
+
+  // Fallback to direct OpenAI if OS unavailable or failed
+  if (!usedOS) {
+    console.log('[LLM] Using direct OpenAI fallback');
+    model = FALLBACK_MODEL;
+
+    try {
+      const response = await openaiRequest<{
+        choices: Array<{
+          message: {
+            content: string;
+          };
+        }>;
+        usage?: {
+          total_tokens: number;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+        };
+      }>('/chat/completions', {
+        model,
+        messages,
+        temperature: 0.3,
+        max_tokens: 2000,
+        response_format: { type: 'json_object' },
+      });
+
+      content = response.choices[0]?.message?.content || '[]';
+      inputTokens = response.usage?.prompt_tokens || 0;
+      outputTokens = response.usage?.completion_tokens || 0;
+      responseTimeMs = Date.now() - startTime;
+      costCents = calculateOpenAICost(model, inputTokens, outputTokens);
+    } catch (fallbackError) {
+      console.error('[LLM] Direct OpenAI fallback failed:', fallbackError);
+      throw fallbackError;
+    }
+  }
+
+  try {
+    console.log('[LLM] Raw response length:', content.length);
     console.log('[LLM] First 500 chars:', content.substring(0, 500));
 
     let parsed: { companies?: Array<{
@@ -347,7 +473,7 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
 
     // Log SIVA metric for successful extraction
     await logSivaMetric({
-      provider: 'openai',
+      provider: usedOS ? 'os-llm-router' : 'openai',
       operation: 'company_extraction',
       requestType: 'chat_completion',
       model,
@@ -365,6 +491,7 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
         newsCount: newsResults.length,
         companiesExtracted: uniqueCompanies.length,
         region: options?.region,
+        usedOsRouter: usedOS,
       },
     });
 
@@ -372,22 +499,22 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
       companies: uniqueCompanies,
       totalExtracted: uniqueCompanies.length,
       model,
-      tokensUsed: response.usage?.total_tokens || 0,
+      tokensUsed: inputTokens + outputTokens,
       inputTokens,
       outputTokens,
       costCents,
       responseTimeMs,
     };
   } catch (error) {
-    const responseTimeMs = Date.now() - startTime;
+    const errorResponseTimeMs = Date.now() - startTime;
 
     // Log SIVA metric for failed extraction
     await logSivaMetric({
-      provider: 'openai',
+      provider: usedOS ? 'os-llm-router' : 'openai',
       operation: 'company_extraction',
       requestType: 'chat_completion',
-      model,
-      responseTimeMs,
+      model: model || FALLBACK_MODEL,
+      responseTimeMs: errorResponseTimeMs,
       success: false,
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
       vertical: options?.vertical,
@@ -399,7 +526,7 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
     return {
       companies: [],
       totalExtracted: 0,
-      model,
+      model: model || FALLBACK_MODEL,
       tokensUsed: 0,
     };
   }
@@ -407,6 +534,7 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
 
 /**
  * Enrich a company with more details using LLM
+ * Uses OS LLM router (S51) first, falls back to direct OpenAI
  */
 export async function enrichCompanyWithLLM(
   companyName: string,
@@ -423,42 +551,97 @@ ${existingData.city ? `Location hint: ${existingData.city}` : ''}
 Return JSON with company details.`;
 
   const startTime = Date.now();
-  const model = 'gpt-4o-mini';
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ];
 
-  try {
-    const response = await openaiRequest<{
-      choices: Array<{
-        message: {
-          content: string;
-        };
-      }>;
-      usage?: {
-        total_tokens: number;
-        prompt_tokens?: number;
-        completion_tokens?: number;
-      };
-    }>('/chat/completions', {
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
+  let content: string = '';
+  let model: string = FALLBACK_MODEL;
+  let inputTokens: number = 0;
+  let outputTokens: number = 0;
+  let costCents: number = 0;
+  let responseTimeMs: number = 0;
+  let usedOS = false;
+
+  // Check if OS is available
+  const useOS = await isOsAvailable();
+
+  if (useOS) {
+    console.log('[LLM] Using OS LLM router for company enrichment');
+    const osResult = await osComplete(messages, {
+      task_type: 'company_enrichment',
+      vertical: 'banking',
       temperature: 0.2,
       max_tokens: 500,
-      response_format: { type: 'json_object' },
     });
 
-    const responseTimeMs = Date.now() - startTime;
-    const inputTokens = response.usage?.prompt_tokens || 0;
-    const outputTokens = response.usage?.completion_tokens || 0;
-    const costCents = calculateOpenAICost(model, inputTokens, outputTokens);
+    if (osResult) {
+      content = osResult.content;
+      model = osResult.model;
+      inputTokens = osResult.usage.input_tokens;
+      outputTokens = osResult.usage.output_tokens;
+      responseTimeMs = osResult.latency_ms;
+      costCents = calculateOpenAICost(model, inputTokens, outputTokens);
+      usedOS = true;
+    }
+  }
 
-    const content = response.choices[0]?.message?.content || '{}';
+  // Fallback to direct OpenAI
+  if (!usedOS) {
+    console.log('[LLM] Using direct OpenAI fallback for enrichment');
+    model = FALLBACK_MODEL;
+
+    try {
+      const response = await openaiRequest<{
+        choices: Array<{
+          message: {
+            content: string;
+          };
+        }>;
+        usage?: {
+          total_tokens: number;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+        };
+      }>('/chat/completions', {
+        model,
+        messages,
+        temperature: 0.2,
+        max_tokens: 500,
+        response_format: { type: 'json_object' },
+      });
+
+      content = response.choices[0]?.message?.content || '{}';
+      inputTokens = response.usage?.prompt_tokens || 0;
+      outputTokens = response.usage?.completion_tokens || 0;
+      responseTimeMs = Date.now() - startTime;
+      costCents = calculateOpenAICost(model, inputTokens, outputTokens);
+    } catch (fallbackError) {
+      const errorResponseTimeMs = Date.now() - startTime;
+
+      await logSivaMetric({
+        provider: 'openai',
+        operation: 'company_enrichment',
+        requestType: 'chat_completion',
+        model: FALLBACK_MODEL,
+        responseTimeMs: errorResponseTimeMs,
+        success: false,
+        errorMessage: fallbackError instanceof Error ? fallbackError.message : 'Unknown error',
+        requestSummary: `Enrich company: ${companyName}`,
+      });
+
+      console.error('[LLM] Enrichment failed:', fallbackError);
+      return null;
+    }
+  }
+
+  try {
     const parsed = JSON.parse(content);
 
     // Log SIVA metric
     await logSivaMetric({
-      provider: 'openai',
+      provider: usedOS ? 'os-llm-router' : 'openai',
       operation: 'company_enrichment',
       requestType: 'chat_completion',
       model,
@@ -470,6 +653,9 @@ Return JSON with company details.`;
       requestSummary: `Enrich company: ${companyName}`,
       responseSummary: `Domain: ${parsed.domain || 'unknown'}, Industry: ${parsed.industry || 'unknown'}`,
       qualityScore: parsed.domain && parsed.industry ? 80 : 60,
+      metadata: {
+        usedOsRouter: usedOS,
+      },
     });
 
     return {
@@ -481,25 +667,11 @@ Return JSON with company details.`;
       headcount: parsed.estimatedHeadcount || existingData.headcount,
       signals: existingData.signals || [],
       confidence: 0.6,
-      source: 'LLM Enrichment',
+      source: usedOS ? 'OS LLM Enrichment' : 'LLM Enrichment',
       sourceUrl: '',
     };
-  } catch (error) {
-    const responseTimeMs = Date.now() - startTime;
-
-    // Log failed metric
-    await logSivaMetric({
-      provider: 'openai',
-      operation: 'company_enrichment',
-      requestType: 'chat_completion',
-      model,
-      responseTimeMs,
-      success: false,
-      errorMessage: error instanceof Error ? error.message : 'Unknown error',
-      requestSummary: `Enrich company: ${companyName}`,
-    });
-
-    console.error('[LLM] Enrichment failed:', error);
+  } catch (parseError) {
+    console.error('[LLM] Failed to parse enrichment response:', parseError);
     return null;
   }
 }

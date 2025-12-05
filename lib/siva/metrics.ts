@@ -11,7 +11,7 @@ import { query, queryOne, insert } from '@/lib/db/client';
 // TYPES
 // =============================================================================
 
-export type SivaProvider = 'openai' | 'apollo' | 'serp';
+export type SivaProvider = 'openai' | 'apollo' | 'serp' | 'os-llm-router';
 
 export interface SivaMetricInput {
   provider: SivaProvider;
