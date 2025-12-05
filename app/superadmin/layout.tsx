@@ -35,6 +35,7 @@ import {
   BarChart3,
   Globe,
   Brain,
+  Server,
 } from 'lucide-react';
 
 interface SessionInfo {
@@ -67,6 +68,17 @@ const navSections = [
       { label: 'All Tenants', href: '/superadmin/tenants', icon: Building2 },
       { label: 'Workspaces', href: '/superadmin/workspaces', icon: Layers },
       { label: 'Subscriptions', href: '/superadmin/billing', icon: BarChart3 },
+    ]
+  },
+  {
+    title: 'UPR OS Config',
+    items: [
+      { label: 'OS Dashboard', href: '/superadmin/os', icon: Server },
+      { label: 'LLM Engine', href: '/superadmin/os/llm', icon: Brain },
+      { label: 'API Providers', href: '/superadmin/os/providers', icon: Plug },
+      { label: 'Verticals', href: '/superadmin/os/verticals', icon: Building2 },
+      { label: 'Territories', href: '/superadmin/os/territories', icon: Globe },
+      { label: 'OS Config', href: '/superadmin/os/config', icon: Settings },
     ]
   },
   {
