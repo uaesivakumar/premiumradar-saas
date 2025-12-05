@@ -92,10 +92,21 @@ function hashData(data: string): string {
 }
 
 /**
+ * Get session encryption key (MUST be configured)
+ */
+function getSessionKey(): string {
+  const key = process.env.SUPER_ADMIN_SESSION_KEY || process.env.NEXTAUTH_SECRET;
+  if (!key) {
+    throw new Error('SUPER_ADMIN_SESSION_KEY or NEXTAUTH_SECRET must be configured for session encryption');
+  }
+  return key;
+}
+
+/**
  * Encrypt session data
  */
 function encryptSession(session: SuperAdminSession): string {
-  const key = process.env.SUPER_ADMIN_SESSION_KEY || process.env.NEXTAUTH_SECRET || 'default-key';
+  const key = getSessionKey();
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv('aes-256-cbc', crypto.scryptSync(key, 'salt', 32), iv);
   let encrypted = cipher.update(JSON.stringify(session), 'utf8', 'hex');
@@ -108,7 +119,7 @@ function encryptSession(session: SuperAdminSession): string {
  */
 function decryptSession(encrypted: string): SuperAdminSession | null {
   try {
-    const key = process.env.SUPER_ADMIN_SESSION_KEY || process.env.NEXTAUTH_SECRET || 'default-key';
+    const key = getSessionKey();
     const [ivHex, data] = encrypted.split(':');
     const iv = Buffer.from(ivHex, 'hex');
     const decipher = crypto.createDecipheriv('aes-256-cbc', crypto.scryptSync(key, 'salt', 32), iv);

@@ -48,6 +48,7 @@ const navSections = [
     items: [
       { label: 'Dashboard', href: '/superadmin', icon: LayoutDashboard },
       { label: 'SIVA Intelligence', href: '/superadmin/siva', icon: Brain },
+      { label: 'Financials', href: '/superadmin/financials', icon: BarChart3 },
       { label: 'Activity Feed', href: '/superadmin/activity', icon: Activity },
     ]
   },

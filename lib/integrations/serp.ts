@@ -12,6 +12,7 @@
  */
 
 import { getIntegrationConfig, recordUsage, recordError } from './api-integrations';
+import { logSivaMetric } from '@/lib/siva/metrics';
 
 // =============================================================================
 // TYPES
@@ -65,7 +66,8 @@ const SERP_BASE_URL = 'https://serpapi.com/search';
 /**
  * Make authenticated request to SerpAPI
  */
-async function serpRequest(params: Record<string, string>): Promise<Record<string, unknown>> {
+async function serpRequest(params: Record<string, string>, operation?: string): Promise<Record<string, unknown>> {
+  const startTime = Date.now();
   const config = await getIntegrationConfig('serp');
 
   if (!config) {
@@ -79,26 +81,75 @@ async function serpRequest(params: Record<string, string>): Promise<Record<strin
 
   const url = `${config.baseUrl || SERP_BASE_URL}?${searchParams.toString()}`;
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-    },
-  });
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (config.integrationId) {
-      await recordError(config.integrationId, `${response.status}: ${errorText}`);
+    const responseTimeMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (config.integrationId) {
+        await recordError(config.integrationId, `${response.status}: ${errorText}`);
+      }
+
+      // Log failed SERP call to SIVA metrics
+      await logSivaMetric({
+        provider: 'serp',
+        operation: operation || params.engine || 'search',
+        integrationId: config.integrationId,
+        requestType: 'GET',
+        responseTimeMs,
+        success: false,
+        errorCode: response.status.toString(),
+        errorMessage: errorText.substring(0, 500),
+        costCents: 0, // SERP uses credit-based pricing, tracked separately
+        requestSummary: `SERP: ${params.q || 'search'}`,
+      });
+
+      throw new Error(`SerpAPI error: ${response.status} - ${errorText}`);
     }
-    throw new Error(`SerpAPI error: ${response.status} - ${errorText}`);
-  }
 
-  if (config.integrationId) {
-    await recordUsage(config.integrationId);
-  }
+    if (config.integrationId) {
+      await recordUsage(config.integrationId);
+    }
 
-  return response.json();
+    // Log successful SERP call to SIVA metrics
+    await logSivaMetric({
+      provider: 'serp',
+      operation: operation || params.engine || 'search',
+      integrationId: config.integrationId,
+      requestType: 'GET',
+      responseTimeMs,
+      success: true,
+      costCents: 0, // SERP uses credit-based pricing, tracked separately
+      requestSummary: `SERP: ${params.q || 'search'}`,
+    });
+
+    return response.json();
+  } catch (error) {
+    const responseTimeMs = Date.now() - startTime;
+
+    // Log network/parsing errors
+    if (error instanceof Error && !error.message.includes('SerpAPI error')) {
+      await logSivaMetric({
+        provider: 'serp',
+        operation: operation || params.engine || 'search',
+        integrationId: config.integrationId,
+        requestType: 'GET',
+        responseTimeMs,
+        success: false,
+        errorMessage: error.message,
+        requestSummary: `SERP: ${params.q || 'search'}`,
+      });
+    }
+
+    throw error;
+  }
 }
 
 // =============================================================================

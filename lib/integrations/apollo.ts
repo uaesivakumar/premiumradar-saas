@@ -11,6 +11,7 @@
  */
 
 import { getIntegrationConfig, recordUsage, recordError } from './api-integrations';
+import { logSivaMetric } from '@/lib/siva/metrics';
 
 // =============================================================================
 // TYPES
@@ -92,8 +93,10 @@ const APOLLO_BASE_URL = 'https://api.apollo.io/v1';
 async function apolloRequest<T>(
   endpoint: string,
   method: 'GET' | 'POST' = 'GET',
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
+  operation?: string
 ): Promise<T> {
+  const startTime = Date.now();
   const config = await getIntegrationConfig('apollo');
 
   if (!config) {
@@ -102,29 +105,78 @@ async function apolloRequest<T>(
 
   const url = `${config.baseUrl || APOLLO_BASE_URL}${endpoint}`;
 
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache',
-      'X-Api-Key': config.apiKey,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'X-Api-Key': config.apiKey,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (config.integrationId) {
-      await recordError(config.integrationId, `${response.status}: ${errorText}`);
+    const responseTimeMs = Date.now() - startTime;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      if (config.integrationId) {
+        await recordError(config.integrationId, `${response.status}: ${errorText}`);
+      }
+
+      // Log failed Apollo call to SIVA metrics
+      await logSivaMetric({
+        provider: 'apollo',
+        operation: operation || endpoint.replace(/\//g, '_').slice(1),
+        integrationId: config.integrationId,
+        requestType: method,
+        responseTimeMs,
+        success: false,
+        errorCode: response.status.toString(),
+        errorMessage: errorText.substring(0, 500),
+        costCents: 0, // Apollo doesn't charge per call (subscription)
+        requestSummary: `${method} ${endpoint}`,
+      });
+
+      throw new Error(`Apollo API error: ${response.status} - ${errorText}`);
     }
-    throw new Error(`Apollo API error: ${response.status} - ${errorText}`);
-  }
 
-  if (config.integrationId) {
-    await recordUsage(config.integrationId);
-  }
+    if (config.integrationId) {
+      await recordUsage(config.integrationId);
+    }
 
-  return response.json();
+    // Log successful Apollo call to SIVA metrics
+    await logSivaMetric({
+      provider: 'apollo',
+      operation: operation || endpoint.replace(/\//g, '_').slice(1),
+      integrationId: config.integrationId,
+      requestType: method,
+      responseTimeMs,
+      success: true,
+      costCents: 0, // Apollo doesn't charge per call (subscription)
+      requestSummary: `${method} ${endpoint}`,
+    });
+
+    return response.json();
+  } catch (error) {
+    const responseTimeMs = Date.now() - startTime;
+
+    // Log network/parsing errors
+    if (error instanceof Error && !error.message.includes('Apollo API error')) {
+      await logSivaMetric({
+        provider: 'apollo',
+        operation: operation || endpoint.replace(/\//g, '_').slice(1),
+        integrationId: config.integrationId,
+        requestType: method,
+        responseTimeMs,
+        success: false,
+        errorMessage: error.message,
+        requestSummary: `${method} ${endpoint}`,
+      });
+    }
+
+    throw error;
+  }
 }
 
 // =============================================================================

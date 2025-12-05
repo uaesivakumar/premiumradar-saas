@@ -87,92 +87,71 @@ interface SivaMetrics {
   };
 }
 
-// Generate mock data for demo - will be replaced with real API
-function generateMockMetrics(): SivaMetrics {
-  const days = 30;
-  const now = new Date();
+/**
+ * Fetch SIVA metrics from API
+ */
+async function fetchSivaMetrics(days: number): Promise<SivaMetrics | null> {
+  try {
+    const response = await fetch(`/api/superadmin/siva/metrics?days=${days}`);
+    const data = await response.json();
 
-  const generateHistory = (baseValue: number, variance: number) => {
-    return Array.from({ length: days }, (_, i) => {
-      const date = new Date(now);
-      date.setDate(date.getDate() - (days - 1 - i));
-      return {
-        date: date.toISOString().split('T')[0],
-        value: Math.max(0, baseValue + (Math.random() - 0.5) * variance * 2),
-      };
-    });
-  };
-
-  return {
-    overall: {
-      healthScore: 78,
-      trend: 'improving',
-      trendPercent: 3.2,
-    },
-    quality: {
-      current: 82,
-      previous: 79,
-      history: generateHistory(80, 10),
-    },
-    accuracy: {
-      current: 91,
-      previous: 89,
-      history: generateHistory(88, 8),
-    },
-    responseTime: {
-      avgMs: 1842,
-      p95Ms: 3200,
-      history: generateHistory(2000, 500),
-    },
-    tokens: {
-      todayInput: 125000,
-      todayOutput: 48000,
-      efficiency: 0.38,
-      history: Array.from({ length: days }, (_, i) => {
-        const date = new Date(now);
-        date.setDate(date.getDate() - (days - 1 - i));
-        return {
-          date: date.toISOString().split('T')[0],
-          input: 100000 + Math.random() * 50000,
-          output: 40000 + Math.random() * 20000,
-        };
-      }),
-    },
-    costs: {
-      today: 12.50,
-      thisWeek: 78.30,
-      thisMonth: 245.80,
-      byProvider: {
-        openai: 180.50,
-        apollo: 45.00,
-        serp: 20.30,
-      },
-      history: generateHistory(10, 5).map(h => ({ date: h.date, amount: h.value })),
-    },
-    interactions: {
-      today: 156,
-      successful: 148,
-      failed: 8,
-      avgSatisfaction: 4.2,
-    },
-  };
+    if (data.success && data.data) {
+      return data.data;
+    }
+    return null;
+  } catch (error) {
+    console.error('[SIVA Dashboard] Failed to fetch metrics:', error);
+    return null;
+  }
 }
 
 export default function SivaDashboard() {
   const [metrics, setMetrics] = useState<SivaMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const daysMap = { '7d': 7, '30d': 30, '90d': 90 };
 
   useEffect(() => {
-    // Simulate API call
-    setIsLoading(true);
-    setTimeout(() => {
-      setMetrics(generateMockMetrics());
+    async function loadMetrics() {
+      setIsLoading(true);
+      setError(null);
+
+      const data = await fetchSivaMetrics(daysMap[timeRange]);
+
+      if (data) {
+        setMetrics(data);
+        setLastUpdated(new Date());
+      } else {
+        setError('Failed to load SIVA metrics');
+      }
+
       setIsLoading(false);
-    }, 500);
+    }
+
+    loadMetrics();
+
+    // Auto-refresh every 60 seconds
+    const interval = setInterval(loadMetrics, 60000);
+    return () => clearInterval(interval);
   }, [timeRange]);
 
-  if (isLoading || !metrics) {
+  const handleRefresh = async () => {
+    setIsLoading(true);
+    const data = await fetchSivaMetrics(daysMap[timeRange]);
+    if (data) {
+      setMetrics(data);
+      setLastUpdated(new Date());
+      setError(null);
+    } else {
+      setError('Failed to refresh metrics');
+    }
+    setIsLoading(false);
+  };
+
+  if (isLoading && !metrics) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
@@ -182,6 +161,25 @@ export default function SivaDashboard() {
       </div>
     );
   }
+
+  if (error && !metrics) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <p className="text-gray-400 mb-4">{error}</p>
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!metrics) return null;
 
   const trendIcon = metrics.overall.trend === 'improving' ? (
     <ArrowUp className="w-5 h-5 text-green-400" />
@@ -228,9 +226,18 @@ export default function SivaDashboard() {
               </button>
             ))}
           </div>
-          <button className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg">
-            <RefreshCw className="w-5 h-5" />
+          <button
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
+          {lastUpdated && (
+            <span className="text-xs text-gray-500">
+              Updated {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
         </div>
       </div>
 

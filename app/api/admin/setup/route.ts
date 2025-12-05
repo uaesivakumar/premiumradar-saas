@@ -10,10 +10,150 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db/client';
 import { seedVerticalConfig, type VerticalConfigData } from '@/lib/admin/vertical-config-service';
+import { SYSTEM_CONFIG_TABLE_SQL, seedDefaultConfigs } from '@/lib/admin/system-config';
 
 // =============================================================================
 // MIGRATION SQL
 // =============================================================================
+
+// =============================================================================
+// SIVA METRICS TABLE SQL
+// =============================================================================
+
+const SIVA_METRICS_SQL = `
+-- SIVA Metrics Table
+-- Tracks every AI/API call for the SIVA Intelligence Dashboard.
+
+CREATE TABLE IF NOT EXISTS siva_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+  -- Call identification
+  provider VARCHAR(50) NOT NULL,           -- 'openai', 'apollo', 'serp'
+  operation VARCHAR(100) NOT NULL,         -- 'enrichment', 'signal_detection', etc.
+  integration_id UUID,
+
+  -- Context
+  tenant_id UUID,
+  user_id UUID,
+  vertical VARCHAR(50),
+  sub_vertical VARCHAR(100),
+
+  -- Request details
+  request_type VARCHAR(100),
+  model VARCHAR(100),
+
+  -- Token usage
+  input_tokens INTEGER DEFAULT 0,
+  output_tokens INTEGER DEFAULT 0,
+  total_tokens INTEGER DEFAULT 0,
+
+  -- Cost tracking (in cents)
+  cost_cents INTEGER DEFAULT 0,
+
+  -- Performance
+  response_time_ms INTEGER,
+
+  -- Status
+  success BOOLEAN NOT NULL DEFAULT true,
+  error_code VARCHAR(100),
+  error_message TEXT,
+
+  -- Quality signals
+  quality_score DECIMAL(5,2),
+  accuracy_score DECIMAL(5,2),
+  user_feedback INTEGER,
+
+  -- Raw data
+  request_summary TEXT,
+  response_summary TEXT,
+  metadata JSONB DEFAULT '{}'
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_siva_metrics_created_at ON siva_metrics(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_siva_metrics_provider ON siva_metrics(provider);
+CREATE INDEX IF NOT EXISTS idx_siva_metrics_operation ON siva_metrics(operation);
+CREATE INDEX IF NOT EXISTS idx_siva_metrics_success ON siva_metrics(success);
+CREATE INDEX IF NOT EXISTS idx_siva_metrics_date ON siva_metrics(DATE(created_at));
+CREATE INDEX IF NOT EXISTS idx_siva_metrics_provider_date ON siva_metrics(provider, DATE(created_at));
+
+-- Daily stats view
+CREATE OR REPLACE VIEW siva_daily_stats AS
+SELECT
+  DATE(created_at) as date,
+  provider,
+  COUNT(*) as total_calls,
+  COUNT(*) FILTER (WHERE success = true) as successful_calls,
+  COUNT(*) FILTER (WHERE success = false) as failed_calls,
+  SUM(input_tokens) as total_input_tokens,
+  SUM(output_tokens) as total_output_tokens,
+  SUM(cost_cents) as total_cost_cents,
+  AVG(response_time_ms) as avg_response_time_ms,
+  PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms) as p95_response_time_ms,
+  AVG(quality_score) FILTER (WHERE quality_score IS NOT NULL) as avg_quality_score,
+  AVG(accuracy_score) FILTER (WHERE accuracy_score IS NOT NULL) as avg_accuracy_score,
+  AVG(user_feedback) FILTER (WHERE user_feedback IS NOT NULL) as avg_user_feedback
+FROM siva_metrics
+GROUP BY DATE(created_at), provider
+ORDER BY DATE(created_at) DESC, provider;
+`;
+
+// =============================================================================
+// GCP COSTS AND FINANCIALS TABLES SQL
+// =============================================================================
+
+const FINANCIALS_SQL = `
+-- GCP Costs Table
+CREATE TABLE IF NOT EXISTS gcp_costs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date DATE NOT NULL,
+  service VARCHAR(100) NOT NULL,
+  sku VARCHAR(200),
+  description TEXT,
+  cost_usd DECIMAL(12,4) NOT NULL DEFAULT 0,
+  currency VARCHAR(10) DEFAULT 'USD',
+  project VARCHAR(100),
+  labels JSONB DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT unique_gcp_cost_entry UNIQUE (date, service, sku)
+);
+
+CREATE INDEX IF NOT EXISTS idx_gcp_costs_date ON gcp_costs(date DESC);
+CREATE INDEX IF NOT EXISTS idx_gcp_costs_service ON gcp_costs(service);
+
+-- Revenue Table
+CREATE TABLE IF NOT EXISTS revenue (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date DATE NOT NULL,
+  type VARCHAR(50) NOT NULL CHECK (type IN ('subscription', 'one-time', 'pilot', 'other')),
+  description TEXT,
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  currency VARCHAR(10) DEFAULT 'USD',
+  customer_id UUID,
+  customer_name VARCHAR(200),
+  recurring BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_revenue_date ON revenue(date DESC);
+CREATE INDEX IF NOT EXISTS idx_revenue_type ON revenue(type);
+
+-- Other Expenses Table
+CREATE TABLE IF NOT EXISTS other_expenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  date DATE NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  description TEXT,
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  currency VARCHAR(10) DEFAULT 'USD',
+  vendor VARCHAR(200),
+  recurring BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_other_expenses_date ON other_expenses(date DESC);
+`;
 
 const MIGRATION_SQL = `
 -- Vertical Configs Table for PremiumRadar SaaS
@@ -422,6 +562,26 @@ export async function POST(request: NextRequest) {
       console.log('[Setup] Running migration...');
       await query(MIGRATION_SQL);
       results.push('✓ Migration completed: vertical_configs table created');
+
+      // Also run SIVA metrics migration
+      console.log('[Setup] Running SIVA metrics migration...');
+      await query(SIVA_METRICS_SQL);
+      results.push('✓ Migration completed: siva_metrics table + siva_daily_stats view created');
+
+      // Run financials tables migration
+      console.log('[Setup] Running financials tables migration...');
+      await query(FINANCIALS_SQL);
+      results.push('✓ Migration completed: gcp_costs, revenue, other_expenses tables created');
+
+      // Run system_config tables migration
+      console.log('[Setup] Running system_config migration...');
+      await query(SYSTEM_CONFIG_TABLE_SQL);
+      results.push('✓ Migration completed: system_config + system_config_history tables created');
+
+      // Seed default configurations
+      console.log('[Setup] Seeding default configurations...');
+      const configsSeeded = await seedDefaultConfigs();
+      results.push(`✓ Seeded ${configsSeeded} default system configurations`);
     }
 
     // Step 2: Seed Banking/Employee Banking/UAE
@@ -462,15 +622,23 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    // Check if table exists
+    // Check if vertical_configs table exists
     const tableCheck = await query<{ exists: boolean }>(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables
         WHERE table_name = 'vertical_configs'
       )
     `);
-
     const tableExists = tableCheck[0]?.exists || false;
+
+    // Check if siva_metrics table exists
+    const sivaTableCheck = await query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'siva_metrics'
+      )
+    `);
+    const sivaTableExists = sivaTableCheck[0]?.exists || false;
 
     // Count configs if table exists
     let configCount = 0;
@@ -481,12 +649,45 @@ export async function GET() {
       configCount = parseInt(countResult[0]?.count || '0', 10);
     }
 
+    // Count SIVA metrics if table exists
+    let sivaMetricsCount = 0;
+    if (sivaTableExists) {
+      const countResult = await query<{ count: string }>(`
+        SELECT COUNT(*) as count FROM siva_metrics
+      `);
+      sivaMetricsCount = parseInt(countResult[0]?.count || '0', 10);
+    }
+
+    // Check if system_config table exists
+    const systemConfigCheck = await query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'system_config'
+      )
+    `);
+    const systemConfigExists = systemConfigCheck[0]?.exists || false;
+
+    // Count system configs if table exists
+    let systemConfigCount = 0;
+    if (systemConfigExists) {
+      const countResult = await query<{ count: string }>(`
+        SELECT COUNT(*) as count FROM system_config
+      `);
+      systemConfigCount = parseInt(countResult[0]?.count || '0', 10);
+    }
+
     return NextResponse.json({
       status: 'ok',
       database: {
         connected: true,
-        tableExists,
+        tables: {
+          vertical_configs: tableExists,
+          siva_metrics: sivaTableExists,
+          system_config: systemConfigExists,
+        },
         configCount,
+        sivaMetricsCount,
+        systemConfigCount,
       },
       timestamp: new Date().toISOString(),
     });

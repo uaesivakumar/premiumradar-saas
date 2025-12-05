@@ -10,6 +10,7 @@
  */
 
 import { getIntegrationConfig, recordUsage, recordError } from './api-integrations';
+import { logSivaMetric, calculateOpenAICost } from '@/lib/siva/metrics';
 import type { SerpNewsResult, ExtractedSignal, SignalType } from './serp';
 
 // =============================================================================
@@ -35,6 +36,10 @@ export interface LLMExtractionResult {
   totalExtracted: number;
   model: string;
   tokensUsed: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  costCents?: number;
+  responseTimeMs?: number;
 }
 
 // =============================================================================
@@ -227,6 +232,9 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
   ]
 }`;
 
+  const startTime = Date.now();
+  const model = 'gpt-4o-mini';
+
   try {
     const response = await openaiRequest<{
       choices: Array<{
@@ -236,9 +244,11 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
       }>;
       usage?: {
         total_tokens: number;
+        prompt_tokens?: number;
+        completion_tokens?: number;
       };
     }>('/chat/completions', {
-      model: 'gpt-4o-mini',
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -247,6 +257,11 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
       max_tokens: 2000,
       response_format: { type: 'json_object' },
     });
+
+    const responseTimeMs = Date.now() - startTime;
+    const inputTokens = response.usage?.prompt_tokens || 0;
+    const outputTokens = response.usage?.completion_tokens || 0;
+    const costCents = calculateOpenAICost(model, inputTokens, outputTokens);
 
     const content = response.choices[0]?.message?.content || '[]';
     console.log('[LLM] Raw OpenAI response length:', content.length);
@@ -330,18 +345,61 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
       index === self.findIndex(c => c.name.toLowerCase() === company.name.toLowerCase())
     );
 
+    // Log SIVA metric for successful extraction
+    await logSivaMetric({
+      provider: 'openai',
+      operation: 'company_extraction',
+      requestType: 'chat_completion',
+      model,
+      inputTokens,
+      outputTokens,
+      costCents,
+      responseTimeMs,
+      success: true,
+      vertical: options?.vertical,
+      subVertical: options?.subVertical,
+      requestSummary: `Extract companies from ${newsResults.length} news articles`,
+      responseSummary: `Extracted ${uniqueCompanies.length} companies`,
+      qualityScore: uniqueCompanies.length > 0 ? 85 : 50, // Basic quality heuristic
+      metadata: {
+        newsCount: newsResults.length,
+        companiesExtracted: uniqueCompanies.length,
+        region: options?.region,
+      },
+    });
+
     return {
       companies: uniqueCompanies,
       totalExtracted: uniqueCompanies.length,
-      model: 'gpt-4o-mini',
+      model,
       tokensUsed: response.usage?.total_tokens || 0,
+      inputTokens,
+      outputTokens,
+      costCents,
+      responseTimeMs,
     };
   } catch (error) {
+    const responseTimeMs = Date.now() - startTime;
+
+    // Log SIVA metric for failed extraction
+    await logSivaMetric({
+      provider: 'openai',
+      operation: 'company_extraction',
+      requestType: 'chat_completion',
+      model,
+      responseTimeMs,
+      success: false,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      vertical: options?.vertical,
+      subVertical: options?.subVertical,
+      requestSummary: `Extract companies from ${newsResults.length} news articles`,
+    });
+
     console.error('[LLM] Extraction failed:', error);
     return {
       companies: [],
       totalExtracted: 0,
-      model: 'gpt-4o-mini',
+      model,
       tokensUsed: 0,
     };
   }
@@ -364,6 +422,9 @@ ${existingData.city ? `Location hint: ${existingData.city}` : ''}
 
 Return JSON with company details.`;
 
+  const startTime = Date.now();
+  const model = 'gpt-4o-mini';
+
   try {
     const response = await openaiRequest<{
       choices: Array<{
@@ -371,8 +432,13 @@ Return JSON with company details.`;
           content: string;
         };
       }>;
+      usage?: {
+        total_tokens: number;
+        prompt_tokens?: number;
+        completion_tokens?: number;
+      };
     }>('/chat/completions', {
-      model: 'gpt-4o-mini',
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -382,8 +448,29 @@ Return JSON with company details.`;
       response_format: { type: 'json_object' },
     });
 
+    const responseTimeMs = Date.now() - startTime;
+    const inputTokens = response.usage?.prompt_tokens || 0;
+    const outputTokens = response.usage?.completion_tokens || 0;
+    const costCents = calculateOpenAICost(model, inputTokens, outputTokens);
+
     const content = response.choices[0]?.message?.content || '{}';
     const parsed = JSON.parse(content);
+
+    // Log SIVA metric
+    await logSivaMetric({
+      provider: 'openai',
+      operation: 'company_enrichment',
+      requestType: 'chat_completion',
+      model,
+      inputTokens,
+      outputTokens,
+      costCents,
+      responseTimeMs,
+      success: true,
+      requestSummary: `Enrich company: ${companyName}`,
+      responseSummary: `Domain: ${parsed.domain || 'unknown'}, Industry: ${parsed.industry || 'unknown'}`,
+      qualityScore: parsed.domain && parsed.industry ? 80 : 60,
+    });
 
     return {
       name: parsed.name || companyName,
@@ -398,6 +485,20 @@ Return JSON with company details.`;
       sourceUrl: '',
     };
   } catch (error) {
+    const responseTimeMs = Date.now() - startTime;
+
+    // Log failed metric
+    await logSivaMetric({
+      provider: 'openai',
+      operation: 'company_enrichment',
+      requestType: 'chat_completion',
+      model,
+      responseTimeMs,
+      success: false,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      requestSummary: `Enrich company: ${companyName}`,
+    });
+
     console.error('[LLM] Enrichment failed:', error);
     return null;
   }
