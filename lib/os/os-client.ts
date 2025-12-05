@@ -14,7 +14,7 @@
  * - /api/os/territories - Territory management (S53)
  */
 
-const OS_BASE_URL = process.env.UPR_OS_URL || 'https://upr-os-staging-203519206516.us-central1.run.app';
+const OS_BASE_URL = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
 const OS_API_KEY = process.env.UPR_OS_API_KEY || '';
 
 // =============================================================================
