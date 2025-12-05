@@ -128,108 +128,103 @@ interface CommandCenterData {
   lastUpdated: string;
 }
 
-// Mock data for development (will be replaced with real API)
+// Real data - Pre-launch phase (no revenue yet)
+// Last updated: Dec 5, 2025
 const mockData: CommandCenterData = {
   pulse: {
-    mrr: 4200,
-    mrrGrowth: 18,
-    arr: 50400,
+    mrr: 0,           // No revenue yet - product not live
+    mrrGrowth: 0,     // No growth yet
+    arr: 0,
     users: {
-      total: 47,
-      active: 38,
-      dau: 23,
+      total: 0,       // No users yet
+      active: 0,
+      dau: 0,
     },
-    churn: 2.1,
+    churn: 0,         // N/A - no users
     burn: {
-      monthly: 890,
-      daily: 29.67,
+      monthly: 213,   // Apollo $59 + Anthropic $100 + ChatGPT $21 + GCP ~$33 = ~$213
+      daily: 7.1,
     },
     runway: {
-      months: 24,
-      cashBalance: 21360,
+      months: 4.7,    // $1000 / $213 = ~4.7 months
+      cashBalance: 1000,
     },
-    margin: 78.8,
-    aiSavings: 180,
+    margin: 0,        // No revenue
+    aiSavings: 0,     // Will track once OS routing is active
   },
   priorities: [
     {
       id: '1',
-      severity: 'critical',
-      title: 'Apollo API near rate limit',
-      description: 'Usage at 87% of monthly quota. Consider switching to backup.',
-      metric: '87%',
-      action: { label: 'Switch to Backup', href: '/superadmin/integrations' },
+      severity: 'info',
+      title: 'Product in pre-launch phase',
+      description: 'Focus on completing MVP and preparing for first customers.',
+      action: { label: 'View Roadmap', href: '/superadmin/siva' },
     },
     {
       id: '2',
       severity: 'warning',
-      title: 'User "Emirates NBD" stuck on onboarding',
-      description: 'Started 3 days ago, stopped at vertical selection step.',
-      action: { label: 'View User', href: '/superadmin/users' },
+      title: 'Render subscription to be discontinued',
+      description: 'Currently paying $60.80/mo for Render. Migrate to GCP to save costs.',
+      metric: '$60.80',
+      action: { label: 'View Costs', href: '/superadmin/financials' },
     },
     {
       id: '3',
       severity: 'info',
-      title: '3 demo requests pending',
-      description: 'New leads from website. Auto-schedule demos?',
-      action: { label: 'Review Requests', href: '/superadmin/users/demo' },
+      title: 'SERP credits healthy',
+      description: '14,643 credits remaining (357 used of 15,000). No renewal needed.',
+      metric: '97.6%',
     },
   ],
   modelUpdates: [
     {
       id: '1',
-      provider: 'openai',
-      model: 'GPT-4.5-turbo',
-      releaseDate: '2024-12-04',
-      isNew: true,
-      improvements: ['40% cheaper than GPT-4', 'Better reasoning', 'Faster response'],
-      costChange: -40,
-      speedChange: 20,
-      qualityChange: 5,
+      provider: 'anthropic',
+      model: 'Claude 3.5 Sonnet',
+      releaseDate: '2024-10-22',
+      isNew: false,
+      improvements: ['Best price/performance', 'Great for coding', 'Fast responses'],
+      costChange: -50,
+      qualityChange: 10,
       actions: { canSwitch: true, canTest: true, canAddFallback: true },
-      benchmarkResults: [
-        { task: 'Extraction', currentScore: 92, newScore: 94, costSavings: 40 },
-        { task: 'Enrichment', currentScore: 88, newScore: 91, costSavings: 40 },
-        { task: 'Scoring', currentScore: 95, newScore: 96, costSavings: 40 },
-      ],
-      estimatedMonthlySavings: 128,
+      estimatedMonthlySavings: 0,
     },
     {
       id: '2',
-      provider: 'anthropic',
-      model: 'Claude 3.5 Opus',
-      releaseDate: '2024-12-02',
-      isNew: true,
-      improvements: ['Best for complex reasoning', 'Longer context window'],
-      qualityChange: 15,
-      actions: { canSwitch: false, canTest: true, canAddFallback: true },
+      provider: 'openai',
+      model: 'GPT-4o-mini',
+      releaseDate: '2024-07-18',
+      isNew: false,
+      improvements: ['Very cheap', 'Good for simple tasks', 'Fast'],
+      costChange: -90,
+      speedChange: 50,
+      actions: { canSwitch: true, canTest: true, canAddFallback: true },
     },
     {
       id: '3',
       provider: 'google',
-      model: 'Gemini 2.0 Flash',
-      releaseDate: '2024-12-01',
+      model: 'Gemini 1.5 Flash',
+      releaseDate: '2024-05-14',
       isNew: false,
-      improvements: ['3x faster', 'Same quality', 'Better for structured output'],
-      speedChange: 200,
-      costChange: -30,
+      improvements: ['1M token context', 'Multimodal', 'Cost effective'],
+      speedChange: 100,
+      costChange: -60,
       actions: { canSwitch: true, canTest: true, canAddFallback: true },
-      estimatedMonthlySavings: 45,
     },
   ],
   revenue: {
-    subscriptions: { amount: 3800, count: 5 },
-    apiOverages: 400,
-    total: 4200,
+    subscriptions: { amount: 0, count: 0 },  // No customers yet
+    apiOverages: 0,
+    total: 0,
   },
   costs: {
-    openai: 320,
-    anthropic: 0,
-    apollo: 120,
-    serp: 60,
-    gcp: 290,
-    domains: 100,
-    total: 890,
+    openai: 21,       // ChatGPT subscription ($21/mo), API not billed yet
+    anthropic: 100,   // Claude Pro subscription
+    apollo: 59,       // Basic Seat
+    serp: 0,          // Prepaid credits (15,000 searches)
+    gcp: 33,          // Redis $14 + Cloud SQL $12 + Networking $3 + misc $4
+    domains: 0,       // Included elsewhere or annual
+    total: 213,
   },
   lastUpdated: new Date().toISOString(),
 };
