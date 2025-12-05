@@ -46,6 +46,8 @@ interface DashboardStats {
   api: {
     latencyP95: number;
     errorRate: number;
+    cumulativeErrorRate: number;
+    hasRecentErrors: boolean;
     integrations: Array<{
       provider: string;
       name: string;
@@ -108,9 +110,20 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Calculate API stats from integrations
+    // Note: These are cumulative all-time counts, not recent/live error rates
     const totalUsage = integrations.reduce((sum, i) => sum + i.usageCount, 0);
     const totalErrors = integrations.reduce((sum, i) => sum + i.errorCount, 0);
-    const errorRate = totalUsage > 0 ? totalErrors / totalUsage : 0;
+    // For display purposes, show the cumulative rate but don't use it for health status
+    const cumulativeErrorRate = totalUsage > 0 ? totalErrors / totalUsage : 0;
+
+    // For system health, only consider if there were very recent errors (in last hour)
+    // Check if any integration has lastErrorAt within last hour
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    const hasRecentErrors = integrations.some(i =>
+      i.lastErrorAt && new Date(i.lastErrorAt).getTime() > oneHourAgo
+    );
+    // Effective error rate for health: 0 if no recent errors, otherwise show cumulative
+    const errorRate = hasRecentErrors ? cumulativeErrorRate : 0;
 
     // Transform access logs to activity feed format
     const recentActivity = accessLogs.slice(0, 10).map((log, idx) => ({
@@ -131,7 +144,9 @@ export async function GET(request: NextRequest) {
       },
       api: {
         latencyP95: 142, // Would come from APM in production
-        errorRate,
+        errorRate, // For system health (only counts recent errors)
+        cumulativeErrorRate, // All-time error rate for reference
+        hasRecentErrors,
         integrations: integrations.map(i => ({
           provider: i.provider,
           name: i.name,

@@ -54,7 +54,9 @@ interface ApiStats {
   };
   api: {
     latencyP95: number;
-    errorRate: number;
+    errorRate: number; // For system health (recent errors only)
+    cumulativeErrorRate: number; // All-time error rate
+    hasRecentErrors: boolean;
     integrations: Array<{
       provider: string;
       name: string;
@@ -245,20 +247,24 @@ export default function SuperAdminDashboard() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-gray-400">Error Rate</span>
-                <span className="text-sm font-medium text-white">
-                  {((stats?.api.errorRate || 0) * 100).toFixed(2)}%
+                <span className="text-sm text-gray-400">Error Rate (1h)</span>
+                <span className={`text-sm font-medium ${stats?.api.hasRecentErrors ? 'text-red-400' : 'text-green-400'}`}>
+                  {stats?.api.hasRecentErrors ? `${((stats?.api.errorRate || 0) * 100).toFixed(2)}%` : '0% (No recent errors)'}
                 </span>
               </div>
               <div className="h-2 bg-gray-800 rounded-full">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    (stats?.api.errorRate || 0) < 0.01 ? 'bg-green-500' :
+                    !stats?.api.hasRecentErrors ? 'bg-green-500' :
                     (stats?.api.errorRate || 0) < 0.05 ? 'bg-yellow-500' : 'bg-red-500'
                   }`}
-                  style={{ width: `${Math.min(100, (stats?.api.errorRate || 0) * 1000)}%` }}
+                  style={{ width: stats?.api.hasRecentErrors ? `${Math.min(100, (stats?.api.errorRate || 0) * 1000)}%` : '5%' }}
                 />
               </div>
+              {/* Show cumulative rate as reference */}
+              <p className="text-xs text-gray-600 mt-1">
+                All-time: {((stats?.api.cumulativeErrorRate || 0) * 100).toFixed(1)}%
+              </p>
             </div>
             {/* Integration Stats */}
             <div className="pt-2 border-t border-gray-800">
