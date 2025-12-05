@@ -47,6 +47,7 @@ const navSections = [
   {
     title: 'Overview',
     items: [
+      { label: 'Command Center', href: '/superadmin/command-center', icon: Zap },
       { label: 'Dashboard', href: '/superadmin', icon: LayoutDashboard },
       { label: 'SIVA Intelligence', href: '/superadmin/siva', icon: Brain },
       { label: 'Financials', href: '/superadmin/financials', icon: BarChart3 },
