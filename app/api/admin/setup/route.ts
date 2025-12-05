@@ -75,8 +75,8 @@ CREATE INDEX IF NOT EXISTS idx_siva_metrics_created_at ON siva_metrics(created_a
 CREATE INDEX IF NOT EXISTS idx_siva_metrics_provider ON siva_metrics(provider);
 CREATE INDEX IF NOT EXISTS idx_siva_metrics_operation ON siva_metrics(operation);
 CREATE INDEX IF NOT EXISTS idx_siva_metrics_success ON siva_metrics(success);
-CREATE INDEX IF NOT EXISTS idx_siva_metrics_date ON siva_metrics(DATE(created_at));
-CREATE INDEX IF NOT EXISTS idx_siva_metrics_provider_date ON siva_metrics(provider, DATE(created_at));
+CREATE INDEX IF NOT EXISTS idx_siva_metrics_date ON siva_metrics((created_at::date));
+CREATE INDEX IF NOT EXISTS idx_siva_metrics_provider_date ON siva_metrics(provider, (created_at::date));
 
 -- Daily stats view
 CREATE OR REPLACE VIEW siva_daily_stats AS
