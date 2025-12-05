@@ -34,6 +34,7 @@ import {
   Zap,
   BarChart3,
   Globe,
+  Brain,
 } from 'lucide-react';
 
 interface SessionInfo {
@@ -46,8 +47,8 @@ const navSections = [
     title: 'Overview',
     items: [
       { label: 'Dashboard', href: '/superadmin', icon: LayoutDashboard },
+      { label: 'SIVA Intelligence', href: '/superadmin/siva', icon: Brain },
       { label: 'Activity Feed', href: '/superadmin/activity', icon: Activity },
-      { label: 'System Health', href: '/superadmin/health', icon: Zap },
     ]
   },
   {
