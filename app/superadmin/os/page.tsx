@@ -297,7 +297,7 @@ export default function OSConfigDashboard() {
             <div>
               <p className="text-white font-medium">Connected to UPR OS</p>
               <p className="text-gray-500 text-sm font-mono">
-                {process.env.NEXT_PUBLIC_UPR_OS_URL || 'https://upr-os-staging-203519206516.us-central1.run.app'}
+                {process.env.NEXT_PUBLIC_UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app'}
               </p>
             </div>
           </div>
