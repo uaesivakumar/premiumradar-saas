@@ -119,8 +119,29 @@ export default function AdminDashboardPage() {
 
         {activeTab === 'config' && (
           <div className="grid grid-cols-2 gap-6">
+            {/* AI Super Admin - Primary interface */}
+            <a
+              href="/dashboard/admin/ai"
+              className="col-span-2 block bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-xl p-6 hover:shadow-xl transition-all border border-slate-700 group"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="text-4xl bg-blue-600/20 rounded-lg p-3 text-blue-400 group-hover:scale-110 transition-transform">
+                    AI
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-white mb-1">AI Super Admin</h3>
+                    <p className="text-slate-400">Natural language commands. Toggle providers, LLMs, and verticals with one click.</p>
+                  </div>
+                </div>
+                <div className="text-slate-500 group-hover:text-blue-400 transition-colors text-2xl">
+                  &rarr;
+                </div>
+              </div>
+            </a>
+
             <ConfigCard
-              icon="📋"
+              icon="Version"
               title="Version Control"
               description="View and manage application versions"
               href="/dashboard/admin/config/versions"
