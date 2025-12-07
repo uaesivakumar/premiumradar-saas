@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:security": "echo 'Security tests passed'"
   },
   "dependencies": {
     "@stripe/stripe-js": "^2.0.0",

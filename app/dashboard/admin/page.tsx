@@ -121,7 +121,7 @@ export default function AdminDashboardPage() {
           <div className="grid grid-cols-2 gap-6">
             {/* AI Super Admin - Primary interface */}
             <a
-              href="/dashboard/admin/ai"
+              href="/superadmin/ai"
               className="col-span-2 block bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-xl p-6 hover:shadow-xl transition-all border border-slate-700 group"
             >
               <div className="flex items-center justify-between">
