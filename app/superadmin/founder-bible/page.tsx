@@ -801,21 +801,21 @@ const AI_DEPARTMENTS = [
 // ============================================================================
 
 function PRDSection() {
-  const [activePRD, setActivePRD] = useState<'phase1' | 'tools' | 'api' | 'db'>('phase1');
+  const [activePRD, setActivePRD] = useState<'phases' | 'tools' | 'api' | 'db'>('phases');
 
   return (
     <div className="max-w-7xl mx-auto px-6">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-4">Master PRD</h1>
         <p className="text-slate-400 max-w-2xl mx-auto">
-          Complete technical specification with API contracts, database schemas, and implementation details.
+          Complete 5-phase roadmap with 85 sprints (S133-S217), API contracts, and database schemas.
         </p>
       </div>
 
       {/* PRD Tabs */}
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
         {[
-          { id: 'phase1', label: 'Phase 1 Scope', icon: '🎯' },
+          { id: 'phases', label: 'All 5 Phases', icon: '🗺️' },
           { id: 'tools', label: 'SIVA Tools', icon: '🔧' },
           { id: 'api', label: 'API Contracts', icon: '🔌' },
           { id: 'db', label: 'Database Schema', icon: '🗄️' },
@@ -841,7 +841,7 @@ function PRDSection() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
         >
-          {activePRD === 'phase1' && <Phase1PRD />}
+          {activePRD === 'phases' && <AllPhasesPRD />}
           {activePRD === 'tools' && <SIVAToolsPRD />}
           {activePRD === 'api' && <APIContractsPRD />}
           {activePRD === 'db' && <DatabaseSchemaPRD />}
@@ -850,6 +850,375 @@ function PRDSection() {
     </div>
   );
 }
+
+function AllPhasesPRD() {
+  const [expandedPhase, setExpandedPhase] = useState<number | null>(1);
+
+  return (
+    <div className="space-y-6">
+      {/* Overview Stats */}
+      <div className="grid grid-cols-5 gap-4 mb-8">
+        {ALL_PHASES_DATA.map((phase) => (
+          <div
+            key={phase.phase}
+            className={`bg-slate-900/50 border rounded-xl p-4 cursor-pointer transition-all ${
+              phase.current ? 'border-emerald-500' : 'border-slate-800 hover:border-slate-700'
+            }`}
+            onClick={() => setExpandedPhase(expandedPhase === phase.phase ? null : phase.phase)}
+          >
+            <div className={`text-3xl font-bold ${phase.current ? 'text-emerald-400' : 'text-slate-400'}`}>
+              P{phase.phase}
+            </div>
+            <div className="text-sm text-slate-300">{phase.name}</div>
+            <div className="text-xs text-slate-500">{phase.sprintRange}</div>
+            <div className={`text-lg font-bold mt-2 ${phase.current ? 'text-emerald-400' : 'text-cyan-400'}`}>
+              {phase.targetARR}
+            </div>
+            {phase.current && (
+              <span className="inline-block mt-2 bg-emerald-500/20 text-emerald-400 text-xs px-2 py-1 rounded">
+                CURRENT
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Phase Details */}
+      {ALL_PHASES_DATA.map((phase) => (
+        <div
+          key={phase.phase}
+          className={`bg-slate-900/50 border rounded-2xl overflow-hidden ${
+            phase.current ? 'border-emerald-500' : 'border-slate-800'
+          }`}
+        >
+          <button
+            onClick={() => setExpandedPhase(expandedPhase === phase.phase ? null : phase.phase)}
+            className="w-full px-8 py-6 flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-6">
+              <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-2xl font-bold ${
+                phase.current ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'
+              }`}>
+                P{phase.phase}
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold">{phase.name}</h2>
+                <p className="text-slate-400">{phase.goal}</p>
+                <p className="text-sm text-slate-500">{phase.sprintRange} • {phase.sprintCount} sprints</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <p className="text-2xl font-bold text-emerald-400">{phase.targetARR}</p>
+                <p className="text-sm text-slate-500">Target ARR</p>
+              </div>
+              <span className={`text-2xl transition-transform ${expandedPhase === phase.phase ? 'rotate-180' : ''}`}>
+                ▼
+              </span>
+            </div>
+          </button>
+
+          <AnimatePresence>
+            {expandedPhase === phase.phase && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="px-8 pb-8 border-t border-slate-800 pt-6">
+                  {/* Highlights */}
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {phase.highlights.map((h) => (
+                      <span key={h} className="bg-slate-800 text-slate-300 text-sm px-3 py-1 rounded-full">
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Exit Criteria */}
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 mb-6">
+                    <h4 className="text-emerald-400 font-bold mb-2">Exit Criteria:</h4>
+                    <ul className="grid md:grid-cols-2 gap-2">
+                      {phase.exitCriteria.map((c, i) => (
+                        <li key={i} className="text-sm text-slate-300 flex items-center gap-2">
+                          <span className="text-emerald-400">□</span> {c}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Sprint Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700">
+                          <th className="text-left py-3 px-4 text-slate-400">Sprint</th>
+                          <th className="text-left py-3 px-4 text-slate-400">Focus</th>
+                          <th className="text-left py-3 px-4 text-slate-400">Repo</th>
+                          <th className="text-left py-3 px-4 text-slate-400">Key Deliverables</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {phase.sprints.map((sprint) => (
+                          <tr key={sprint.id} className="border-b border-slate-800 hover:bg-slate-800/50">
+                            <td className="py-3 px-4 font-mono text-emerald-400">{sprint.id}</td>
+                            <td className="py-3 px-4">{sprint.focus}</td>
+                            <td className="py-3 px-4 text-slate-400">{sprint.repo}</td>
+                            <td className="py-3 px-4 text-slate-300">{sprint.deliverables}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      ))}
+
+      {/* Success Metrics by Phase */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+        <h2 className="text-2xl font-bold mb-6">Success Metrics by Phase</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left py-3 px-4 text-slate-400">Phase</th>
+                <th className="text-right py-3 px-4 text-slate-400">Users</th>
+                <th className="text-right py-3 px-4 text-slate-400">ARR</th>
+                <th className="text-right py-3 px-4 text-slate-400">SIVA Queries/Day</th>
+                <th className="text-left py-3 px-4 text-slate-400">Key Milestone</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { phase: 1, users: '100', arr: '$100K', queries: '1K', milestone: 'First paying customers' },
+                { phase: 2, users: '500', arr: '$500K', queries: '10K', milestone: 'SIVA indispensable' },
+                { phase: 3, users: '2K', arr: '$3M', queries: '50K', milestone: 'Enterprise deals' },
+                { phase: 4, users: '10K', arr: '$20M', queries: '500K', milestone: 'Multi-vertical' },
+                { phase: 5, users: '50K', arr: '$100M+', queries: '5M', milestone: 'Market leader' },
+              ].map((row) => (
+                <tr key={row.phase} className="border-b border-slate-800">
+                  <td className="py-3 px-4 font-bold text-emerald-400">Phase {row.phase}</td>
+                  <td className="py-3 px-4 text-right text-slate-300">{row.users}</td>
+                  <td className="py-3 px-4 text-right text-cyan-400 font-bold">{row.arr}</td>
+                  <td className="py-3 px-4 text-right text-slate-300">{row.queries}</td>
+                  <td className="py-3 px-4 text-slate-300">{row.milestone}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* User Types Section */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+        <h2 className="text-2xl font-bold mb-6">User Types</h2>
+        <p className="text-slate-400 mb-8">
+          Understanding user types is critical. Individual users are NOT just &quot;free tier&quot; - they&apos;re salespeople whose companies haven&apos;t adopted PremiumRadar yet.
+        </p>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {USER_TYPES_DATA.map((user) => (
+            <div key={user.type} className={`bg-${user.color}-500/10 border border-${user.color}-500/30 rounded-xl p-6`}>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-3xl">{user.icon}</span>
+                <h3 className={`text-${user.color}-400 font-bold text-lg`}>{user.type}</h3>
+              </div>
+              <p className="text-slate-300 text-sm mb-3">{user.description}</p>
+              <div className="bg-slate-800/50 rounded-lg p-3">
+                <p className="text-xs text-slate-500 mb-1">REAL WORLD</p>
+                <p className="text-slate-300 text-xs italic">{user.realWorld}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Complete Phase Data with All Sprints
+const ALL_PHASES_DATA = [
+  {
+    phase: 1,
+    name: 'Launch Ready',
+    sprintRange: 'S133-S152',
+    sprintCount: 20,
+    goal: 'Ship MVP to first paying customers',
+    targetARR: '$100K',
+    current: true,
+    highlights: ['Banking EB UAE', 'SIVA workspace', 'Billing', 'Onboarding', '12 SIVA tools'],
+    exitCriteria: [
+      '10 beta customers onboarded',
+      'Full user journey working',
+      'Billing functional',
+      'Support channels ready',
+    ],
+    sprints: [
+      { id: 'S133', focus: 'Stealth Mode Polish', repo: 'SaaS', deliverables: 'Landing page, waitlist, private beta' },
+      { id: 'S134', focus: 'User Onboarding v1', repo: 'SaaS', deliverables: 'Sign up, company setup, vertical selection' },
+      { id: 'S135', focus: 'User Journey', repo: 'SaaS', deliverables: 'First-time experience, guided setup' },
+      { id: 'S136', focus: 'Dashboard v2', repo: 'SaaS', deliverables: 'Core dashboard improvements' },
+      { id: 'S137', focus: 'SIVA Chat Enhancement', repo: 'SaaS', deliverables: 'Chat interface, history, context' },
+      { id: 'S138', focus: 'Signal Display', repo: 'SaaS', deliverables: 'Signal cards, filtering, details' },
+      { id: 'S139', focus: 'Company Profiles', repo: 'SaaS', deliverables: 'Company view, signal history, contacts' },
+      { id: 'S140', focus: 'Scoring UI', repo: 'SaaS', deliverables: 'QTLE visualization, score breakdown' },
+      { id: 'S141', focus: 'Auth & Security', repo: 'SaaS', deliverables: 'NextAuth, RBAC basics' },
+      { id: 'S142', focus: 'Billing Integration', repo: 'SaaS', deliverables: 'Stripe, subscription management' },
+      { id: 'S143', focus: 'SIVA Tools v1', repo: 'OS', deliverables: 'Score, search, prioritize tools' },
+      { id: 'S144', focus: 'Banking Intelligence', repo: 'OS', deliverables: 'Banking-specific scoring' },
+      { id: 'S145', focus: 'Signal Pipeline v2', repo: 'OS', deliverables: 'Signal processing improvements' },
+      { id: 'S146', focus: 'API Hardening', repo: 'OS', deliverables: 'Rate limiting, error handling' },
+      { id: 'S147', focus: 'Super Admin Core', repo: 'SA', deliverables: 'Vertical config editor' },
+      { id: 'S148', focus: 'Super Admin Personas', repo: 'SA', deliverables: 'Persona management' },
+      { id: 'S149', focus: 'Tenant Admin MVP', repo: 'SaaS', deliverables: 'Basic tenant management' },
+      { id: 'S150', focus: 'E2E Testing', repo: 'All', deliverables: 'Comprehensive test coverage' },
+      { id: 'S151', focus: 'Performance', repo: 'All', deliverables: 'Load testing, optimization' },
+      { id: 'S152', focus: 'Launch Prep', repo: 'All', deliverables: 'Documentation, support setup' },
+    ],
+  },
+  {
+    phase: 2,
+    name: 'Intelligence Engine',
+    sprintRange: 'S153-S167',
+    sprintCount: 15,
+    goal: 'SIVA becomes indispensable',
+    targetARR: '$500K',
+    current: false,
+    highlights: ['Proactive alerts', 'Knowledge graph', 'Citations', 'Voice input', 'SIVA Memory'],
+    exitCriteria: [
+      'Daily proactive briefings working',
+      'Citation system complete',
+      'Voice input functional',
+      'Users describe SIVA as "indispensable"',
+    ],
+    sprints: [
+      { id: 'S153', focus: 'SIVA Proactive Alerts', repo: 'OS', deliverables: 'Daily briefings, signal alerts' },
+      { id: 'S154', focus: 'Knowledge Graph v1', repo: 'OS', deliverables: 'Company-people-signal relationships' },
+      { id: 'S155', focus: 'Citation System', repo: 'OS', deliverables: '"Based on..." with sources' },
+      { id: 'S156', focus: 'SIVA Memory', repo: 'OS', deliverables: 'Conversation history, user preferences' },
+      { id: 'S157', focus: 'Multi-Source Intel', repo: 'OS', deliverables: 'LinkedIn, news, company data fusion' },
+      { id: 'S158', focus: 'Pattern Detection', repo: 'OS', deliverables: 'Trend analysis, opportunity patterns' },
+      { id: 'S159', focus: 'SIVA Tools v2', repo: 'OS', deliverables: 'Outreach, objection handling' },
+      { id: 'S160', focus: 'Scoring v2', repo: 'OS', deliverables: 'ML-enhanced scoring' },
+      { id: 'S161', focus: 'Contact Intelligence', repo: 'OS', deliverables: 'Decision maker mapping' },
+      { id: 'S162', focus: 'SIVA Voice Input', repo: 'SaaS', deliverables: 'Web speech recognition' },
+      { id: 'S163', focus: 'Dashboard Intelligence', repo: 'SaaS', deliverables: 'Smart widgets, recommendations' },
+      { id: 'S164', focus: 'Pipeline Predictions', repo: 'SaaS', deliverables: 'Deal probability, timing' },
+      { id: 'S165', focus: 'Learning System', repo: 'OS', deliverables: 'User feedback integration' },
+      { id: 'S166', focus: 'Sub-Vertical Depth', repo: 'OS', deliverables: 'Corporate banking, SME banking' },
+      { id: 'S167', focus: 'Intelligence Metrics', repo: 'All', deliverables: 'Usage analytics, AI performance' },
+    ],
+  },
+  {
+    phase: 3,
+    name: 'Enterprise Ready',
+    sprintRange: 'S168-S182',
+    sprintCount: 15,
+    goal: 'SOC2, SDK, Mobile',
+    targetARR: '$3M',
+    current: false,
+    highlights: ['SOC2 Type II', 'SIVA SDK v1', 'Mobile app', 'Enterprise SSO', 'Salesforce integration'],
+    exitCriteria: [
+      'SOC2 Type II audit passed',
+      'SIVA SDK published',
+      'Mobile app in app stores',
+      '5 enterprise customers',
+    ],
+    sprints: [
+      { id: 'S168', focus: 'SOC2 Foundation', repo: 'All', deliverables: 'Audit logging, access controls' },
+      { id: 'S169', focus: 'SOC2 Controls', repo: 'All', deliverables: 'Security policies, monitoring' },
+      { id: 'S170', focus: 'GDPR Compliance', repo: 'All', deliverables: 'Data subject rights, consent' },
+      { id: 'S171', focus: 'Enterprise SSO', repo: 'SaaS', deliverables: 'SAML, OIDC, custom IdP' },
+      { id: 'S172', focus: 'Advanced RBAC', repo: 'SaaS', deliverables: 'Custom roles, permissions' },
+      { id: 'S173', focus: 'Tenant Admin v2', repo: 'SaaS', deliverables: 'Full admin capabilities' },
+      { id: 'S174', focus: 'SIVA SDK v1', repo: 'OS', deliverables: 'Public API, SDK scaffolding' },
+      { id: 'S175', focus: 'SDK Documentation', repo: 'OS', deliverables: 'Developer docs, examples' },
+      { id: 'S176', focus: 'Salesforce Integration', repo: 'OS', deliverables: 'Native SF connector' },
+      { id: 'S177', focus: 'Mobile App v1', repo: 'SaaS', deliverables: 'iOS/Android MVP' },
+      { id: 'S178', focus: 'Mobile SIVA', repo: 'SaaS', deliverables: 'Voice on mobile' },
+      { id: 'S179', focus: 'Push Notifications', repo: 'SaaS', deliverables: 'Real-time mobile alerts' },
+      { id: 'S180', focus: 'Audit & Compliance UI', repo: 'SA', deliverables: 'Compliance dashboards' },
+      { id: 'S181', focus: 'Enterprise Onboarding', repo: 'SaaS', deliverables: 'Bulk user import, SSO setup' },
+      { id: 'S182', focus: 'Enterprise Launch', repo: 'All', deliverables: 'Enterprise tier ready' },
+    ],
+  },
+  {
+    phase: 4,
+    name: 'Scale & Expand',
+    sprintRange: 'S183-S202',
+    sprintCount: 20,
+    goal: 'Multi-vertical, SLM development',
+    targetARR: '$20M',
+    current: false,
+    highlights: ['Insurance vertical', 'Real Estate vertical', 'SLM v1', 'HubSpot integration', 'White-label'],
+    exitCriteria: [
+      '3 verticals active (Banking, Insurance, Real Estate)',
+      'SLM v1 deployed',
+      '10+ integration partners',
+      '1000+ paying customers',
+    ],
+    sprints: [
+      { id: 'S183', focus: 'Insurance Vertical', repo: 'All', deliverables: 'Insurance config, personas' },
+      { id: 'S184', focus: 'Insurance Signals', repo: 'OS', deliverables: 'Insurance-specific signals' },
+      { id: 'S185', focus: 'Insurance Intelligence', repo: 'OS', deliverables: 'Insurance scoring, patterns' },
+      { id: 'S186', focus: 'Real Estate Vertical', repo: 'All', deliverables: 'RE config, personas' },
+      { id: 'S187', focus: 'Real Estate Signals', repo: 'OS', deliverables: 'RE-specific signals' },
+      { id: 'S188', focus: 'Real Estate Intelligence', repo: 'OS', deliverables: 'RE scoring, patterns' },
+      { id: 'S189', focus: 'SLM Data Collection', repo: 'OS', deliverables: 'Sales conversation corpus' },
+      { id: 'S190', focus: 'SLM Pipeline', repo: 'OS', deliverables: 'Fine-tuning infrastructure' },
+      { id: 'S191', focus: 'SLM v1 Training', repo: 'OS', deliverables: 'First fine-tuned model' },
+      { id: 'S192', focus: 'SLM Integration', repo: 'OS', deliverables: 'Replace base model calls' },
+      { id: 'S193', focus: 'SLM Evaluation', repo: 'OS', deliverables: 'Benchmarks, quality metrics' },
+      { id: 'S194', focus: 'SIVA SDK v2', repo: 'OS', deliverables: 'Enhanced APIs, webhooks' },
+      { id: 'S195', focus: 'HubSpot Integration', repo: 'OS', deliverables: 'Native HubSpot connector' },
+      { id: 'S196', focus: 'Pipedrive Integration', repo: 'OS', deliverables: 'Native Pipedrive connector' },
+      { id: 'S197', focus: 'White-Label v1', repo: 'SaaS', deliverables: 'Rebrandable SIVA' },
+      { id: 'S198', focus: 'Marketplace', repo: 'SaaS', deliverables: 'Integration marketplace' },
+      { id: 'S199', focus: 'International v1', repo: 'All', deliverables: 'Multi-currency, localization' },
+      { id: 'S200', focus: 'UAE Expansion', repo: 'All', deliverables: 'UAE-specific features' },
+      { id: 'S201', focus: 'India Market', repo: 'All', deliverables: 'India-specific features' },
+      { id: 'S202', focus: 'Scale Metrics', repo: 'All', deliverables: 'Growth analytics' },
+    ],
+  },
+  {
+    phase: 5,
+    name: 'Dominance',
+    sprintRange: 'S203-S217',
+    sprintCount: 15,
+    goal: 'Platform play, $1B+ potential',
+    targetARR: '$100M+',
+    current: false,
+    highlights: ['5 verticals', 'SIVA voice device', 'Open-source SLM', 'Global regions', 'IPO readiness'],
+    exitCriteria: [
+      '5 verticals active',
+      'SIVA recognized as industry standard',
+      '$100M+ ARR',
+      '100+ SDK integrations',
+      'SIVA devices shipping',
+    ],
+    sprints: [
+      { id: 'S203', focus: 'Recruitment Vertical', repo: 'All', deliverables: 'Recruitment config, personas' },
+      { id: 'S204', focus: 'SaaS Sales Vertical', repo: 'All', deliverables: 'B2B SaaS sales config' },
+      { id: 'S205', focus: 'SIVA Voice Device', repo: 'All', deliverables: 'Dedicated hardware design' },
+      { id: 'S206', focus: 'Wake Word System', repo: 'OS', deliverables: '"Hey SIVA" detection' },
+      { id: 'S207', focus: 'SLM v2', repo: 'OS', deliverables: 'Advanced fine-tuning' },
+      { id: 'S208', focus: 'Open Source SLM', repo: 'OS', deliverables: 'Community release' },
+      { id: 'S209', focus: 'Developer Ecosystem', repo: 'All', deliverables: 'Partner program' },
+      { id: 'S210', focus: 'SIVA Marketplace', repo: 'SaaS', deliverables: 'Skills, plugins, integrations' },
+      { id: 'S211', focus: 'Multi-Language', repo: 'All', deliverables: '10+ language support' },
+      { id: 'S212', focus: 'Global Regions', repo: 'All', deliverables: 'EU, APAC data centers' },
+      { id: 'S213', focus: 'Enterprise Scale', repo: 'All', deliverables: '10K+ seat deployments' },
+      { id: 'S214', focus: 'Platform Analytics', repo: 'All', deliverables: 'Ecosystem metrics' },
+      { id: 'S215', focus: 'Strategic Partnerships', repo: 'All', deliverables: 'Major CRM partnerships' },
+      { id: 'S216', focus: 'IPO Readiness', repo: 'All', deliverables: 'Financial systems, audits' },
+      { id: 'S217', focus: 'Market Leadership', repo: 'All', deliverables: 'Category definition' },
+    ],
+  },
+];
 
 function Phase1PRD() {
   return (
