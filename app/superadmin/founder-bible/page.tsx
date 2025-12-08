@@ -2979,36 +2979,103 @@ function TopicCardEnhanced({
   onComplete: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'content' | 'deepDive' | 'techRationale' | 'future' | 'code'>('content');
+  const [currentSection, setCurrentSection] = useState(0);
+  const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
+  const [showQuizResult, setShowQuizResult] = useState(false);
 
-  const tabs = [
-    { id: 'content', label: 'Overview', available: true },
-    { id: 'deepDive', label: 'Deep Dive', available: !!topic.deepDive },
-    { id: 'techRationale', label: 'Why This Tech?', available: !!topic.techRationale },
-    { id: 'future', label: '2030 Vision', available: !!topic.futureCompatibility },
-    { id: 'code', label: 'Code Example', available: !!topic.codeExample },
-  ].filter(t => t.available);
+  // Build learning sections for progressive disclosure
+  const sections = [
+    { id: 'intro', title: '1. Introduction', icon: '📖' },
+    { id: 'analogy', title: '2. Understand It', icon: '💡' },
+    { id: 'details', title: '3. The Details', icon: '🔍' },
+    { id: 'technical', title: '4. Technical Deep Dive', icon: '⚙️' },
+    { id: 'quiz', title: '5. Test Yourself', icon: '✅' },
+  ];
+
+  // Generate a simple quiz from the content
+  const generateQuiz = () => {
+    const quizzes = [
+      {
+        question: `What is the main purpose of "${topic.title}"?`,
+        options: [
+          topic.keyPoints[0] || 'Understanding the concept',
+          'It has no specific purpose',
+          'Only for advanced users',
+          'Deprecated feature',
+        ],
+        correct: 0,
+      },
+    ];
+    return quizzes[0];
+  };
+
+  const quiz = generateQuiz();
+
+  const handleQuizSubmit = () => {
+    setShowQuizResult(true);
+    if (quizAnswer === quiz.correct) {
+      setTimeout(() => {
+        onComplete();
+      }, 1500);
+    }
+  };
 
   return (
-    <div className={`mb-4 rounded-xl border ${
-      isComplete ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-800/50 border-slate-700'
+    <div className={`mb-6 rounded-2xl border-2 overflow-hidden transition-all ${
+      isComplete
+        ? 'bg-gradient-to-br from-emerald-900/20 to-emerald-800/10 border-emerald-500/40'
+        : 'bg-gradient-to-br from-slate-900 to-slate-800/50 border-slate-700 hover:border-slate-600'
     }`}>
+      {/* Topic Header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left"
+        className="w-full px-6 py-5 flex items-center justify-between text-left"
       >
-        <div className="flex items-center gap-3">
-          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm ${
-            isComplete ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400'
+        <div className="flex items-center gap-4">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold ${
+            isComplete
+              ? 'bg-emerald-500 text-white'
+              : 'bg-gradient-to-br from-slate-700 to-slate-800 text-slate-300'
           }`}>
-            {isComplete ? '✓' : '○'}
-          </span>
-          <span className={isComplete ? 'text-emerald-400 font-medium' : 'text-white font-medium'}>{topic.title}</span>
-          {(topic.deepDive || topic.techRationale || topic.futureCompatibility) && (
-            <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">In-Depth</span>
-          )}
+            {isComplete ? '✓' : '📚'}
+          </div>
+          <div>
+            <h4 className={`font-bold text-lg ${isComplete ? 'text-emerald-400' : 'text-white'}`}>
+              {topic.title}
+            </h4>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-xs text-slate-500">
+                {topic.keyPoints.length} key concepts
+              </span>
+              {topic.analogy && (
+                <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded text-xs">
+                  Has Analogy
+                </span>
+              )}
+              {topic.deepDive && (
+                <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">
+                  Deep Dive
+                </span>
+              )}
+              {topic.codeExample && (
+                <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs">
+                  Code
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        <span className={`transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
+        <div className="flex items-center gap-4">
+          {isComplete && (
+            <span className="text-emerald-400 text-sm font-medium">Completed</span>
+          )}
+          <motion.span
+            animate={{ rotate: expanded ? 180 : 0 }}
+            className="text-2xl text-slate-400"
+          >
+            ▼
+          </motion.span>
+        </div>
       </button>
 
       <AnimatePresence>
@@ -3017,94 +3084,395 @@ function TopicCardEnhanced({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
+            transition={{ duration: 0.3 }}
           >
-            <div className="px-4 pb-4 space-y-4">
-              {/* Tabs for different content types */}
-              {tabs.length > 1 && (
-                <div className="flex gap-2 border-b border-slate-700 pb-2">
-                  {tabs.map((tab) => (
+            <div className="border-t border-slate-700">
+              {/* Section Navigator */}
+              <div className="px-6 py-4 bg-slate-800/30 border-b border-slate-700/50">
+                <div className="flex items-center gap-1 overflow-x-auto pb-2">
+                  {sections.map((section, idx) => (
                     <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                      className={`px-3 py-1.5 rounded-t text-sm transition-colors ${
-                        activeTab === tab.id
-                          ? 'bg-slate-700 text-white'
-                          : 'text-slate-400 hover:text-white'
+                      key={section.id}
+                      onClick={() => setCurrentSection(idx)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+                        currentSection === idx
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
                       }`}
                     >
-                      {tab.label}
+                      <span>{section.icon}</span>
+                      <span>{section.title}</span>
                     </button>
                   ))}
                 </div>
-              )}
+                {/* Progress indicator */}
+                <div className="flex gap-1 mt-3">
+                  {sections.map((_, idx) => (
+                    <div
+                      key={idx}
+                      className={`h-1 flex-1 rounded-full transition-all ${
+                        idx <= currentSection ? 'bg-emerald-500' : 'bg-slate-700'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
 
-              {/* Content based on active tab */}
-              {activeTab === 'content' && (
-                <>
-                  <p className="text-slate-300 leading-relaxed">{topic.content}</p>
+              {/* Section Content */}
+              <div className="px-6 py-6">
+                <AnimatePresence mode="wait">
+                  {/* Section 1: Introduction */}
+                  {currentSection === 0 && (
+                    <motion.div
+                      key="intro"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="space-y-6"
+                    >
+                      <div className="bg-gradient-to-r from-emerald-900/30 to-cyan-900/30 rounded-xl p-6 border border-emerald-500/20">
+                        <h5 className="text-emerald-400 font-bold text-lg mb-3">🎯 What You&apos;ll Learn</h5>
+                        <p className="text-slate-200 text-lg leading-relaxed">{topic.content}</p>
+                      </div>
 
-                  {topic.analogy && (
-                    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4">
-                      <p className="text-cyan-400 text-sm font-medium mb-1">💡 Analogy (Easy to Remember)</p>
-                      <p className="text-slate-300 text-sm">{topic.analogy}</p>
-                    </div>
+                      {/* Visual Key Points */}
+                      <div>
+                        <h5 className="text-white font-bold mb-4">📌 Key Takeaways</h5>
+                        <div className="grid gap-3">
+                          {topic.keyPoints.map((point, i) => (
+                            <motion.div
+                              key={i}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.1 }}
+                              className="flex items-start gap-4 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50"
+                            >
+                              <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center text-emerald-400 font-bold text-sm flex-shrink-0">
+                                {i + 1}
+                              </span>
+                              <p className="text-slate-300 leading-relaxed">{point}</p>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setCurrentSection(1)}
+                        className="w-full py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                      >
+                        Continue to Analogy →
+                      </button>
+                    </motion.div>
                   )}
 
-                  <div className="bg-slate-700/50 rounded-lg p-4">
-                    <p className="text-emerald-400 text-sm font-medium mb-2">Key Points:</p>
-                    <ul className="space-y-2">
-                      {topic.keyPoints.map((point, i) => (
-                        <li key={i} className="text-slate-300 text-sm flex items-start gap-2">
-                          <span className="text-emerald-400 mt-0.5">•</span>
-                          <span>{point}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </>
-              )}
+                  {/* Section 2: Analogy */}
+                  {currentSection === 1 && (
+                    <motion.div
+                      key="analogy"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="space-y-6"
+                    >
+                      <div className="text-center mb-8">
+                        <span className="text-6xl">💡</span>
+                        <h5 className="text-cyan-400 font-bold text-xl mt-4">Think of it this way...</h5>
+                      </div>
 
-              {activeTab === 'deepDive' && topic.deepDive && (
-                <div className="bg-slate-800/50 rounded-lg p-4">
-                  <p className="text-purple-400 text-sm font-medium mb-3">🔬 Deep Dive</p>
-                  <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{topic.deepDive}</div>
-                </div>
-              )}
+                      {topic.analogy ? (
+                        <div className="bg-gradient-to-br from-cyan-900/30 to-blue-900/30 rounded-2xl p-8 border-2 border-cyan-500/30">
+                          <div className="text-center">
+                            <p className="text-xl text-white leading-relaxed italic">
+                              &ldquo;{topic.analogy}&rdquo;
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-800/50 rounded-xl p-6 text-center">
+                          <p className="text-slate-400">
+                            This concept is straightforward - let&apos;s dive into the details!
+                          </p>
+                        </div>
+                      )}
 
-              {activeTab === 'techRationale' && topic.techRationale && (
-                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
-                  <p className="text-orange-400 text-sm font-medium mb-3">🛠️ Why This Technology?</p>
-                  <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{topic.techRationale}</div>
-                </div>
-              )}
+                      {/* Visual comparison if applicable */}
+                      {topic.analogy && (
+                        <div className="grid md:grid-cols-2 gap-4 mt-6">
+                          <div className="bg-slate-800/50 rounded-xl p-5 border border-slate-700">
+                            <h6 className="text-slate-400 text-sm mb-2">🏠 Real World</h6>
+                            <p className="text-white font-medium">
+                              {topic.analogy.split('.')[0]}.
+                            </p>
+                          </div>
+                          <div className="bg-emerald-900/30 rounded-xl p-5 border border-emerald-500/30">
+                            <h6 className="text-emerald-400 text-sm mb-2">💻 In SIVA OS</h6>
+                            <p className="text-white font-medium">
+                              {topic.title} works the same way.
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
-              {activeTab === 'future' && topic.futureCompatibility && (
-                <div className="bg-gradient-to-r from-purple-900/30 to-cyan-900/30 border border-purple-500/30 rounded-lg p-4">
-                  <p className="text-purple-400 text-sm font-medium mb-3">🚀 2030 Compatibility & Future Vision</p>
-                  <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{topic.futureCompatibility}</div>
-                </div>
-              )}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setCurrentSection(0)}
+                          className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors"
+                        >
+                          ← Back
+                        </button>
+                        <button
+                          onClick={() => setCurrentSection(2)}
+                          className="flex-1 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl font-medium transition-colors"
+                        >
+                          Continue to Details →
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
 
-              {activeTab === 'code' && topic.codeExample && (
-                <div className="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 bg-slate-800 border-b border-slate-700">
-                    <p className="text-slate-400 text-xs font-mono">Code Example</p>
-                  </div>
-                  <pre className="p-4 text-sm text-emerald-400 font-mono overflow-x-auto">
-                    <code>{topic.codeExample}</code>
-                  </pre>
-                </div>
-              )}
+                  {/* Section 3: Details */}
+                  {currentSection === 2 && (
+                    <motion.div
+                      key="details"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="space-y-6"
+                    >
+                      <h5 className="text-white font-bold text-xl flex items-center gap-2">
+                        <span>🔍</span> The Details
+                      </h5>
 
-              {!isComplete && (
-                <button
-                  onClick={onComplete}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-lg font-medium transition-colors"
-                >
-                  Mark as Complete
-                </button>
-              )}
+                      {topic.deepDive ? (
+                        <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+                          <div className="prose prose-invert prose-sm max-w-none">
+                            {topic.deepDive.split('\n\n').map((paragraph, i) => {
+                              // Check if it's a header-like line
+                              if (paragraph.includes('├──') || paragraph.includes('└──') || paragraph.includes('│')) {
+                                return (
+                                  <pre key={i} className="bg-slate-900/50 p-4 rounded-lg text-emerald-400 text-sm font-mono overflow-x-auto my-4">
+                                    {paragraph}
+                                  </pre>
+                                );
+                              }
+                              // Check if it's a numbered list
+                              if (/^\d+\./.test(paragraph.trim())) {
+                                return (
+                                  <div key={i} className="bg-slate-700/30 rounded-lg p-4 my-3">
+                                    <p className="text-slate-300">{paragraph}</p>
+                                  </div>
+                                );
+                              }
+                              // Check if it's a header
+                              if (paragraph.toUpperCase() === paragraph && paragraph.length < 50) {
+                                return (
+                                  <h6 key={i} className="text-emerald-400 font-bold mt-6 mb-2">
+                                    {paragraph}
+                                  </h6>
+                                );
+                              }
+                              return (
+                                <p key={i} className="text-slate-300 mb-4 leading-relaxed">
+                                  {paragraph}
+                                </p>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-800/50 rounded-xl p-6">
+                          <p className="text-slate-300">
+                            The key concepts have been covered. Ready to test your understanding?
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setCurrentSection(1)}
+                          className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors"
+                        >
+                          ← Back
+                        </button>
+                        <button
+                          onClick={() => setCurrentSection(3)}
+                          className="flex-1 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl font-medium transition-colors"
+                        >
+                          Continue to Technical →
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Section 4: Technical */}
+                  {currentSection === 3 && (
+                    <motion.div
+                      key="technical"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="space-y-6"
+                    >
+                      <h5 className="text-white font-bold text-xl flex items-center gap-2">
+                        <span>⚙️</span> Technical Deep Dive
+                      </h5>
+
+                      {/* Tech Rationale */}
+                      {topic.techRationale && (
+                        <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-6">
+                          <h6 className="text-orange-400 font-bold mb-3">🛠️ Why This Approach?</h6>
+                          <div className="text-slate-300 whitespace-pre-line leading-relaxed">
+                            {topic.techRationale}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Code Example */}
+                      {topic.codeExample && (
+                        <div className="bg-slate-900 rounded-xl overflow-hidden border border-slate-700">
+                          <div className="px-4 py-3 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+                            <span className="text-slate-400 text-sm font-mono">Code Example</span>
+                            <span className="text-xs text-emerald-400">TypeScript</span>
+                          </div>
+                          <pre className="p-4 text-sm text-emerald-400 font-mono overflow-x-auto">
+                            <code>{topic.codeExample}</code>
+                          </pre>
+                        </div>
+                      )}
+
+                      {/* Future Compatibility */}
+                      {topic.futureCompatibility && (
+                        <div className="bg-gradient-to-r from-purple-900/30 to-cyan-900/30 border border-purple-500/30 rounded-xl p-6">
+                          <h6 className="text-purple-400 font-bold mb-3">🚀 2030 Compatibility</h6>
+                          <p className="text-slate-300 whitespace-pre-line leading-relaxed">
+                            {topic.futureCompatibility}
+                          </p>
+                        </div>
+                      )}
+
+                      {!topic.techRationale && !topic.codeExample && !topic.futureCompatibility && (
+                        <div className="bg-slate-800/50 rounded-xl p-6 text-center">
+                          <p className="text-slate-400">
+                            This is a foundational concept. Technical implementation details are covered in advanced modules.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setCurrentSection(2)}
+                          className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors"
+                        >
+                          ← Back
+                        </button>
+                        <button
+                          onClick={() => setCurrentSection(4)}
+                          className="flex-1 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-xl font-medium transition-colors"
+                        >
+                          Take Quiz →
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Section 5: Quiz */}
+                  {currentSection === 4 && (
+                    <motion.div
+                      key="quiz"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="space-y-6"
+                    >
+                      <div className="text-center mb-6">
+                        <span className="text-5xl">🧠</span>
+                        <h5 className="text-white font-bold text-xl mt-4">Test Your Understanding</h5>
+                        <p className="text-slate-400 mt-2">Answer correctly to mark this topic as complete</p>
+                      </div>
+
+                      <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+                        <p className="text-white font-medium text-lg mb-6">{quiz.question}</p>
+
+                        <div className="space-y-3">
+                          {quiz.options.map((option, i) => (
+                            <button
+                              key={i}
+                              onClick={() => !showQuizResult && setQuizAnswer(i)}
+                              disabled={showQuizResult}
+                              className={`w-full p-4 rounded-xl text-left transition-all ${
+                                showQuizResult
+                                  ? i === quiz.correct
+                                    ? 'bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400'
+                                    : i === quizAnswer
+                                      ? 'bg-red-500/20 border-2 border-red-500 text-red-400'
+                                      : 'bg-slate-700/50 border border-slate-600 text-slate-400'
+                                  : quizAnswer === i
+                                    ? 'bg-cyan-500/20 border-2 border-cyan-500 text-cyan-400'
+                                    : 'bg-slate-700/50 border border-slate-600 text-slate-300 hover:border-slate-500'
+                              }`}
+                            >
+                              <span className="font-medium">{String.fromCharCode(65 + i)}.</span> {option}
+                            </button>
+                          ))}
+                        </div>
+
+                        {showQuizResult && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`mt-6 p-4 rounded-xl ${
+                              quizAnswer === quiz.correct
+                                ? 'bg-emerald-500/20 border border-emerald-500/30'
+                                : 'bg-red-500/20 border border-red-500/30'
+                            }`}
+                          >
+                            {quizAnswer === quiz.correct ? (
+                              <p className="text-emerald-400 font-medium">
+                                ✅ Correct! You&apos;ve mastered this topic.
+                              </p>
+                            ) : (
+                              <p className="text-red-400 font-medium">
+                                ❌ Not quite. Review the content and try again!
+                              </p>
+                            )}
+                          </motion.div>
+                        )}
+
+                        {!showQuizResult && quizAnswer !== null && (
+                          <button
+                            onClick={handleQuizSubmit}
+                            className="w-full mt-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold transition-colors"
+                          >
+                            Submit Answer
+                          </button>
+                        )}
+
+                        {showQuizResult && quizAnswer !== quiz.correct && (
+                          <button
+                            onClick={() => {
+                              setQuizAnswer(null);
+                              setShowQuizResult(false);
+                              setCurrentSection(0);
+                            }}
+                            className="w-full mt-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors"
+                          >
+                            Review Content Again
+                          </button>
+                        )}
+                      </div>
+
+                      {!showQuizResult && (
+                        <button
+                          onClick={() => setCurrentSection(3)}
+                          className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-colors"
+                        >
+                          ← Back to Technical
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </motion.div>
         )}
