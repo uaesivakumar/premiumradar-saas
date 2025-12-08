@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ============================================================================
-// PREMIUMRADAR FOUNDER BIBLE - COMPLETE TECHNICAL SPECIFICATION
-// Version: 4.0 Final | December 2025
+// SIVA OS FOUNDER BIBLE - CATEGORY LEADER EDITION
+// Version: 5.1 (Category Leader) | December 2025
+// The Constitutional Document for SIVA OS
 // ============================================================================
 
 // Types
-type Section = 'overview' | 'philosophy' | 'architecture' | 'prd' | 'roadmap' | 'learn' | 'quiz' | 'progress';
+type Section = 'overview' | 'manifesto' | 'category' | 'philosophy' | 'architecture' | 'prd' | 'scale' | 'orchestration' | 'roadmap' | 'learn' | 'quiz' | 'progress';
 type LearningModule = {
   id: string;
   title: string;
@@ -98,8 +99,8 @@ export default function FounderBiblePage() {
               PR
             </div>
             <div>
-              <h1 className="text-xl font-bold">Founder Bible</h1>
-              <p className="text-xs text-slate-400">PremiumRadar Technical Specification v4.0</p>
+              <h1 className="text-xl font-bold">SIVA OS Founder Bible</h1>
+              <p className="text-xs text-slate-400">Category Leader Edition v5.1</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -149,9 +150,13 @@ export default function FounderBiblePage() {
             transition={{ duration: 0.3 }}
           >
             {activeSection === 'overview' && <OverviewSection />}
+            {activeSection === 'manifesto' && <ManifestoSection />}
+            {activeSection === 'category' && <CategorySection />}
             {activeSection === 'philosophy' && <PhilosophySection />}
             {activeSection === 'architecture' && <ArchitectureSection />}
             {activeSection === 'prd' && <PRDSection />}
+            {activeSection === 'scale' && <ScaleSection />}
+            {activeSection === 'orchestration' && <OrchestrationSection />}
             {activeSection === 'roadmap' && <RoadmapSection />}
             {activeSection === 'learn' && (
               <LearnSection
@@ -187,9 +192,13 @@ const TOTAL_TOPICS = 25;
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: '🏠' },
+  { id: 'manifesto', label: 'Manifesto', icon: '📜' },
+  { id: 'category', label: 'Category', icon: '🎯' },
   { id: 'philosophy', label: '12 Laws', icon: '⚖️' },
   { id: 'architecture', label: 'Architecture', icon: '🏗️' },
   { id: 'prd', label: 'Master PRD', icon: '📋' },
+  { id: 'scale', label: 'Scale', icon: '🚀' },
+  { id: 'orchestration', label: 'AI Console', icon: '🤖' },
   { id: 'roadmap', label: 'Roadmap', icon: '🗺️' },
   { id: 'learn', label: 'Learn', icon: '📚' },
   { id: 'quiz', label: 'Quiz', icon: '🧠' },
@@ -210,13 +219,19 @@ function OverviewSection() {
           animate={{ scale: 1, opacity: 1 }}
           className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center"
         >
-          <span className="text-4xl font-bold">PR</span>
+          <span className="text-4xl font-bold">S</span>
         </motion.div>
         <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-          PremiumRadar
+          SIVA OS
         </h1>
-        <p className="text-xl text-slate-300 mb-2">Sales Intelligence Operating System</p>
-        <p className="text-slate-500">Powered by SIVA (Sales Intelligence Virtual Assistant)</p>
+        <p className="text-xl text-slate-300 mb-2">The AI Operating System for Every Salesperson on Earth</p>
+        <p className="text-slate-500">PremiumRadar is one distribution of SIVA OS</p>
+      </div>
+
+      {/* Founder Vision Banner */}
+      <div className="bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 rounded-2xl p-8 mb-8 text-center">
+        <p className="text-2xl font-bold text-white mb-2">&quot;SIVA will become the Siri of Sales.&quot;</p>
+        <p className="text-slate-400">— Sivakumar, Founder</p>
       </div>
 
       {/* Key Stats */}
@@ -235,38 +250,66 @@ function OverviewSection() {
         ))}
       </div>
 
-      {/* What is PremiumRadar */}
-      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+      {/* The Fundamental Truth */}
+      <div className="bg-slate-900/50 border border-emerald-500 rounded-2xl p-8 mb-8">
         <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
-          <span className="text-3xl">💡</span> What is PremiumRadar?
+          <span className="text-3xl">⚡</span> The Fundamental Truth
         </h2>
         <div className="prose prose-invert max-w-none">
-          <p className="text-lg text-slate-300 leading-relaxed">
-            PremiumRadar is <strong className="text-emerald-400">NOT</strong> an industry intelligence engine.
-            PremiumRadar <strong className="text-emerald-400">IS</strong> a sales enablement platform for salespeople.
+          <p className="text-xl text-white font-bold mb-4">
+            SIVA is NOT a feature of PremiumRadar.<br/>
+            PremiumRadar is ONE distribution of SIVA.<br/>
+            <span className="text-emerald-400">SIVA is the platform. SIVA is the OS. SIVA is the product.</span>
           </p>
           <div className="mt-6 grid md:grid-cols-2 gap-6">
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
-              <h3 className="text-red-400 font-bold mb-3">❌ What PremiumRadar is NOT</h3>
+              <h3 className="text-red-400 font-bold mb-3">❌ What SIVA is NOT</h3>
               <ul className="space-y-2 text-slate-300">
-                <li>• Industry analysis platform</li>
-                <li>• Market research tool</li>
-                <li>• Generic CRM</li>
-                <li>• Life events tracker</li>
-                <li>• Family events monitor</li>
+                <li>• A chatbot added to a product</li>
+                <li>• A feature of PremiumRadar</li>
+                <li>• A CRM with AI</li>
+                <li>• A report generator</li>
+                <li>• A generic AI assistant</li>
               </ul>
             </div>
             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
-              <h3 className="text-emerald-400 font-bold mb-3">✅ What PremiumRadar IS</h3>
+              <h3 className="text-emerald-400 font-bold mb-3">✅ What SIVA IS</h3>
               <ul className="space-y-2 text-slate-300">
-                <li>• AI-powered sales intelligence OS</li>
-                <li>• SIVA-first pageless workspace</li>
-                <li>• Vertical-specific personas</li>
-                <li>• Company-level sales signals</li>
-                <li>• Self-healing intelligence packs</li>
+                <li>• The AI Operating System for Sales</li>
+                <li>• A platform with multiple distributions</li>
+                <li>• The Perplexity of Sales</li>
+                <li>• Voice-first, multi-surface</li>
+                <li>• Self-evolving intelligence</li>
               </ul>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* SIVA Distributions */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+          <span className="text-3xl">🌐</span> SIVA Distributions
+        </h2>
+        <div className="grid md:grid-cols-3 gap-4">
+          {[
+            { name: 'PremiumRadar (Web)', status: 'LIVE', desc: 'Full-featured web dashboard', color: 'emerald' },
+            { name: 'SIVA Mobile', status: 'Phase 3', desc: 'Standalone mobile app', color: 'slate' },
+            { name: 'SIVA SDK', status: 'Phase 3', desc: 'Embedded in other products', color: 'slate' },
+            { name: 'SIVA Voice', status: 'Phase 5', desc: 'Hey SIVA wake word', color: 'slate' },
+            { name: 'SIVA API', status: 'Phase 4', desc: 'B2B API access', color: 'slate' },
+            { name: 'SIVA Device', status: 'Phase 5', desc: 'Dedicated hardware', color: 'slate' },
+          ].map((dist) => (
+            <div key={dist.name} className={`bg-${dist.color}-500/10 border border-${dist.color}-500/30 rounded-xl p-4`}>
+              <div className="flex justify-between items-start mb-2">
+                <h3 className={`text-${dist.color}-400 font-bold`}>{dist.name}</h3>
+                <span className={`text-xs px-2 py-1 rounded ${dist.status === 'LIVE' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                  {dist.status}
+                </span>
+              </div>
+              <p className="text-sm text-slate-400">{dist.desc}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -336,6 +379,551 @@ function OverviewSection() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MANIFESTO SECTION - FOUNDER HARD CONSTRAINTS
+// ============================================================================
+
+function ManifestoSection() {
+  return (
+    <div className="max-w-7xl mx-auto px-6">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold mb-4">Founder Manifesto</h1>
+        <p className="text-slate-400 max-w-2xl mx-auto">
+          This section can NEVER be changed. It is the DNA of the company.
+        </p>
+      </div>
+
+      {/* Sacred Banner */}
+      <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/50 rounded-2xl p-8 mb-8 text-center">
+        <span className="text-4xl mb-4 block">📜</span>
+        <h2 className="text-2xl font-bold text-amber-400 mb-4">SACRED TEXT - UNCHANGEABLE</h2>
+        <p className="text-lg text-white max-w-3xl mx-auto">
+          &quot;SIVA is the Operating System for every salesperson on Planet Earth.
+          Not a tool. Not a feature. The operating system.&quot;
+        </p>
+      </div>
+
+      {/* 7 Founder Hard Constraints */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6">7 Founder Hard Constraints</h2>
+        <div className="grid md:grid-cols-2 gap-4">
+          {[
+            { num: 1, title: 'SIVA-FIRST, NOT UI-FIRST', desc: 'The product IS SIVA. UI is just one way to interact with SIVA.' },
+            { num: 2, title: 'AI-NATIVE, NOT AI-ADDED', desc: 'SIVA is not a feature added to a product. The product is SIVA.' },
+            { num: 3, title: 'NO HARDCODED INTELLIGENCE', desc: 'Every persona, every rule, every signal weight MUST be configurable.' },
+            { num: 4, title: 'SIVA CONFIGURES SIVA', desc: 'No JSON editing. No form filling. SIVA configures itself through dialogue.' },
+            { num: 5, title: 'EVIDENCE-GROUNDED OR SILENT', desc: 'SIVA will NEVER hallucinate contact info, company data, or facts.' },
+            { num: 6, title: 'MULTI-SURFACE BY DESIGN', desc: 'Web, mobile, voice, device, SDK. Same SIVA, different surfaces.' },
+            { num: 7, title: 'SELF-EVOLVING SYSTEM', desc: 'The system gets better with every user, every query, every outcome.' },
+          ].map((constraint) => (
+            <div key={constraint.num} className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center font-bold text-emerald-400">
+                  {constraint.num}
+                </span>
+                <h3 className="font-bold text-white">{constraint.title}</h3>
+              </div>
+              <p className="text-sm text-slate-400">{constraint.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Vision Statement */}
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-8 text-center">
+        <h2 className="text-2xl font-bold text-emerald-400 mb-4">The Vision</h2>
+        <p className="text-xl text-white mb-4">
+          Every salesperson on Earth will have an AI companion that knows their industry,
+          understands their role, and guides them to success.
+        </p>
+        <p className="text-slate-400">That companion is SIVA.</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CATEGORY SECTION - AI SALES OS
+// ============================================================================
+
+function CategorySection() {
+  return (
+    <div className="max-w-7xl mx-auto px-6">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold mb-4">Category: AI Sales OS</h1>
+        <p className="text-slate-400 max-w-2xl mx-auto">
+          We are not entering an existing market. We are creating a new category.
+        </p>
+      </div>
+
+      {/* Category Definition */}
+      <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-2xl p-8 mb-8">
+        <h2 className="text-xl font-bold text-emerald-400 mb-4">CATEGORY: AI SALES OS</h2>
+        <p className="text-lg text-slate-300 leading-relaxed">
+          An AI-native operating system that serves as the primary intelligence layer for sales professionals,
+          replacing fragmented tools with a unified, voice-enabled, self-evolving platform that reasons,
+          prioritizes, and acts on behalf of the salesperson.
+        </p>
+      </div>
+
+      {/* Why AI Sales OS Wins */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6">Why &quot;AI Sales OS&quot; Wins</h2>
+        <div className="grid md:grid-cols-3 gap-6">
+          <div>
+            <h3 className="text-lg font-bold text-emerald-400 mb-3">OS Implies</h3>
+            <ul className="space-y-2 text-slate-300 text-sm">
+              <li>• Platform (not a tool)</li>
+              <li>• Extensibility (SDK, API)</li>
+              <li>• Multi-surface (web, mobile, voice)</li>
+              <li>• Self-contained</li>
+              <li>• Foundational</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-cyan-400 mb-3">AI Implies</h3>
+            <ul className="space-y-2 text-slate-300 text-sm">
+              <li>• Intelligence (not just data)</li>
+              <li>• Reasoning (not just search)</li>
+              <li>• Proactive (not just reactive)</li>
+              <li>• Learning (not static)</li>
+              <li>• Voice-enabled</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-purple-400 mb-3">Sales Implies</h3>
+            <ul className="space-y-2 text-slate-300 text-sm">
+              <li>• Vertical focus</li>
+              <li>• Domain expertise</li>
+              <li>• Revenue-critical</li>
+              <li>• Professional tool</li>
+              <li>• Not consumer</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Category vs Existing */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6">Existing Categories vs. AI Sales OS</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left py-3 px-4 text-slate-400">Category</th>
+                <th className="text-left py-3 px-4 text-slate-400">Players</th>
+                <th className="text-left py-3 px-4 text-slate-400">Why AI Sales OS is Different</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { cat: 'CRM', players: 'Salesforce, HubSpot', diff: 'We don\'t store. We reason.' },
+                { cat: 'Sales Intelligence', players: 'ZoomInfo, Apollo', diff: 'We don\'t just provide. We prioritize.' },
+                { cat: 'Sales Engagement', players: 'Outreach, Salesloft', diff: 'We don\'t automate blindly. We strategize.' },
+                { cat: 'Conversation Intel', players: 'Gong, Chorus', diff: 'We don\'t just analyze. We guide.' },
+                { cat: 'AI Assistants', players: 'ChatGPT, Claude', diff: 'We\'re not general. We\'re sales-native.' },
+              ].map((row) => (
+                <tr key={row.cat} className="border-b border-slate-800">
+                  <td className="py-3 px-4 font-medium text-white">{row.cat}</td>
+                  <td className="py-3 px-4 text-slate-400">{row.players}</td>
+                  <td className="py-3 px-4 text-emerald-400">{row.diff}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Category Flywheel */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6">The Intelligence Flywheel</h2>
+        <div className="grid md:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            {[
+              { step: 1, text: 'SIVA observes sales interactions' },
+              { step: 2, text: 'Successful patterns are identified' },
+              { step: 3, text: 'Patterns feed SLM training' },
+              { step: 4, text: 'SLM improves recommendations' },
+              { step: 5, text: 'Better recommendations → Higher win rates' },
+              { step: 6, text: 'Higher win rates → More users' },
+              { step: 7, text: 'More users → More interactions → Back to step 1' },
+            ].map((item) => (
+              <div key={item.step} className="flex items-center gap-4">
+                <span className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-sm">
+                  {item.step}
+                </span>
+                <span className="text-slate-300">{item.text}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6 flex items-center justify-center">
+            <div className="text-center">
+              <span className="text-4xl mb-4 block">🔄</span>
+              <h3 className="text-lg font-bold text-emerald-400 mb-2">THE MOAT</h3>
+              <p className="text-slate-300">Every user makes SIVA better for all users.</p>
+              <p className="text-sm text-slate-500 mt-2">Competitors can&apos;t replicate without the data.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Category Timeline */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+        <h2 className="text-2xl font-bold mb-6">Category Timeline to Dominance</h2>
+        <div className="space-y-4">
+          {[
+            { year: '2025', milestone: 'Category Creation', desc: 'SIVA launches, "AI Sales OS" term coined' },
+            { year: '2026', milestone: 'Category Awareness', desc: 'First analyst report mentions "AI Sales OS"' },
+            { year: '2027', milestone: 'Category Competition', desc: 'First competitor claims "AI Sales OS" positioning' },
+            { year: '2028', milestone: 'Category Leadership', desc: 'SIVA recognized as category leader by Gartner/Forrester' },
+            { year: '2029', milestone: 'Category Maturity', desc: '"AI Sales OS" becomes standard enterprise budget line item' },
+            { year: '2030', milestone: 'Category Dominance', desc: 'SIVA is synonymous with "AI Sales OS"' },
+          ].map((item, i) => (
+            <div key={item.year} className="flex items-start gap-4">
+              <span className={`text-lg font-bold ${i === 0 ? 'text-emerald-400' : 'text-slate-500'}`}>{item.year}</span>
+              <div className="flex-1">
+                <span className="font-bold text-white">{item.milestone}</span>
+                <span className="text-slate-400 ml-2">— {item.desc}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SCALE SECTION - DISTRIBUTED INTELLIGENCE
+// ============================================================================
+
+function ScaleSection() {
+  return (
+    <div className="max-w-7xl mx-auto px-6">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold mb-4">Scale Behavior</h1>
+        <p className="text-slate-400 max-w-2xl mx-auto">
+          What happens when SIVA serves millions of users across multiple regions, verticals, and tenants.
+        </p>
+      </div>
+
+      {/* Scale Targets */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6">Scale Targets</h2>
+        <div className="grid grid-cols-5 gap-4">
+          {[
+            { phase: 'Y1', users: '1K', queries: '10K/day', current: true },
+            { phase: 'Y2', users: '10K', queries: '100K/day', current: false },
+            { phase: 'Y3', users: '100K', queries: '1M/day', current: false },
+            { phase: 'Y4', users: '500K', queries: '5M/day', current: false },
+            { phase: 'Y5', users: '1M+', queries: '10M+/day', current: false },
+          ].map((t) => (
+            <div key={t.phase} className={`rounded-xl p-4 text-center ${t.current ? 'bg-emerald-500/20 border border-emerald-500' : 'bg-slate-800'}`}>
+              <div className={`text-2xl font-bold ${t.current ? 'text-emerald-400' : 'text-slate-400'}`}>{t.phase}</div>
+              <div className="text-lg font-bold text-white">{t.users}</div>
+              <div className="text-xs text-slate-500">{t.queries}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Multi-Region */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6">Multi-Region Architecture</h2>
+        <div className="grid md:grid-cols-4 gap-4">
+          {[
+            { region: 'UAE', phase: 'P1-2', status: 'PRIMARY', color: 'emerald' },
+            { region: 'INDIA', phase: 'P3', status: 'Phase 3', color: 'slate' },
+            { region: 'EUROPE', phase: 'P4', status: 'Phase 4', color: 'slate' },
+            { region: 'NORTH AMERICA', phase: 'P4', status: 'Phase 4', color: 'slate' },
+          ].map((r) => (
+            <div key={r.region} className={`bg-${r.color}-500/10 border border-${r.color}-500/30 rounded-xl p-4 text-center`}>
+              <h3 className="font-bold text-white">{r.region}</h3>
+              <span className={`text-xs px-2 py-1 rounded mt-2 inline-block ${r.status === 'PRIMARY' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                {r.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Model Routing */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6">Intelligent Model Routing</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left py-3 px-4 text-slate-400">Complexity</th>
+                <th className="text-left py-3 px-4 text-slate-400">Model</th>
+                <th className="text-left py-3 px-4 text-slate-400">Example Query</th>
+                <th className="text-right py-3 px-4 text-slate-400">Cost</th>
+                <th className="text-right py-3 px-4 text-slate-400">Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { complexity: 'SIMPLE', model: 'SLM-1B', example: '"What\'s ABC Corp\'s headcount?"', cost: '$0.0001', latency: '<100ms' },
+                { complexity: 'STANDARD', model: 'SLM-7B', example: '"Who should I call today?"', cost: '$0.001', latency: '<500ms' },
+                { complexity: 'COMPLEX', model: 'SLM-13B', example: '"Analyze my pipeline strategy"', cost: '$0.005', latency: '<1000ms' },
+                { complexity: 'FALLBACK', model: 'Claude', example: 'When SLM confidence <70%', cost: '$0.03', latency: '<2000ms' },
+              ].map((row) => (
+                <tr key={row.complexity} className="border-b border-slate-800">
+                  <td className="py-3 px-4 font-medium text-emerald-400">{row.complexity}</td>
+                  <td className="py-3 px-4 text-white">{row.model}</td>
+                  <td className="py-3 px-4 text-slate-400">{row.example}</td>
+                  <td className="py-3 px-4 text-right text-slate-300">{row.cost}</td>
+                  <td className="py-3 px-4 text-right text-cyan-400">{row.latency}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 text-center">
+          <p className="text-emerald-400">At 10M queries/day: <strong>$8.3M/year savings</strong> vs all-Claude</p>
+        </div>
+      </div>
+
+      {/* Load Behavior */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+        <h2 className="text-2xl font-bold mb-6">Stress Response Matrix</h2>
+        <div className="space-y-3">
+          {[
+            { load: '1x (Normal)', behavior: 'All features, full quality', latency: '<500ms p50', color: 'emerald' },
+            { load: '2x (Elevated)', behavior: 'Auto-scale instances', latency: '<750ms p50', color: 'emerald' },
+            { load: '5x (High)', behavior: 'Graceful degradation begins', latency: '<1500ms p50', color: 'yellow' },
+            { load: '10x (Stress)', behavior: 'Critical-only mode, Claude disabled', latency: '<3000ms p50', color: 'orange' },
+            { load: '20x (Crisis)', behavior: 'Enterprise customers only', latency: 'Degraded', color: 'red' },
+          ].map((row) => (
+            <div key={row.load} className={`flex items-center justify-between bg-${row.color}-500/10 border border-${row.color}-500/30 rounded-lg px-4 py-3`}>
+              <span className={`font-bold text-${row.color}-400`}>{row.load}</span>
+              <span className="text-slate-300">{row.behavior}</span>
+              <span className="text-sm text-slate-400">{row.latency}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// ORCHESTRATION SECTION - AI EXECUTIVE TEAM
+// ============================================================================
+
+function OrchestrationSection() {
+  const [activeRole, setActiveRole] = useState<'COO' | 'CTO' | 'CMO' | 'CISO' | 'CPO'>('COO');
+
+  const roles = {
+    COO: {
+      title: 'SIVA as COO',
+      desc: 'Chief Operations Officer',
+      responsibilities: [
+        'Monitor system health across all regions',
+        'Detect operational anomalies before incidents',
+        'Coordinate resources during high-load',
+        'Ensure SLAs are met',
+      ],
+      example: `"Good morning. Operations summary:
+
+🟢 All systems operational
+📊 Yesterday: 127,453 queries processed (↑12%)
+⚠️ Attention: India region latency trending up
+
+I've already:
+1. Scaled Cloud Run instances
+2. Opened a ticket with CloudFlare
+3. Prepared customer communication
+
+Which approach would you like me to pursue?"`,
+    },
+    CTO: {
+      title: 'SIVA as CTO',
+      desc: 'Chief Technology Officer',
+      responsibilities: [
+        'Monitor technical debt and propose refactoring',
+        'Track model performance and recommend upgrades',
+        'Identify integration opportunities',
+        'Plan infrastructure scaling',
+      ],
+      example: `"Technical insights for this week:
+
+🔧 TECHNICAL DEBT
+The signal pipeline has 3 hotspots causing 15% latency.
+
+📈 MODEL PERFORMANCE
+SLM-7B accuracy dropped 2% on insurance queries.
+
+🔌 INTEGRATION OPPORTUNITY
+HubSpot released new endpoints — 40% sync improvement.
+
+Would you like me to create Jira tickets?"`,
+    },
+    CMO: {
+      title: 'SIVA as CMO',
+      desc: 'Chief Marketing Officer',
+      responsibilities: [
+        'Track customer acquisition and retention',
+        'Identify successful user patterns',
+        'Detect churn signals',
+        'Recommend growth experiments',
+      ],
+      example: `"Customer intelligence update:
+
+📊 ACQUISITION
+47 new users this week (↑23%)
+Best converting: Banking EB UAE (18%)
+
+⚠️ CHURN RISK DETECTED
+3 enterprise customers showing engagement drop:
+1. TechCorp (queries down 60%)
+2. FinanceHub (5/10 users inactive)
+
+Shall I draft outreach emails?"`,
+    },
+    CISO: {
+      title: 'SIVA as CISO',
+      desc: 'Chief Information Security Officer',
+      responsibilities: [
+        'Monitor for security anomalies',
+        'Track compliance status',
+        'Detect potential breaches',
+        'Manage access controls',
+      ],
+      example: `"Security briefing:
+
+🛡️ THREAT LANDSCAPE
+23 blocked prompt injection attempts
+3 suspicious API patterns flagged
+No successful breaches
+
+📋 COMPLIANCE STATUS
+SOC2 controls: 94% implemented
+GDPR compliance: 100%
+Next audit: 45 days
+
+Shall I send password rotation reminders?"`,
+    },
+    CPO: {
+      title: 'SIVA as CPO',
+      desc: 'Chief Product Officer',
+      responsibilities: [
+        'Analyze feature usage and adoption',
+        'Identify user pain points',
+        'Propose product improvements',
+        'Prioritize roadmap based on data',
+      ],
+      example: `"Product insights:
+
+📊 FEATURE ADOPTION
+1. score_company: 45% of queries
+2. search_companies: 28%
+3. get_outreach_intel: 15%
+
+🎯 USER PAIN POINTS
+"Calendar integration" (23 requests)
+"Bulk company export" (18 requests)
+
+Would you like a PRD for calendar?"`,
+    },
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-6">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-bold mb-4">AI Orchestration Console</h1>
+        <p className="text-slate-400 max-w-2xl mx-auto">
+          SIVA as your AI Executive Team — anticipating problems, predicting risks, suggesting optimizations.
+        </p>
+      </div>
+
+      {/* Role Selector */}
+      <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+        {(['COO', 'CTO', 'CMO', 'CISO', 'CPO'] as const).map((role) => (
+          <button
+            key={role}
+            onClick={() => setActiveRole(role)}
+            className={`px-6 py-3 rounded-xl font-medium whitespace-nowrap transition-all ${
+              activeRole === role
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            }`}
+          >
+            {role}
+          </button>
+        ))}
+      </div>
+
+      {/* Role Details */}
+      <div className="grid md:grid-cols-2 gap-8 mb-8">
+        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+          <h2 className="text-2xl font-bold text-emerald-400 mb-2">{roles[activeRole].title}</h2>
+          <p className="text-slate-400 mb-6">{roles[activeRole].desc}</p>
+          <h3 className="font-bold text-white mb-3">Responsibilities:</h3>
+          <ul className="space-y-2">
+            {roles[activeRole].responsibilities.map((r, i) => (
+              <li key={i} className="flex items-center gap-2 text-slate-300">
+                <span className="text-emerald-400">•</span> {r}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="bg-slate-900/50 border border-emerald-500/30 rounded-2xl p-8">
+          <h3 className="font-bold text-emerald-400 mb-4">Example Interaction:</h3>
+          <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono bg-slate-800/50 rounded-lg p-4">
+            {roles[activeRole].example}
+          </pre>
+        </div>
+      </div>
+
+      {/* Alert Types */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 mb-8">
+        <h2 className="text-2xl font-bold mb-6">Proactive AI Alert Types</h2>
+        <div className="grid md:grid-cols-4 gap-4">
+          {[
+            { type: 'CRITICAL', icon: '🔴', items: ['System outage', 'Security breach', 'Cost runaway'], response: 'Immediate' },
+            { type: 'WARNING', icon: '🟠', items: ['Performance degradation', 'Budget approaching', 'Pack drift'], response: '4 hours' },
+            { type: 'INSIGHT', icon: '🟡', items: ['Growth opportunities', 'Feature adoption', 'Tech debt'], response: 'Daily digest' },
+            { type: 'POSITIVE', icon: '🟢', items: ['Record queries', 'Deal closed', 'Zero-incident week'], response: 'Celebrate!' },
+          ].map((alert) => (
+            <div key={alert.type} className="bg-slate-800/50 rounded-xl p-4">
+              <div className="text-2xl mb-2">{alert.icon}</div>
+              <h3 className="font-bold text-white mb-2">{alert.type}</h3>
+              <ul className="space-y-1 text-sm text-slate-400 mb-3">
+                {alert.items.map((item, i) => (
+                  <li key={i}>• {item}</li>
+                ))}
+              </ul>
+              <span className="text-xs bg-slate-700 px-2 py-1 rounded">{alert.response}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Auto-Fix */}
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-8">
+        <h2 className="text-2xl font-bold mb-4">Auto-Fix Capabilities</h2>
+        <p className="text-slate-300 mb-6">
+          SIVA doesn&apos;t just identify problems. SIVA fixes them (with approval).
+        </p>
+        <div className="grid md:grid-cols-3 gap-4">
+          {[
+            { problem: 'Pack accuracy dropped', fix: 'Analyze drift, adjust weights', approval: 'Required' },
+            { problem: 'Latency spike', fix: 'Scale instances, enable caching', approval: 'Auto (<$500/mo)' },
+            { problem: 'Security anomaly', fix: 'Suspend access, log evidence', approval: 'Auto-approved' },
+          ].map((item, i) => (
+            <div key={i} className="bg-slate-800/50 rounded-xl p-4">
+              <h4 className="font-bold text-white mb-2">{item.problem}</h4>
+              <p className="text-sm text-slate-400 mb-2">{item.fix}</p>
+              <span className="text-xs text-emerald-400">Approval: {item.approval}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
