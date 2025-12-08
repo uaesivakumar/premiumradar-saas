@@ -53,6 +53,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Protect /superadmin routes (except login page)
+  // Note: /superadmin/founder-bible is now protected by this block
   if (pathname.startsWith('/superadmin') && pathname !== '/superadmin/login') {
     const sessionCookie = request.cookies.get(SUPER_ADMIN_COOKIE);
 

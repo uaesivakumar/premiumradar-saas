@@ -1,75 +1,78 @@
-# PremiumRadar-SAAS Notion Update
+# PremiumRadar Notion Update
 
-Fix all Notion update issues and ensure complete property population.
+Fix Notion data issues and ensure complete property population in the **UNIFIED** databases.
 
-**Use after:** Completing a stream, sprint, or when Notion data is incomplete.
+**Use after:** Completing a stream, sprint, or when Notion data is incomplete/broken.
+
+---
+
+## SOURCE OF TRUTH
+
+**There are exactly TWO Notion databases. No others exist.**
+
+| Database | ID | Records |
+|----------|-----|---------|
+| **SPRINTS** | `5c32e26d-641a-4711-a9fb-619703943fb9` | 132 sprints (S1-S132) |
+| **FEATURES** | `26ae5afe-4b5f-4d97-b402-5c459f188944` | 754 features |
+
+### Current Distribution
+| Repo | Sprints | Features |
+|------|---------|----------|
+| OS | 65 | 533 |
+| SaaS Frontend | 56 | 105 |
+| Super Admin | 11 | 116 |
+
+---
 
 ## Common Issues This Command Fixes
 
-1. ❌ Columns not fully populated
-2. ❌ Notion auth token not fetched
-3. ❌ Database schema not understood
-4. ❌ Property types incorrect (checkbox vs multi_select)
-5. ❌ Status not updated properly
-6. ❌ Missing dates, notes, or business value
+1. Columns not fully populated
+2. Missing Repo assignment
+3. Property types incorrect (checkbox vs multi_select)
+4. Status not updated properly
+5. Missing dates, notes, or business value
+6. Sprints/features not assigned to correct Repo
 
-## EXECUTE THESE STEPS IN ORDER:
+---
 
-### Step 1: Fetch Notion Token (CRITICAL)
+## EXECUTE THESE STEPS:
+
+### Step 1: Fetch Notion Token
 ```bash
-export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)
+export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS --project=applied-algebra-474804-e6)
 echo "Token fetched: ${NOTION_TOKEN:0:10}..."
 ```
 
-**If token fetch fails:**
+### Step 2: Audit Current State
+Run the audit script to see what needs fixing:
+
 ```bash
-# Check if you're authenticated with gcloud
-gcloud auth list
-
-# Re-authenticate if needed
-gcloud auth login
+cd /Users/skc/Projects/UPR/upr-os
+NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS --project=applied-algebra-474804-e6) node scripts/notion/audit-features.js
 ```
 
-### Step 2: Load Database IDs
-```bash
-cat .notion-db-ids.json
-```
+This shows:
+- Column fill rates
+- Empty columns to delete
+- Repo distribution
 
-```javascript
-const DB_IDS = {
-  sprints: '5c32e26d-641a-4711-a9fb-619703943fb9',
-  features: '26ae5afe-4b5f-4d97-b402-5c459f188944',
-  knowledge: 'f1552250-cafc-4f5f-90b0-edc8419e578b'
-};
-```
+### Step 3: Validate Schema
 
-### Step 3: Validate Database Schema
-**CRITICAL:** Always verify property types before updating!
-
-```javascript
-// Query database schema
-const db = await notion.databases.retrieve({ database_id: DB_ID });
-const schema = {};
-for (const [name, prop] of Object.entries(db.properties)) {
-  schema[name] = prop.type;
-}
-console.log('Schema:', JSON.stringify(schema, null, 2));
-```
-
-### SPRINTS Database Schema
+**SPRINTS Schema:**
 ```javascript
 {
-  "Sprint": "title",
-  "Status": "select",           // Options: Done, In Progress, Backlog
+  "Sprint": "title",              // "SX: Name" format
+  "Status": "select",             // Backlog | In Progress | Done
+  "Repo": "select",               // OS | SaaS Frontend | Super Admin (REQUIRED!)
   "Goal": "rich_text",
   "Sprint Notes": "rich_text",
   "Outcomes": "rich_text",
   "Highlights": "rich_text",
   "Business Value": "rich_text",
   "Learnings": "rich_text",
+  "Branch": "rich_text",
   "Commit": "rich_text",
   "Git Tag": "rich_text",
-  "Branch": "rich_text",
   "Started At": "date",
   "Completed At": "date",
   "Synced At": "date",
@@ -78,32 +81,37 @@ console.log('Schema:', JSON.stringify(schema, null, 2));
 }
 ```
 
-### FEATURES Database Schema
+**FEATURES Schema:**
 ```javascript
 {
   "Features": "title",
-  "Sprint": "number",
-  "Status": "select",           // Options: Done, In Progress, Backlog
-  "Priority": "select",         // Options: High, Medium, Low
-  "Complexity": "select",       // Options: High, Medium, Low
-  "Type": "select",             // Options: Feature, Bug, Infrastructure, Testing
+  "Sprint": "number",             // Sprint number (e.g., 26)
+  "Status": "select",             // Backlog | In Progress | Done
+  "Repo": "select",               // OS | SaaS Frontend | Super Admin (REQUIRED!)
+  "Priority": "select",           // High | Medium | Low
+  "Complexity": "select",         // High | Medium | Low
+  "Type": "select",               // Feature | Bug | Infrastructure | Testing
   "Notes": "rich_text",
-  "Tags": "multi_select",
-  "Assignee": "rich_text",
+  "Tags": "multi_select",         // UI, AI, API, Database, Security, etc.
+  "Assignee": "rich_text",        // Claude (TC) or human name
   "Done?": "checkbox",
   "Started At": "date",
   "Completed At": "date"
 }
 ```
 
-### Step 4: Run Full Update Script
+### Step 4: Fix Sprints
 
-**For Sprints (all properties):**
+**Update a single sprint:**
 ```javascript
+import { Client } from '@notionhq/client';
+const notion = new Client({ auth: process.env.NOTION_TOKEN });
+
 await notion.pages.update({
   page_id: sprint.id,
   properties: {
     'Status': { select: { name: 'Done' } },
+    'Repo': { select: { name: 'OS' } },  // REQUIRED!
     'Goal': { rich_text: [{ text: { content: 'Goal description' } }] },
     'Sprint Notes': { rich_text: [{ text: { content: 'Notes here' } }] },
     'Outcomes': { rich_text: [{ text: { content: 'What was delivered' } }] },
@@ -111,7 +119,7 @@ await notion.pages.update({
     'Business Value': { rich_text: [{ text: { content: 'Impact' } }] },
     'Learnings': { rich_text: [{ text: { content: 'Technical insights' } }] },
     'Branch': { rich_text: [{ text: { content: 'feat/branch-name' } }] },
-    'Commit': { rich_text: [{ text: { content: 'Implemented in feat/...' } }] },
+    'Commit': { rich_text: [{ text: { content: 'Commit reference' } }] },
     'Git Tag': { rich_text: [{ text: { content: 'sprint-sX-complete' } }] },
     'Started At': { date: { start: '2025-11-20' } },
     'Completed At': { date: { start: '2025-11-26' } },
@@ -122,12 +130,15 @@ await notion.pages.update({
 });
 ```
 
-**For Features (all properties):**
+### Step 5: Fix Features
+
+**Update a single feature:**
 ```javascript
 await notion.pages.update({
   page_id: feature.id,
   properties: {
     'Status': { select: { name: 'Done' } },
+    'Repo': { select: { name: 'OS' } },  // REQUIRED - must match sprint's Repo
     'Priority': { select: { name: 'High' } },
     'Complexity': { select: { name: 'Medium' } },
     'Type': { select: { name: 'Feature' } },
@@ -141,39 +152,54 @@ await notion.pages.update({
 });
 ```
 
-### Step 5: Verify Update Success
-```bash
-# Run verification script
-node -e "
-const { Client } = require('@notionhq/client');
-const notion = new Client({ auth: process.env.NOTION_TOKEN });
+### Step 6: Bulk Updates
 
-// Check a sample sprint
-notion.databases.query({
-  database_id: '5c32e26d-641a-4711-a9fb-619703943fb9',
-  page_size: 1,
-  sorts: [{ property: 'Sprint', direction: 'descending' }]
-}).then(res => {
-  const p = res.results[0].properties;
-  console.log('Sample Sprint Properties:');
-  console.log('- Status:', p.Status?.select?.name || 'MISSING');
-  console.log('- Goal:', p.Goal?.rich_text?.[0]?.plain_text?.substring(0,30) || 'MISSING');
-  console.log('- Business Value:', p['Business Value']?.rich_text?.[0]?.plain_text?.substring(0,30) || 'MISSING');
+**Re-tag Super Admin features:**
+```bash
+cd /Users/skc/Projects/UPR/upr-os
+NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS --project=applied-algebra-474804-e6) node scripts/notion/retag-super-admin-features.js --dry-run
+# Remove --dry-run to apply
+```
+
+**Reassign features across sprints:**
+```bash
+NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS --project=applied-algebra-474804-e6) node scripts/notion/reassign-features.js --dry-run
+```
+
+**Perfect features (fill missing values):**
+```bash
+NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS --project=applied-algebra-474804-e6) node scripts/notion/perfect-features.js --dry-run
+```
+
+### Step 7: Verify Updates
+
+```javascript
+// Check distribution
+const features = await fetchAll(notion, FEATURES_DB);
+const byRepo = {};
+features.forEach(f => {
+  const repo = f.properties.Repo?.select?.name || 'Not set';
+  byRepo[repo] = (byRepo[repo] || 0) + 1;
 });
-"
+console.log('Features by Repo:', byRepo);
+// Expected: { 'OS': 533, 'SaaS Frontend': 105, 'Super Admin': 116 }
 ```
 
-## Quick Fix Scripts
+---
 
-**Fix all sprints in range:**
-```bash
-NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS) node scripts/notion/fixAllSprintsV2.js
-```
+## Available Fix Scripts
 
-**Fix all features in range:**
-```bash
-NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS) node scripts/notion/fixStream11Complete.js
-```
+| Script | Purpose |
+|--------|---------|
+| `audit-features.js` | Analyze column usage and repo distribution |
+| `perfect-features.js` | Fill missing values (dates, tags, type, assignee) |
+| `reassign-features.js` | Redistribute features across sprints by Repo |
+| `retag-super-admin-features.js` | Re-tag features that should be Super Admin |
+| `find-super-admin-features.js` | Find features that might be Super Admin |
+
+All scripts support `--dry-run` flag.
+
+---
 
 ## Usage
 
@@ -181,33 +207,42 @@ NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)
 /notion-update
 ```
 
-Or with specific range:
+Or to fix specific sprint range:
 ```
-/notion-update S1-S10
+/notion-update S78-S132
 ```
+
+---
 
 ## Troubleshooting
 
 ### "Property X is expected to be Y"
-- **Cause:** Using wrong property type (e.g., checkbox instead of multi_select)
-- **Fix:** Check schema above and use correct type
+- **Cause:** Using wrong property type
+- **Fix:** Check schema - `Phases Updated` is `multi_select`, not checkbox
 
 ### "Token not found"
-- **Cause:** NOTION_TOKEN not set
-- **Fix:** Run `export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)`
+```bash
+export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS --project=applied-algebra-474804-e6)
+```
 
 ### "Page not found"
-- **Cause:** Wrong database ID or page ID
-- **Fix:** Verify IDs in `.notion-db-ids.json`
+- Verify database IDs are correct
+- SPRINTS: `5c32e26d-641a-4711-a9fb-619703943fb9`
+- FEATURES: `26ae5afe-4b5f-4d97-b402-5c459f188944`
 
-### "Validation error"
-- **Cause:** Property name mismatch
-- **Fix:** Property names are case-sensitive - verify exact names
+### Features missing Repo
+Run retag script to auto-assign based on keywords:
+```bash
+node scripts/notion/retag-super-admin-features.js
+```
+
+---
 
 ## FORBIDDEN PRACTICES
 
-- ❌ NEVER update only the Status field
-- ❌ NEVER skip filling required fields
-- ❌ NEVER assume a field is optional
-- ❌ NEVER leave Notes, Learnings, or Business Value empty
-- ❌ NEVER assume property types - always verify schema first
+- Updating only Status without other fields
+- Leaving Repo unset
+- Skipping required fields
+- Leaving Notes/Learnings/Business Value empty
+- Assuming property types - always verify schema
+- Creating new databases (only 2 exist!)

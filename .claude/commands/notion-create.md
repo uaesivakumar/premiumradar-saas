@@ -1,25 +1,55 @@
-# PremiumRadar-SAAS Notion Create
+# PremiumRadar Notion Create
 
-Create new sprints and features in Notion with proper schema and full property population.
+Create new sprints and features in the **UNIFIED** Notion databases.
 
 **Use when:** Starting a new stream/stretch, planning new work, or creating sprint backlog.
 
+---
+
+## SOURCE OF TRUTH
+
+**There are exactly TWO Notion databases. No others exist.**
+
+| Database | ID | Records | Purpose |
+|----------|-----|---------|---------|
+| **SPRINTS** | `5c32e26d-641a-4711-a9fb-619703943fb9` | 132 sprints (S1-S132) | Sprint planning & tracking |
+| **FEATURES** | `26ae5afe-4b5f-4d97-b402-5c459f188944` | 754 features | Feature tracking |
+
+### Sprint Distribution by Repo
+| Repo | Sprints | Range |
+|------|---------|-------|
+| OS | 65 | Backend/API work |
+| SaaS Frontend | 56 | UI/Frontend work |
+| Super Admin | 11 | Admin panel work |
+
+### Feature Distribution by Repo
+| Repo | Features |
+|------|----------|
+| OS | 533 |
+| SaaS Frontend | 105 |
+| Super Admin | 116 |
+
+---
+
 ## IMPORTANT RULES
 
-1. **TC MUST understand Notion schema before creating**
-2. **TC MUST populate ALL required fields** (not just name/status)
+1. **TC MUST populate ALL required fields** (not just name/status)
+2. **TC MUST set Repo correctly** - determines which codebase
 3. **TC MUST wait for founder approval before executing** created sprints
-4. **Sprint count can be specified or auto-determined** based on complexity
+4. **Next sprint number:** Query DB to find max Sprint number + 1
 
-## Database Schema Reference
+---
+
+## Database Schemas
 
 ### SPRINTS Database
 **ID:** `5c32e26d-641a-4711-a9fb-619703943fb9`
 
 ```javascript
 {
-  "Sprint": "title",              // "Sprint SX" or "SX: Name"
-  "Status": "select",             // Backlog → In Progress → Done
+  "Sprint": "title",              // "SX: Name" format (e.g., "S133: New Feature")
+  "Status": "select",             // Backlog | In Progress | Done
+  "Repo": "select",               // OS | SaaS Frontend | Super Admin (REQUIRED!)
   "Goal": "rich_text",            // Sprint objective
   "Sprint Notes": "rich_text",    // Stream/phase context
   "Outcomes": "rich_text",        // Expected deliverables
@@ -43,13 +73,14 @@ Create new sprints and features in Notion with proper schema and full property p
 ```javascript
 {
   "Features": "title",            // Feature name
-  "Sprint": "number",             // Sprint number (e.g., 26)
-  "Status": "select",             // Backlog → In Progress → Done
-  "Priority": "select",           // High, Medium, Low
-  "Complexity": "select",         // High, Medium, Low
-  "Type": "select",               // Feature, Bug, Infrastructure, Testing
+  "Sprint": "number",             // Sprint number (e.g., 133)
+  "Status": "select",             // Backlog | In Progress | Done
+  "Repo": "select",               // OS | SaaS Frontend | Super Admin (REQUIRED!)
+  "Priority": "select",           // High | Medium | Low
+  "Complexity": "select",         // High | Medium | Low
+  "Type": "select",               // Feature | Bug | Infrastructure | Testing
   "Notes": "rich_text",           // Feature description
-  "Tags": "multi_select",         // UI, AI, Animation, State, Core
+  "Tags": "multi_select",         // UI, AI, API, Database, Security, Frontend, Backend, Core
   "Assignee": "rich_text",        // Claude (TC) or human name
   "Done?": "checkbox",            // Completion flag
   "Started At": "date",           // When started
@@ -57,56 +88,54 @@ Create new sprints and features in Notion with proper schema and full property p
 }
 ```
 
+---
+
 ## EXECUTE THESE STEPS:
 
 ### Step 1: Fetch Notion Token
 ```bash
-export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)
+export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS --project=applied-algebra-474804-e6)
 ```
 
-### Step 2: Analyze Task Complexity
-Determine number of sprints needed:
-- **Simple task (1-2 features):** 1 sprint
-- **Medium task (3-6 features):** 2 sprints
-- **Complex feature (7-15 features):** 3-4 sprints
-- **Major feature/stream (15+ features):** 5+ sprints
-
-If user specifies sprint count, use that. Otherwise, TC decides based on complexity.
-
-### Step 3: Design Sprint Structure
-Before creating, plan the sprint breakdown:
-
-```markdown
-## Proposed Sprint Plan
-
-**Stream:** [Stream Name]
-**Total Sprints:** X
-
-### Sprint SX: [Goal]
-**Features:**
-1. Feature A (Type: Feature, Priority: High)
-2. Feature B (Type: Infrastructure, Priority: High)
-...
-
-### Sprint SX+1: [Goal]
-**Features:**
-1. Feature C (Type: Feature, Priority: High)
-...
-```
-
-### Step 4: Create Sprints
+### Step 2: Find Next Sprint Number
 ```javascript
+import { Client } from '@notionhq/client';
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const SPRINTS_DB = '5c32e26d-641a-4711-a9fb-619703943fb9';
 
-async function createSprint(sprintNumber, name, goal, stream) {
+// Find highest sprint number
+const sprints = await notion.databases.query({
+  database_id: SPRINTS_DB,
+  sorts: [{ property: 'Sprint', direction: 'descending' }],
+  page_size: 1
+});
+
+const lastTitle = sprints.results[0]?.properties.Sprint?.title?.[0]?.plain_text || 'S0';
+const match = lastTitle.match(/^S(\d+)/);
+const nextSprintNum = match ? parseInt(match[1]) + 1 : 133;
+console.log('Next sprint number:', nextSprintNum);
+```
+
+### Step 3: Determine Repo
+Choose based on WHERE the work will be done:
+
+| Repo | When to Use |
+|------|-------------|
+| **OS** | Backend API, services, database, UPR OS codebase |
+| **SaaS Frontend** | UI components, React, frontend in premiumradar-saas |
+| **Super Admin** | Admin panel, vertical config, persona editor, tenant management |
+
+### Step 4: Create Sprint
+```javascript
+async function createSprint(sprintNumber, name, goal, repo) {
   return await notion.pages.create({
     parent: { database_id: SPRINTS_DB },
     properties: {
       'Sprint': { title: [{ text: { content: `S${sprintNumber}: ${name}` } }] },
       'Status': { select: { name: 'Backlog' } },
+      'Repo': { select: { name: repo } },  // REQUIRED: OS | SaaS Frontend | Super Admin
       'Goal': { rich_text: [{ text: { content: goal } }] },
-      'Sprint Notes': { rich_text: [{ text: { content: `${stream}. ${goal}` } }] },
+      'Sprint Notes': { rich_text: [{ text: { content: goal } }] },
       'Outcomes': { rich_text: [{ text: { content: 'To be filled upon completion' } }] },
       'Highlights': { rich_text: [{ text: { content: 'To be filled upon completion' } }] },
       'Business Value': { rich_text: [{ text: { content: 'Business impact description' } }] },
@@ -121,13 +150,14 @@ async function createSprint(sprintNumber, name, goal, stream) {
 ```javascript
 const FEATURES_DB = '26ae5afe-4b5f-4d97-b402-5c459f188944';
 
-async function createFeature(name, sprintNumber, type, priority, complexity, notes, tags) {
+async function createFeature(name, sprintNumber, type, priority, complexity, notes, tags, repo) {
   return await notion.pages.create({
     parent: { database_id: FEATURES_DB },
     properties: {
       'Features': { title: [{ text: { content: name } }] },
       'Sprint': { number: sprintNumber },
       'Status': { select: { name: 'Backlog' } },
+      'Repo': { select: { name: repo } },  // MUST match sprint's Repo
       'Priority': { select: { name: priority } },
       'Complexity': { select: { name: complexity } },
       'Type': { select: { name: type } },
@@ -135,94 +165,90 @@ async function createFeature(name, sprintNumber, type, priority, complexity, not
       'Tags': { multi_select: tags.map(t => ({ name: t })) },
       'Assignee': { rich_text: [{ text: { content: 'Claude (TC)' } }] },
       'Done?': { checkbox: false },
+      'Started At': { date: { start: new Date().toISOString().split('T')[0] } },
     },
   });
 }
 ```
 
 ### Step 6: Report Creation Summary
-After creating, provide:
 ```
 ## Notion Creation Complete
 
-**Stream:** [Stream Name]
-**Sprints Created:** X (S31-S35)
+**Repo:** [OS | SaaS Frontend | Super Admin]
+**Sprints Created:** X (S133-S135)
 **Features Created:** Y
 
 ### Sprint Breakdown:
-| Sprint | Goal | Features |
-|--------|------|----------|
-| S31 | [Goal] | 5 features |
-| S32 | [Goal] | 6 features |
-...
-
-**Total Features:** Y
+| Sprint | Goal | Features | Repo |
+|--------|------|----------|------|
+| S133 | [Goal] | 5 features | OS |
+| S134 | [Goal] | 6 features | OS |
 
 **AWAITING APPROVAL**
-Please review the created sprints in Notion:
-[Link to Sprints DB]
 
-Reply "approved" to begin execution, or provide modifications.
+View in Notion:
+- Sprints: https://www.notion.so/5c32e26d641a4711a9fb619703943fb9
+- Features: https://www.notion.so/26ae5afe4b5f4d97b4025c459f188944
+
+Reply "approved" to begin execution.
 ```
 
-### Step 7: Wait for Approval
-**TC MUST NOT execute sprints until founder approves in Notion.**
+---
 
 ## Usage Examples
 
-### Create with specific sprint count:
+### Create OS backend sprints:
 ```
-/notion-create 5 sprints for user authentication system
-```
-
-### Let TC decide sprint count:
-```
-/notion-create implement real-time notifications
+/notion-create 3 sprints for SIVA agent improvements (OS)
 ```
 
-### Create for specific stream:
+### Create SaaS Frontend sprints:
 ```
-/notion-create stream-12 performance optimization
+/notion-create 2 sprints for dashboard redesign (SaaS Frontend)
 ```
 
-## Implementation Guidelines for TC
+### Create Super Admin sprints:
+```
+/notion-create vertical config editor (Super Admin)
+```
 
-When creating features, follow these patterns:
+---
 
-### Feature Naming
-- Use descriptive names: "SIVAInputBar with Cmd+K shortcut"
-- Include the component name if UI: "ReasoningOverlay panel"
-- Prefix infrastructure: "Zustand store setup"
+## Quick Reference
 
-### Priority Assignment
+### Priority
 - **High:** Core functionality, blockers
 - **Medium:** Important but not blocking
 - **Low:** Nice-to-have, polish
 
-### Complexity Assignment
-- **High:** New architecture, complex state, multiple integrations
-- **Medium:** Standard feature, some complexity
-- **Low:** Simple UI, bug fix, minor enhancement
+### Complexity
+- **High:** New architecture, complex state
+- **Medium:** Standard feature
+- **Low:** Simple UI, bug fix
 
-### Type Assignment
+### Type
 - **Feature:** New user-facing functionality
 - **Infrastructure:** Backend, state management, API
-- **Testing:** Tests, QA, verification
+- **Testing:** Tests, QA
 - **Bug:** Bug fixes
 
 ### Tags
-- `UI` - User interface components
+- `UI` - User interface
 - `AI` - AI/ML related
-- `Animation` - Motion/animation work
-- `State` - State management
-- `Core` - Core business logic
-- `API` - API integrations
+- `API` - API work
+- `Database` - DB changes
+- `Security` - Auth/security
+- `Frontend` - Frontend work
+- `Backend` - Backend work
+- `Core` - Core logic
+
+---
 
 ## FORBIDDEN PRACTICES
 
-- ❌ Creating sprints/features without full property population
-- ❌ Starting execution before founder approval
-- ❌ Using incorrect property types
-- ❌ Skipping complexity/priority assessment
-- ❌ Creating vague feature names
-- ❌ Auto-executing immediately after creation
+- Creating sprints/features without setting Repo
+- Mismatching feature Repo with sprint Repo
+- Creating without full property population
+- Starting execution before founder approval
+- Using incorrect property types
