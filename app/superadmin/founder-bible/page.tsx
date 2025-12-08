@@ -48,6 +48,37 @@ type ProgressData = {
   totalTimeSpent: number;
 };
 
+// Sprint Progress Types (from Notion API)
+type SprintStatus = 'Backlog' | 'In Progress' | 'Done' | 'Blocked';
+type SprintData = {
+  id: string;
+  sprintNumber: number;
+  title: string;
+  status: SprintStatus;
+  repo: string;
+  phase: number;
+};
+type PhaseProgress = {
+  phase: number;
+  name: string;
+  targetARR: string;
+  totalSprints: number;
+  completedSprints: number;
+  inProgressSprints: number;
+  percentComplete: number;
+  sprints: SprintData[];
+};
+type SprintProgressData = {
+  totalSprints: number;
+  completedSprints: number;
+  inProgressSprints: number;
+  overallPercent: number;
+  phases: PhaseProgress[];
+  currentPhase: number;
+  currentSprint: SprintData | null;
+  lastUpdated: string;
+};
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -63,12 +94,34 @@ export default function FounderBiblePage() {
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
   const [currentQuiz, setCurrentQuiz] = useState<string | null>(null);
 
+  // Sprint progress from Notion
+  const [sprintProgress, setSprintProgress] = useState<SprintProgressData | null>(null);
+  const [sprintProgressLoading, setSprintProgressLoading] = useState(true);
+
   // Load progress from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('founder-bible-progress');
     if (saved) {
       setProgress(JSON.parse(saved));
     }
+  }, []);
+
+  // Fetch sprint progress from Notion
+  useEffect(() => {
+    async function fetchSprintProgress() {
+      try {
+        const response = await fetch('/api/notion/sprint-progress');
+        const data = await response.json();
+        if (data.success && data.data) {
+          setSprintProgress(data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch sprint progress:', error);
+      } finally {
+        setSprintProgressLoading(false);
+      }
+    }
+    fetchSprintProgress();
   }, []);
 
   // Save progress
@@ -155,7 +208,7 @@ export default function FounderBiblePage() {
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
           >
-            {activeSection === 'overview' && <OverviewSection />}
+            {activeSection === 'overview' && <OverviewSection sprintProgress={sprintProgress} loading={sprintProgressLoading} />}
             {activeSection === 'manifesto' && <ManifestoSection />}
             {activeSection === 'category' && <CategorySection />}
             {activeSection === 'philosophy' && <PhilosophySection />}
@@ -163,7 +216,7 @@ export default function FounderBiblePage() {
             {activeSection === 'prd' && <PRDSection />}
             {activeSection === 'scale' && <ScaleSection />}
             {activeSection === 'orchestration' && <OrchestrationSection />}
-            {activeSection === 'roadmap' && <RoadmapSection />}
+            {activeSection === 'roadmap' && <RoadmapSection sprintProgress={sprintProgress} loading={sprintProgressLoading} />}
             {activeSection === 'learn' && (
               <LearnSection
                 expandedModule={expandedModule}
@@ -215,7 +268,13 @@ const SECTIONS = [
 // OVERVIEW SECTION
 // ============================================================================
 
-function OverviewSection() {
+function OverviewSection({
+  sprintProgress,
+  loading
+}: {
+  sprintProgress: SprintProgressData | null;
+  loading: boolean;
+}) {
   return (
     <div className="max-w-7xl mx-auto px-6">
       {/* Hero */}
@@ -234,6 +293,120 @@ function OverviewSection() {
         <p className="text-slate-500">PremiumRadar is one distribution of SIVA OS</p>
       </div>
 
+      {/* Live Sprint Progress from Notion */}
+      <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-2xl p-8 mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎯</span>
+            <h2 className="text-xl font-bold">Project Progress</h2>
+            <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full">LIVE from Notion</span>
+          </div>
+          {sprintProgress && (
+            <div className="text-right">
+              <p className="text-3xl font-bold text-emerald-400">{sprintProgress.overallPercent}%</p>
+              <p className="text-xs text-slate-500">Overall Complete</p>
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500"></div>
+            <span className="ml-3 text-slate-400">Loading from Notion...</span>
+          </div>
+        ) : sprintProgress ? (
+          <>
+            {/* Overall Progress Bar */}
+            <div className="mb-6">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-slate-400">
+                  {sprintProgress.completedSprints} of {sprintProgress.totalSprints} sprints complete
+                </span>
+                <span className="text-emerald-400">
+                  {sprintProgress.inProgressSprints} in progress
+                </span>
+              </div>
+              <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all duration-500"
+                  style={{ width: `${sprintProgress.overallPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Phase Progress Cards */}
+            <div className="grid grid-cols-5 gap-3">
+              {sprintProgress.phases.map((phase) => (
+                <div
+                  key={phase.phase}
+                  className={`rounded-xl p-4 ${
+                    phase.phase === sprintProgress.currentPhase
+                      ? 'bg-emerald-500/20 border border-emerald-500/50'
+                      : 'bg-slate-800/50 border border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-bold ${
+                      phase.phase === sprintProgress.currentPhase ? 'text-emerald-400' : 'text-slate-400'
+                    }`}>
+                      P{phase.phase}
+                    </span>
+                    <span className="text-xs text-slate-500">{phase.targetARR}</span>
+                  </div>
+                  <p className="text-sm font-medium text-white mb-2 truncate">{phase.name}</p>
+                  <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden mb-1">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        phase.phase === sprintProgress.currentPhase
+                          ? 'bg-emerald-500'
+                          : phase.percentComplete === 100
+                            ? 'bg-cyan-500'
+                            : 'bg-slate-500'
+                      }`}
+                      style={{ width: `${phase.percentComplete}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">{phase.completedSprints}/{phase.totalSprints}</span>
+                    <span className={phase.phase === sprintProgress.currentPhase ? 'text-emerald-400' : 'text-slate-400'}>
+                      {phase.percentComplete}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Current Sprint */}
+            {sprintProgress.currentSprint && (
+              <div className="mt-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${
+                      sprintProgress.currentSprint.status === 'In Progress'
+                        ? 'bg-yellow-500/20 text-yellow-400'
+                        : 'bg-slate-600/50 text-slate-400'
+                    }`}>
+                      {sprintProgress.currentSprint.status === 'In Progress' ? 'IN PROGRESS' : 'NEXT UP'}
+                    </span>
+                    <span className="text-white font-medium">{sprintProgress.currentSprint.title}</span>
+                  </div>
+                  <span className="text-xs text-slate-500">{sprintProgress.currentSprint.repo}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Last Updated */}
+            <p className="text-xs text-slate-600 mt-4 text-right">
+              Last synced: {new Date(sprintProgress.lastUpdated).toLocaleString()}
+            </p>
+          </>
+        ) : (
+          <div className="text-center py-8 text-slate-500">
+            Unable to load sprint progress. Check Notion connection.
+          </div>
+        )}
+      </div>
+
       {/* Founder Vision Banner */}
       <div className="bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 rounded-2xl p-8 mb-8 text-center">
         <p className="text-2xl font-bold text-white mb-2">&quot;SIVA will become the Siri of Sales.&quot;</p>
@@ -243,12 +416,25 @@ function OverviewSection() {
       {/* Key Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-16">
         {[
-          { label: 'Sprints Completed', value: '132', icon: '✅' },
-          { label: 'Features Built', value: '754', icon: '🔧' },
-          { label: 'SIVA Tools', value: '12', icon: '🤖' },
-          { label: 'Database Tables', value: '130+', icon: '🗄️' },
+          {
+            label: 'Sprints Complete',
+            value: sprintProgress ? sprintProgress.completedSprints.toString() : '—',
+            icon: '✅',
+            live: true
+          },
+          {
+            label: 'Total Sprints',
+            value: sprintProgress ? sprintProgress.totalSprints.toString() : '85',
+            icon: '🔧',
+            live: true
+          },
+          { label: 'SIVA Tools', value: '12', icon: '🤖', live: false },
+          { label: 'Database Tables', value: '130+', icon: '🗄️', live: false },
         ].map((stat) => (
-          <div key={stat.label} className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 text-center">
+          <div key={stat.label} className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 text-center relative">
+            {stat.live && (
+              <span className="absolute top-2 right-2 w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            )}
             <div className="text-3xl mb-2">{stat.icon}</div>
             <div className="text-3xl font-bold text-emerald-400">{stat.value}</div>
             <div className="text-sm text-slate-400">{stat.label}</div>
@@ -2339,7 +2525,19 @@ const DB_TABLE_GROUPS = [
 // ROADMAP SECTION
 // ============================================================================
 
-function RoadmapSection() {
+function RoadmapSection({
+  sprintProgress,
+  loading
+}: {
+  sprintProgress: SprintProgressData | null;
+  loading: boolean;
+}) {
+  // Helper to get live progress for a phase
+  const getPhaseProgress = (phaseNum: number) => {
+    if (!sprintProgress) return null;
+    return sprintProgress.phases.find(p => p.phase === phaseNum);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-6">
       <div className="text-center mb-12">
@@ -2347,51 +2545,111 @@ function RoadmapSection() {
         <p className="text-slate-400 max-w-2xl mx-auto">
           85 sprints (S133-S217) across 5 phases to reach $1B+ platform.
         </p>
+        {sprintProgress && (
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="text-sm text-emerald-400">
+              Live from Notion — {sprintProgress.completedSprints}/{sprintProgress.totalSprints} complete ({sprintProgress.overallPercent}%)
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Timeline */}
       <div className="relative">
-        {ROADMAP_PHASES.map((phase, index) => (
-          <div key={phase.name} className="mb-8 relative">
-            <div className={`bg-slate-900/50 border rounded-2xl p-8 ${
-              phase.current ? 'border-emerald-500' : 'border-slate-800'
-            }`}>
-              {phase.current && (
-                <span className="absolute -top-3 left-8 bg-emerald-500 text-white text-xs px-3 py-1 rounded-full">
-                  CURRENT PHASE
-                </span>
-              )}
-              <div className="flex items-start gap-6">
-                <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-2xl font-bold ${
-                  phase.current
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-slate-800 text-slate-400'
-                }`}>
-                  {index + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-4 mb-2">
-                    <h2 className="text-2xl font-bold">{phase.name}</h2>
-                    <span className="text-sm text-slate-500">({phase.sprints})</span>
+        {ROADMAP_PHASES.map((phase, index) => {
+          const livePhase = getPhaseProgress(index + 1);
+          const isCurrentPhase = sprintProgress ? sprintProgress.currentPhase === index + 1 : phase.current;
+          const isComplete = livePhase && livePhase.percentComplete === 100;
+
+          return (
+            <div key={phase.name} className="mb-8 relative">
+              <div className={`bg-slate-900/50 border rounded-2xl p-8 ${
+                isCurrentPhase ? 'border-emerald-500' : isComplete ? 'border-cyan-500' : 'border-slate-800'
+              }`}>
+                {isCurrentPhase && (
+                  <span className="absolute -top-3 left-8 bg-emerald-500 text-white text-xs px-3 py-1 rounded-full">
+                    CURRENT PHASE
+                  </span>
+                )}
+                {isComplete && !isCurrentPhase && (
+                  <span className="absolute -top-3 left-8 bg-cyan-500 text-white text-xs px-3 py-1 rounded-full">
+                    COMPLETE
+                  </span>
+                )}
+                <div className="flex items-start gap-6">
+                  <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-2xl font-bold ${
+                    isCurrentPhase
+                      ? 'bg-emerald-500 text-white'
+                      : isComplete
+                        ? 'bg-cyan-500 text-white'
+                        : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    {isComplete ? '✓' : index + 1}
                   </div>
-                  <p className="text-slate-400 mb-4">{phase.goal}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {phase.highlights.map((h) => (
-                      <span key={h} className="bg-slate-800 text-slate-300 text-sm px-3 py-1 rounded-full">
-                        {h}
-                      </span>
-                    ))}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-4 mb-2">
+                      <h2 className="text-2xl font-bold">{phase.name}</h2>
+                      <span className="text-sm text-slate-500">({phase.sprints})</span>
+                    </div>
+                    <p className="text-slate-400 mb-4">{phase.goal}</p>
+
+                    {/* Live Progress Bar */}
+                    {livePhase && (
+                      <div className="mb-4">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-slate-500">
+                            {livePhase.completedSprints}/{livePhase.totalSprints} sprints
+                          </span>
+                          <span className={isCurrentPhase ? 'text-emerald-400' : 'text-slate-400'}>
+                            {livePhase.percentComplete}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 ${
+                              isCurrentPhase
+                                ? 'bg-emerald-500'
+                                : isComplete
+                                  ? 'bg-cyan-500'
+                                  : 'bg-slate-600'
+                            }`}
+                            style={{ width: `${livePhase.percentComplete}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      {phase.highlights.map((h) => (
+                        <span key={h} className="bg-slate-800 text-slate-300 text-sm px-3 py-1 rounded-full">
+                          {h}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-emerald-400">{phase.target}</p>
-                  <p className="text-sm text-slate-500">Target ARR</p>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-emerald-400">{phase.target}</p>
+                    <p className="text-sm text-slate-500">Target ARR</p>
+                    {livePhase && livePhase.inProgressSprints > 0 && (
+                      <p className="text-xs text-yellow-400 mt-2">
+                        {livePhase.inProgressSprints} in progress
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {/* Last sync info */}
+      {sprintProgress && (
+        <p className="text-xs text-slate-600 text-center mt-8">
+          Last synced: {new Date(sprintProgress.lastUpdated).toLocaleString()}
+        </p>
+      )}
     </div>
   );
 }
