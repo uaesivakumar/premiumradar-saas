@@ -1,7 +1,12 @@
 /**
- * Super Admin Verticals Config API
+ * Super Admin Verticals Config API (S147)
  *
- * Proxies to UPR OS Vertical Pack APIs (S52).
+ * Proxies to UPR OS Vertical Pack APIs with:
+ * - Schema validation before save (S147.1)
+ * - Local DB persistence
+ * - OS kernel hot reload on change
+ * - Version tracking
+ *
  * Provides Super Admin with control over:
  * - Vertical Packs (Banking, Insurance, etc.)
  * - Signal Types
@@ -15,6 +20,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/superadmin/security';
 import { verticals } from '@/lib/os/os-client';
+import {
+  validateVerticalConfig,
+  validateVerticalUpdate,
+  type VerticalConfig,
+} from '@/lib/os/validation/vertical-schema';
+import {
+  createVertical as createVerticalDB,
+  updateVertical as updateVerticalDB,
+  getVertical as getVerticalDB,
+  getVersionHistory,
+  rollbackToVersion,
+} from '@/lib/db/vertical-configs';
+import { kernelLoader } from '@/lib/os/kernel-loader';
 
 async function verifyAuth(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
@@ -150,8 +168,47 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'create': {
-        const result = await verticals.create(body.vertical);
-        return NextResponse.json(result);
+        const verticalConfig = body.vertical as VerticalConfig;
+
+        // S147.1: Validate before save
+        const validation = validateVerticalConfig(verticalConfig);
+        if (!validation.valid) {
+          return NextResponse.json({
+            success: false,
+            error: 'Validation failed',
+            validation,
+          }, { status: 400 });
+        }
+
+        // Save to local DB first
+        const dbResult = await createVerticalDB(verticalConfig, 'superadmin');
+        if (!dbResult.success) {
+          return NextResponse.json({
+            success: false,
+            error: dbResult.error,
+            validation: dbResult.validation,
+          }, { status: 400 });
+        }
+
+        // Then propagate to OS
+        const osResult = await verticals.create(body.vertical);
+
+        // Trigger OS kernel hot reload
+        if (osResult.success) {
+          const reloadResult = await kernelLoader.reloadVertical(verticalConfig.slug);
+          return NextResponse.json({
+            ...osResult,
+            localDB: { saved: true, id: dbResult.data?.id },
+            osReload: reloadResult,
+            validation,
+          });
+        }
+
+        return NextResponse.json({
+          ...osResult,
+          localDB: { saved: true, id: dbResult.data?.id },
+          validation,
+        });
       }
 
       case 'clone': {
@@ -206,7 +263,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * PATCH /api/superadmin/os/verticals
- * Update vertical
+ * Update vertical with validation and hot reload
  */
 export async function PATCH(request: NextRequest) {
   const session = await verifyAuth(request);
@@ -216,13 +273,52 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { slug, updates } = body;
+    const { slug, updates, change_reason } = body;
 
     if (!slug) {
       return NextResponse.json({ error: 'Vertical slug required' }, { status: 400 });
     }
 
+    // Get current config for validation
+    const current = await getVerticalDB(slug);
+    if (current) {
+      // S147.1: Validate update
+      const validation = validateVerticalUpdate(
+        { slug: current.slug, name: current.name, config: current.config },
+        updates as Partial<VerticalConfig>
+      );
+
+      if (!validation.valid) {
+        return NextResponse.json({
+          success: false,
+          error: 'Validation failed',
+          validation,
+        }, { status: 400 });
+      }
+
+      // Save to local DB with version tracking
+      const dbResult = await updateVerticalDB(slug, updates, 'superadmin', change_reason);
+      if (!dbResult.success) {
+        return NextResponse.json({
+          success: false,
+          error: dbResult.error,
+          validation: dbResult.validation,
+        }, { status: 400 });
+      }
+    }
+
+    // Propagate to OS
     const result = await verticals.update(slug, updates);
+
+    // Trigger OS kernel hot reload
+    if (result.success) {
+      const reloadResult = await kernelLoader.reloadVertical(slug);
+      return NextResponse.json({
+        ...result,
+        osReload: reloadResult,
+      });
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     console.error('[SuperAdmin:Verticals] PATCH error:', error);
