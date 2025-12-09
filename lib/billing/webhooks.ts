@@ -1,14 +1,18 @@
 /**
- * Stripe Webhooks Handler
+ * Stripe Webhooks Handler - Sprint S142.1
  *
  * Process Stripe webhook events for subscription lifecycle.
+ * Includes:
+ * - Signature verification
+ * - Idempotency (no duplicate processing)
+ * - All core event handlers
  */
 
 import type Stripe from 'stripe';
 import { stripe, mapStripeSubscription, mapStripeStatus } from './stripe-client';
+import { processWithIdempotency } from './webhook-idempotency';
 import type {
   WebhookEventType,
-  WebhookEvent,
   Subscription,
   Invoice,
   PlanTier,
@@ -52,25 +56,35 @@ export interface WebhookHandlerResult {
 
 /**
  * Handle checkout.session.completed
+ * Creates subscription record after successful checkout
  */
 export async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session
 ): Promise<WebhookHandlerResult> {
   const workspaceId = session.metadata?.workspaceId;
+  const userId = session.metadata?.userId;
   const tier = session.metadata?.tier as PlanTier;
 
-  if (!workspaceId) {
-    return { success: false, message: 'Missing workspaceId in metadata' };
+  if (!workspaceId || !userId) {
+    return { success: false, message: 'Missing workspaceId or userId in metadata' };
   }
 
-  // The subscription is created automatically by Stripe
-  // We just need to sync our database
-  console.log(`Checkout completed for workspace ${workspaceId}, tier: ${tier}`);
+  console.log(`[Webhook] Checkout completed for workspace ${workspaceId}, tier: ${tier}`);
+
+  // In production: Create/update subscription record in database
+  // await db.subscriptions.upsert({ ... })
 
   return {
     success: true,
     message: 'Checkout completed',
-    data: { workspaceId, tier, sessionId: session.id },
+    data: {
+      workspaceId,
+      userId,
+      tier,
+      sessionId: session.id,
+      customerId: session.customer,
+      subscriptionId: session.subscription,
+    },
   };
 }
 
@@ -83,11 +97,15 @@ export async function handleSubscriptionCreated(
   const workspaceId = subscription.metadata?.workspaceId;
 
   if (!workspaceId) {
-    return { success: false, message: 'Missing workspaceId in subscription metadata' };
+    console.log('[Webhook] Subscription created without workspaceId:', subscription.id);
+    return { success: true, message: 'Subscription created (no workspace link yet)' };
   }
 
   const mappedSub = mapStripeSubscription(subscription, workspaceId);
-  console.log(`Subscription created: ${subscription.id} for workspace ${workspaceId}`);
+  console.log(`[Webhook] Subscription created: ${subscription.id} for workspace ${workspaceId}`);
+
+  // In production: Insert subscription record
+  // await db.subscriptions.create(mappedSub)
 
   return {
     success: true,
@@ -105,15 +123,21 @@ export async function handleSubscriptionUpdated(
   const workspaceId = subscription.metadata?.workspaceId;
 
   if (!workspaceId) {
-    // Try to find workspace by customer ID
-    console.log('Subscription updated without workspaceId:', subscription.id);
+    console.log('[Webhook] Subscription updated without workspaceId:', subscription.id);
     return { success: true, message: 'Subscription updated (no workspace link)' };
   }
 
   const status = mapStripeStatus(subscription.status);
   const cancelAtPeriodEnd = subscription.cancel_at_period_end;
+  const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
 
-  console.log(`Subscription ${subscription.id} updated: status=${status}, cancelAtPeriodEnd=${cancelAtPeriodEnd}`);
+  console.log(`[Webhook] Subscription ${subscription.id} updated: status=${status}, cancelAtPeriodEnd=${cancelAtPeriodEnd}`);
+
+  // In production: Update subscription record
+  // await db.subscriptions.update({
+  //   where: { stripeSubscriptionId: subscription.id },
+  //   data: { status, cancelAtPeriodEnd, currentPeriodEnd }
+  // })
 
   return {
     success: true,
@@ -123,6 +147,7 @@ export async function handleSubscriptionUpdated(
       workspaceId,
       status,
       cancelAtPeriodEnd,
+      currentPeriodEnd: currentPeriodEnd.toISOString(),
     },
   };
 }
@@ -135,26 +160,81 @@ export async function handleSubscriptionDeleted(
 ): Promise<WebhookHandlerResult> {
   const workspaceId = subscription.metadata?.workspaceId;
 
-  console.log(`Subscription ${subscription.id} deleted for workspace ${workspaceId}`);
+  console.log(`[Webhook] Subscription ${subscription.id} deleted for workspace ${workspaceId}`);
 
-  // Downgrade workspace to free tier
+  // In production: Update subscription status to canceled
+  // await db.subscriptions.update({
+  //   where: { stripeSubscriptionId: subscription.id },
+  //   data: { status: 'canceled', canceledAt: new Date() }
+  // })
+
   return {
     success: true,
     message: 'Subscription deleted - workspace downgraded to free',
-    data: { workspaceId, newTier: 'free' },
+    data: { workspaceId, newTier: 'free', subscriptionId: subscription.id },
   };
 }
 
 /**
- * Handle invoice.paid
+ * Handle customer.created
+ */
+export async function handleCustomerCreated(
+  customer: Stripe.Customer
+): Promise<WebhookHandlerResult> {
+  const workspaceId = customer.metadata?.workspaceId;
+  const userId = customer.metadata?.userId;
+
+  console.log(`[Webhook] Customer ${customer.id} created for workspace ${workspaceId}`);
+
+  // In production: Link Stripe customer to workspace
+  // await db.workspaces.update({
+  //   where: { id: workspaceId },
+  //   data: { stripeCustomerId: customer.id }
+  // })
+
+  return {
+    success: true,
+    message: 'Customer created',
+    data: {
+      customerId: customer.id,
+      workspaceId,
+      userId,
+      email: customer.email,
+    },
+  };
+}
+
+/**
+ * Handle customer.updated
+ */
+export async function handleCustomerUpdated(
+  customer: Stripe.Customer
+): Promise<WebhookHandlerResult> {
+  console.log(`[Webhook] Customer ${customer.id} updated`);
+
+  return {
+    success: true,
+    message: 'Customer updated',
+    data: {
+      customerId: customer.id,
+      email: customer.email,
+      name: customer.name,
+    },
+  };
+}
+
+/**
+ * Handle invoice.payment_succeeded (invoice.paid)
  */
 export async function handleInvoicePaid(
   invoice: Stripe.Invoice
 ): Promise<WebhookHandlerResult> {
   const subscriptionId = invoice.subscription as string;
+  const customerId = invoice.customer as string;
 
-  console.log(`Invoice ${invoice.id} paid for subscription ${subscriptionId}`);
+  console.log(`[Webhook] Invoice ${invoice.id} paid for subscription ${subscriptionId}`);
 
+  // In production: Record invoice in database
   const mappedInvoice: Partial<Invoice> = {
     stripeInvoiceId: invoice.id,
     number: invoice.number || '',
@@ -172,7 +252,7 @@ export async function handleInvoicePaid(
   return {
     success: true,
     message: 'Invoice paid',
-    data: { invoice: mappedInvoice },
+    data: { invoice: mappedInvoice, subscriptionId, customerId },
   };
 }
 
@@ -185,9 +265,14 @@ export async function handleInvoicePaymentFailed(
   const subscriptionId = invoice.subscription as string;
   const customerEmail = invoice.customer_email;
 
-  console.log(`Invoice ${invoice.id} payment failed for subscription ${subscriptionId}`);
+  console.log(`[Webhook] Invoice ${invoice.id} payment failed for subscription ${subscriptionId}`);
 
-  // This should trigger dunning email
+  // In production:
+  // 1. Update subscription status to past_due
+  // 2. Send dunning email to customer
+  // await db.subscriptions.update({ status: 'past_due' })
+  // await sendDunningEmail(customerEmail, invoice)
+
   return {
     success: true,
     message: 'Invoice payment failed - dunning triggered',
@@ -197,6 +282,9 @@ export async function handleInvoicePaymentFailed(
       customerEmail,
       amountDue: invoice.amount_due,
       attemptCount: invoice.attempt_count,
+      nextPaymentAttempt: invoice.next_payment_attempt
+        ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+        : null,
     },
   };
 }
@@ -208,59 +296,92 @@ export async function handleInvoiceUpcoming(
   invoice: Stripe.Invoice
 ): Promise<WebhookHandlerResult> {
   const subscriptionId = invoice.subscription as string;
+  const customerEmail = invoice.customer_email;
 
-  console.log(`Upcoming invoice for subscription ${subscriptionId}`);
+  console.log(`[Webhook] Upcoming invoice for subscription ${subscriptionId}`);
 
-  // This can be used to send reminder emails
+  // In production: Send upcoming invoice notification
+  // await sendUpcomingInvoiceNotification(customerEmail, invoice)
+
   return {
     success: true,
     message: 'Upcoming invoice notification',
     data: {
       subscriptionId,
+      customerEmail,
       amountDue: invoice.amount_due,
-      dueDate: invoice.due_date ? new Date(invoice.due_date * 1000) : null,
+      dueDate: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
     },
   };
 }
 
 // ============================================================
-// MAIN WEBHOOK PROCESSOR
+// MAIN WEBHOOK PROCESSOR (WITH IDEMPOTENCY)
 // ============================================================
 
 /**
- * Process webhook event
+ * Process webhook event with idempotency
  */
 export async function processWebhookEvent(
   event: Stripe.Event
 ): Promise<WebhookHandlerResult> {
   const eventType = event.type as WebhookEventType;
 
-  console.log(`Processing webhook: ${eventType} (${event.id})`);
+  console.log(`[Webhook] Processing: ${eventType} (${event.id})`);
 
-  switch (eventType) {
-    case 'checkout.session.completed':
-      return handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+  // Use idempotency wrapper
+  const result = await processWithIdempotency(
+    event.id,
+    eventType,
+    async () => {
+      switch (eventType) {
+        case 'checkout.session.completed':
+          return handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
 
-    case 'customer.subscription.created':
-      return handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+        case 'customer.subscription.created':
+          return handleSubscriptionCreated(event.data.object as Stripe.Subscription);
 
-    case 'customer.subscription.updated':
-      return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+        case 'customer.subscription.updated':
+          return handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
 
-    case 'customer.subscription.deleted':
-      return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+        case 'customer.subscription.deleted':
+          return handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
 
-    case 'invoice.paid':
-      return handleInvoicePaid(event.data.object as Stripe.Invoice);
+        case 'invoice.paid':
+          return handleInvoicePaid(event.data.object as Stripe.Invoice);
 
-    case 'invoice.payment_failed':
-      return handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+        case 'invoice.payment_failed':
+          return handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
 
-    case 'invoice.upcoming':
-      return handleInvoiceUpcoming(event.data.object as Stripe.Invoice);
+        case 'invoice.upcoming':
+          return handleInvoiceUpcoming(event.data.object as Stripe.Invoice);
 
-    default:
-      console.log(`Unhandled webhook event type: ${event.type}`);
-      return { success: true, message: `Unhandled event type: ${event.type}` };
+        case 'customer.created' as WebhookEventType:
+          return handleCustomerCreated(event.data.object as Stripe.Customer);
+
+        case 'customer.updated':
+          return handleCustomerUpdated(event.data.object as Stripe.Customer);
+
+        default:
+          console.log(`[Webhook] Unhandled event type: ${event.type}`);
+          return { success: true, message: `Unhandled event type: ${event.type}` };
+      }
+    }
+  );
+
+  if (result.skipped) {
+    return {
+      success: true,
+      message: `Event ${event.id} already processed (idempotent skip)`,
+    };
   }
+
+  if (!result.success) {
+    return {
+      success: false,
+      message: result.error || 'Unknown error',
+    };
+  }
+
+  return result.result as WebhookHandlerResult;
 }

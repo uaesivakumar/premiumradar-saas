@@ -150,3 +150,47 @@ export type {
   AlertThreshold,
   AlertNotification,
 } from './overage-alerts';
+
+// Webhook Idempotency (S142.1)
+export {
+  isEventProcessed,
+  getEventRecord,
+  acquireEventLock,
+  markEventSuccess,
+  markEventFailed,
+  processWithIdempotency,
+} from './webhook-idempotency';
+export type { WebhookEventRecord } from './webhook-idempotency';
+
+// Customer Portal (S142.2)
+export {
+  createPortalSession,
+  getPortalConfiguration,
+  cancelSubscriptionAtPeriodEnd as cancelSubscription,
+  reactivateSubscription,
+  changePlan,
+  getCustomerInvoices,
+  getPaymentMethods,
+} from './customer-portal';
+export type { PortalSessionResult, CustomerPortalConfig } from './customer-portal';
+
+// Usage Metering (S142.3)
+export {
+  logUsage,
+  getTenantUsage,
+  getUserUsage,
+  checkUsageAllowed,
+  getUsageSummary as getUsageSummaryV2,
+  checkUsageAlerts,
+  formatUsageType,
+  getUsageLog,
+  trackAndCheckUsage,
+  PLAN_LIMITS as USAGE_PLAN_LIMITS,
+} from './usage-metering';
+export type {
+  UsageType,
+  UsageLogEntry,
+  UsageSummary as UsageSummaryV2,
+  UsageCheckResult,
+  UsageAlert,
+} from './usage-metering';
