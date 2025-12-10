@@ -8,7 +8,7 @@
 'use client';
 
 import { useState } from 'react';
-import { TenantTable, ImpersonationBanner } from '@/components/admin';
+import { TenantTable, ImpersonationBanner, UserTable, InvitationTable } from '@/components/admin';
 import {
   useImpersonationStore,
   startImpersonation,
@@ -108,12 +108,29 @@ export default function AdminDashboardPage() {
         )}
 
         {activeTab === 'users' && (
-          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-            <div className="text-4xl mb-4">👥</div>
-            <h2 className="text-lg font-medium text-gray-900 mb-2">User Management</h2>
-            <p className="text-gray-500">
-              Manage users across all tenants. Ban, disable, or delete user accounts.
-            </p>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">User Management</h2>
+                <p className="text-sm text-gray-500">Manage workspace users and invitations</p>
+              </div>
+              <a
+                href="/dashboard/admin/settings"
+                className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                Tenant Settings
+              </a>
+            </div>
+
+            <UserTable
+              onUserSelect={(user) => console.log('Selected user:', user)}
+              onRoleChange={(userId, role) => console.log('Role changed:', userId, role)}
+              onUserAction={(userId, action) => console.log('Action:', userId, action)}
+            />
+
+            <InvitationTable
+              onInvitationUpdate={() => console.log('Invitations updated')}
+            />
           </div>
         )}
 
