@@ -8,12 +8,12 @@
  * Run: node scripts/launch-checklist.js
  */
 
-const { execSync } = require('child_process');
-const https = require('https');
-const http = require('http');
+import { execSync } from 'child_process';
+import https from 'https';
+import http from 'http';
 
 // Configuration
-const STAGING_URL = process.env.STAGING_URL || 'https://premiumradar-saas-staging-k7u2rgnvna-uc.a.run.app';
+const STAGING_URL = process.env.STAGING_URL || 'https://premiumradar-saas-staging-191599223867.us-central1.run.app';
 const PRODUCTION_URL = process.env.PRODUCTION_URL || 'https://app.premiumradar.com';
 const TARGET_ENV = process.argv[2] || 'staging';
 const BASE_URL = TARGET_ENV === 'production' ? PRODUCTION_URL : STAGING_URL;
