@@ -56,7 +56,7 @@ jobs:
             --source . \
             --region $REGION \
             --allow-unauthenticated \
-            --set-env-vars="NODE_ENV=production,NEXT_PUBLIC_APP_ENV=${{ steps.service.outputs.ENVIRONMENT }}" \
+            --set-env-vars="NODE_ENV=production,NEXT_PUBLIC_APP_ENV=${{ steps.service.outputs.ENVIRONMENT }},UPR_OS_BASE_URL=https://upr-os-service-191599223867.us-central1.run.app" \
             --set-secrets="DATABASE_URL=DATABASE_URL:latest,SUPER_ADMIN_EMAILS=SUPER_ADMIN_EMAILS:latest,SUPER_ADMIN_SECRET=SUPER_ADMIN_SECRET:latest,SUPER_ADMIN_SESSION_KEY=SUPER_ADMIN_SESSION_KEY:latest,NOTION_TOKEN_SAAS=NOTION_TOKEN_SAAS:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest" \
             --memory=512Mi \
             --min-instances=0 \
