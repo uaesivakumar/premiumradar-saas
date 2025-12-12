@@ -5,7 +5,7 @@
  * Run with: npx tsx scripts/stress-test-enrichment.ts
  */
 
-const BASE_URL = process.env.BASE_URL || 'https://premiumradar-saas-staging-191599223867.us-central1.run.app';
+const STRESS_TEST_BASE_URL = process.env.BASE_URL || 'https://premiumradar-saas-staging-191599223867.us-central1.run.app';
 
 interface TestResult {
   name: string;
@@ -37,7 +37,7 @@ async function runTest(name: string, testFn: () => Promise<unknown>): Promise<Te
 
 // Test 1: Enrichment Search API
 async function testEnrichmentSearch() {
-  const response = await fetch(`${BASE_URL}/api/enrichment/search`, {
+  const response = await fetch(`${STRESS_TEST_BASE_URL}/api/enrichment/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -70,7 +70,7 @@ async function testEnrichmentSearch() {
 // Test 2: Single Entity Enrichment
 async function testSingleEnrichment() {
   const response = await fetch(
-    `${BASE_URL}/api/enrichment/search?entity=emirates.com&vertical=banking&subVertical=employee-banking&region=UAE`,
+    `${STRESS_TEST_BASE_URL}/api/enrichment/search?entity=emirates.com&vertical=banking&subVertical=employee-banking&region=UAE`,
     { method: 'GET' }
   );
 
@@ -91,7 +91,7 @@ async function testSingleEnrichment() {
 // Test 3: Vertical Config Fetch
 async function testVerticalConfig() {
   const response = await fetch(
-    `${BASE_URL}/api/admin/vertical-config?vertical=banking&subVertical=employee-banking&region=UAE`
+    `${STRESS_TEST_BASE_URL}/api/admin/vertical-config?vertical=banking&subVertical=employee-banking&region=UAE`
   );
 
   const data = await response.json();
@@ -110,7 +110,7 @@ async function testVerticalConfig() {
 
 // Test 4: API Integrations List
 async function testIntegrationsList() {
-  const response = await fetch(`${BASE_URL}/api/admin/integrations`);
+  const response = await fetch(`${STRESS_TEST_BASE_URL}/api/admin/integrations`);
   const data = await response.json();
 
   if (!response.ok) {
@@ -126,7 +126,7 @@ async function testIntegrationsList() {
 // Test 5: Concurrent Requests
 async function testConcurrentRequests() {
   const requests = Array(5).fill(null).map(() =>
-    fetch(`${BASE_URL}/api/enrichment/search`, {
+    fetch(`${STRESS_TEST_BASE_URL}/api/enrichment/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -152,7 +152,7 @@ async function testConcurrentRequests() {
 async function main() {
   console.log('='.repeat(60));
   console.log('ENRICHMENT API STRESS TEST');
-  console.log(`Base URL: ${BASE_URL}`);
+  console.log(`Base URL: ${STRESS_TEST_BASE_URL}`);
   console.log('='.repeat(60));
   console.log();
 

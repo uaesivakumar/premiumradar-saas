@@ -39,10 +39,42 @@ interface EnrichRequest {
   enrichment_sources?: string[];
 }
 
+/**
+ * Score Request - aligned with OS /api/os/score contract
+ *
+ * OS expects: entity_type, entity_id/entity_data, score_types, signals, options
+ */
 interface ScoreRequest {
   tenant_id: string;
-  entity_ids: string[];
-  region_code: string;
+  // Entity identification
+  entity_type?: 'company' | 'individual';
+  entity_id?: string;
+  entity_data?: {
+    id?: string;
+    name?: string;
+    domain?: string;
+    industry?: string;
+    size_range?: string;
+    locations?: string[];
+    linkedin_url?: string;
+  };
+  // Signals for scoring
+  signals?: Array<{
+    type: string;
+    source: string;
+    evidence?: string;
+    confidence?: number;
+  }>;
+  // Score configuration
+  score_types?: ('q_score' | 't_score' | 'l_score' | 'e_score' | 'composite')[];
+  options?: {
+    include_breakdown?: boolean;
+    include_explanation?: boolean;
+    profile?: string;
+  };
+  // Legacy fields (for backward compatibility - transformed internally)
+  entity_ids?: string[];
+  region_code?: string;
   vertical_id?: string;
 }
 
@@ -52,9 +84,45 @@ interface RankRequest {
   ranking_algorithm?: string;
 }
 
+/**
+ * Outreach Request - aligned with OS /api/os/outreach contract
+ *
+ * OS expects: leads array, options object
+ */
 interface OutreachRequest {
   tenant_id: string;
-  entity_ids: string[];
+  // Lead data (primary format)
+  leads?: Array<{
+    id: string;
+    name: string;
+    designation?: string;
+    company?: string;
+    industry?: string;
+    email?: string;
+    linkedin?: string;
+  }>;
+  // Outreach options
+  options?: {
+    channel?: 'email' | 'linkedin' | 'call';
+    tone?: 'formal' | 'friendly' | 'direct';
+    template_id?: string;
+    personalization_level?: 'low' | 'medium' | 'high';
+    profile?: string;
+    context?: Record<string, unknown>;
+  };
+  // Score data for personalization
+  score?: {
+    qtle?: {
+      quality?: { score: number; band?: string };
+      timing?: { score: number; band?: string };
+      likelihood?: { score: number; band?: string };
+      effort?: { score: number; band?: string };
+    };
+    total?: { score: number; band?: string };
+    flags?: string[];
+  };
+  // Legacy fields (for backward compatibility)
+  entity_ids?: string[];
   channel_preference?: string[];
 }
 
@@ -174,10 +242,54 @@ class OSClient {
 
   /**
    * Score - calculate Q/T/L/E scores with region modifiers
+   *
+   * Transforms SaaS request format to OS contract:
+   * - entity_ids[0] → entity_id
+   * - region_code + vertical_id → options.profile
    */
   async score(request: ScoreRequest): Promise<OSResponse> {
-    const response = await this.client.post('/score', request);
+    // Transform request to OS format
+    const osPayload: Record<string, unknown> = {
+      entity_type: request.entity_type || 'company',
+      score_types: request.score_types || ['composite'],
+      signals: request.signals || [],
+      options: {
+        include_breakdown: true,
+        include_explanation: true,
+        profile: this.mapToProfile(request.vertical_id, request.region_code),
+        ...request.options,
+      },
+    };
+
+    // Entity identification
+    if (request.entity_id) {
+      osPayload.entity_id = request.entity_id;
+    } else if (request.entity_data) {
+      osPayload.entity_data = request.entity_data;
+    } else if (request.entity_ids && request.entity_ids.length > 0) {
+      // Legacy: use first entity_id
+      osPayload.entity_id = request.entity_ids[0];
+    }
+
+    const response = await this.client.post('/score', osPayload);
     return response.data;
+  }
+
+  /**
+   * Map vertical/region to OS profile
+   */
+  private mapToProfile(verticalId?: string, regionCode?: string): string {
+    // Map vertical_id to OS profile
+    const profileMap: Record<string, string> = {
+      'banking': 'banking_employee',
+      'employee-banking': 'banking_employee',
+      'corporate-banking': 'banking_corporate',
+      'insurance': 'insurance_individual',
+      'recruitment': 'recruitment_hiring',
+      'saas': 'saas_b2b',
+    };
+
+    return profileMap[verticalId || ''] || 'default';
   }
 
   /**
@@ -190,10 +302,46 @@ class OSClient {
 
   /**
    * Outreach - generate contact sequences
+   *
+   * Transforms SaaS request format to OS contract:
+   * - leads array with full lead data
+   * - options with channel, tone, profile
    */
   async outreach(request: OutreachRequest): Promise<OSResponse> {
-    const response = await this.client.post('/outreach', request);
+    // Build OS payload
+    const osPayload: Record<string, unknown> = {
+      leads: request.leads || [],
+      options: {
+        channel: request.options?.channel || this.mapChannelPreference(request.channel_preference),
+        tone: request.options?.tone || 'friendly',
+        personalization_level: request.options?.personalization_level || 'medium',
+        profile: request.options?.profile || 'default',
+        context: request.options?.context || {},
+      },
+    };
+
+    // If only entity_ids provided (legacy), create minimal lead objects
+    if ((!request.leads || request.leads.length === 0) && request.entity_ids && request.entity_ids.length > 0) {
+      osPayload.leads = request.entity_ids.map((id, index) => ({
+        id,
+        name: `Contact ${index + 1}`, // Placeholder - should be enriched
+        company: 'Unknown',
+      }));
+    }
+
+    const response = await this.client.post('/outreach', osPayload);
     return response.data;
+  }
+
+  /**
+   * Map channel preference array to single channel
+   */
+  private mapChannelPreference(preferences?: string[]): string {
+    if (!preferences || preferences.length === 0) return 'email';
+    const pref = preferences[0].toLowerCase();
+    if (pref.includes('linkedin')) return 'linkedin';
+    if (pref.includes('call') || pref.includes('phone')) return 'call';
+    return 'email';
   }
 
   /**
