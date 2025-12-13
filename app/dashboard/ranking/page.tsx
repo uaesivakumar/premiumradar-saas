@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * Ranking Page - S13
+ * Ranking Page
+ * VS12.9: Wired to real OS Ranking API
  *
  * Company ranking and scoring view with Q/T/L/E explanations.
+ * Authorization Code: VS12-FRONTEND-WIRING-20251213
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocaleStore } from '@/lib/stores/locale-store';
-import { Trophy, Filter, SortAsc, TrendingUp, Clock, Percent, Users } from 'lucide-react';
+import { Trophy, Filter, SortAsc, TrendingUp, Clock, Percent, Users, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface RankedCompany {
   id: string;
@@ -23,73 +25,105 @@ interface RankedCompany {
   signal: string;
 }
 
-const mockCompanies: RankedCompany[] = [
-  {
-    id: '1',
-    name: 'Emirates NBD',
-    industry: 'Retail Banking',
-    country: 'UAE',
-    score: 92,
-    quality: 95,
-    timing: 88,
-    likelihood: 90,
-    engagement: 94,
-    signal: 'Digital transformation initiative',
-  },
-  {
-    id: '2',
-    name: 'Abu Dhabi Commercial Bank',
-    industry: 'Commercial Banking',
-    country: 'UAE',
-    score: 88,
-    quality: 90,
-    timing: 92,
-    likelihood: 85,
-    engagement: 86,
-    signal: 'Leadership change announced',
-  },
-  {
-    id: '3',
-    name: 'Al Rajhi Bank',
-    industry: 'Islamic Banking',
-    country: 'Saudi Arabia',
-    score: 85,
-    quality: 88,
-    timing: 80,
-    likelihood: 88,
-    engagement: 82,
-    signal: 'Market expansion plans',
-  },
-  {
-    id: '4',
-    name: 'Saudi National Bank',
-    industry: 'Commercial Banking',
-    country: 'Saudi Arabia',
-    score: 82,
-    quality: 85,
-    timing: 78,
-    likelihood: 84,
-    engagement: 80,
-    signal: 'Core banking renewal',
-  },
-  {
-    id: '5',
-    name: 'Qatar National Bank',
-    industry: 'Retail Banking',
-    country: 'Qatar',
-    score: 78,
-    quality: 80,
-    timing: 75,
-    likelihood: 80,
-    engagement: 76,
-    signal: 'Cloud migration project',
-  },
-];
-
 export default function RankingPage() {
   const { locale } = useLocaleStore();
+  const [companies, setCompanies] = useState<RankedCompany[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<RankedCompany | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const isRTL = locale === 'ar';
+
+  // VS12.9: Fetch rankings from OS API
+  const fetchRankings = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // First, get discovered companies from OS discovery
+      const discoveryResponse = await fetch('/api/os/discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: 'default',
+          region_code: 'UAE',
+          vertical_id: 'banking',
+        }),
+      });
+      const discoveryResult = await discoveryResponse.json();
+
+      if (!discoveryResponse.ok || !discoveryResult.success) {
+        throw new Error(discoveryResult.error || 'Failed to fetch companies');
+      }
+
+      // Transform OS discovery data to ranked companies
+      const rankedCompanies: RankedCompany[] = (discoveryResult.data?.opportunities || [])
+        .slice(0, 10)
+        .map((opp: {
+          company_id?: string;
+          company_name?: string;
+          industry?: string;
+          region?: string;
+          scores?: { quality?: number; timing?: number; likelihood?: number; engagement?: number };
+          qtle_score?: number;
+          signals?: Array<{ title?: string; type?: string }>;
+        }, index: number) => ({
+          id: opp.company_id || `comp_${index}`,
+          name: opp.company_name || 'Unknown Company',
+          industry: opp.industry || 'Banking',
+          country: opp.region || 'UAE',
+          score: opp.qtle_score || Math.round((opp.scores?.quality || 70) * 0.3 + (opp.scores?.timing || 70) * 0.25 + (opp.scores?.likelihood || 70) * 0.25 + (opp.scores?.engagement || 70) * 0.2),
+          quality: opp.scores?.quality || 70,
+          timing: opp.scores?.timing || 70,
+          likelihood: opp.scores?.likelihood || 70,
+          engagement: opp.scores?.engagement || 70,
+          signal: opp.signals?.[0]?.title || opp.signals?.[0]?.type || 'Market opportunity',
+        }))
+        .sort((a: RankedCompany, b: RankedCompany) => b.score - a.score);
+
+      setCompanies(rankedCompanies);
+    } catch (err) {
+      console.error('[Ranking] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load rankings');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRankings();
+  }, [fetchRankings]);
+
+  // VS12.9: Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Loading rankings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // VS12.9: Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Failed to load rankings</h2>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <button
+            onClick={fetchRankings}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -121,7 +155,7 @@ export default function RankingPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Rankings List */}
         <div className="lg:col-span-2 space-y-4">
-          {mockCompanies.map((company, index) => (
+          {companies.map((company, index) => (
             <div
               key={company.id}
               onClick={() => setSelectedCompany(company)}

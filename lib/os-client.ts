@@ -8,14 +8,31 @@
  * NO shared code symlinks.
  * API consumption ONLY.
  *
- * SECURITY: Uses GCP OIDC tokens for authentication (zero-trust model)
+ * SECURITY (VS1):
+ * - Uses x-pr-os-token header for authentication
+ * - NEVER trusts client-sent tenant_id - must be injected from session
+ * - All calls are audit logged
+ *
+ * RESILIENCE (VS6):
+ * - Circuit breaker pattern for fault tolerance
+ * - Retry with exponential backoff
+ * - Fallback responses when OS unavailable
+ *
+ * Authorization Code: VS1-VS9-APPROVED-20251213
  */
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { GoogleAuth } from 'google-auth-library';
+import {
+  CircuitBreaker,
+  CircuitState,
+  retryWithBackoff,
+  isRetryableError,
+} from './circuit-breaker';
 
 const OS_BASE_URL = process.env.UPR_OS_BASE_URL || 'http://localhost:8080';
-const OS_API_KEY = process.env.UPR_OS_API_KEY || '';
+// VS1: Use PR_OS_TOKEN for SaaS→OS authentication (replaces UPR_OS_API_KEY)
+const PR_OS_TOKEN = process.env.PR_OS_TOKEN || process.env.UPR_OS_API_KEY || '';
 
 // Initialize Google Auth for OIDC token generation
 const auth = new GoogleAuth();
@@ -162,20 +179,124 @@ async function getIdToken(targetAudience: string): Promise<string | null> {
   }
 }
 
+/**
+ * Request context for tenant isolation
+ * VS5: Passed to OS for RLS enforcement
+ */
+interface RequestContext {
+  tenantId: string;
+  userId?: string;
+  requestId?: string;
+}
+
 class OSClient {
   private client: AxiosInstance;
   private targetAudience: string;
+  private currentContext: RequestContext | null = null;
+
+  // VS6: Circuit breakers for different operation types
+  private circuitBreakers: {
+    score: CircuitBreaker;
+    discovery: CircuitBreaker;
+    outreach: CircuitBreaker;
+    general: CircuitBreaker;
+  };
+
+  /**
+   * Set the tenant context for subsequent requests
+   * VS5: This context is passed to OS in headers for RLS enforcement
+   */
+  setContext(context: RequestContext): void {
+    this.currentContext = context;
+  }
+
+  /**
+   * Clear the tenant context
+   */
+  clearContext(): void {
+    this.currentContext = null;
+  }
+
+  /**
+   * Get headers with tenant context
+   * VS5: These headers are used by OS to set RLS context
+   */
+  private getContextHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.currentContext) {
+      headers['x-tenant-id'] = this.currentContext.tenantId;
+      if (this.currentContext.userId) {
+        headers['x-user-id'] = this.currentContext.userId;
+      }
+      if (this.currentContext.requestId) {
+        headers['x-request-id'] = this.currentContext.requestId;
+      }
+    }
+    return headers;
+  }
+
+  /**
+   * VS6: Get circuit breaker stats for monitoring
+   */
+  getCircuitBreakerStats() {
+    return {
+      score: this.circuitBreakers.score.getStats(),
+      discovery: this.circuitBreakers.discovery.getStats(),
+      outreach: this.circuitBreakers.outreach.getStats(),
+      general: this.circuitBreakers.general.getStats(),
+    };
+  }
+
+  /**
+   * VS6: Reset all circuit breakers (admin operation)
+   */
+  resetCircuitBreakers(): void {
+    Object.values(this.circuitBreakers).forEach((cb) => cb.reset());
+  }
 
   constructor(config: OSClientConfig = {}) {
     const baseURL = config.baseURL || OS_BASE_URL;
     this.targetAudience = baseURL; // Cloud Run expects the service URL as audience
+
+    // VS6: Initialize circuit breakers with different thresholds per operation
+    this.circuitBreakers = {
+      score: new CircuitBreaker({
+        name: 'os-score',
+        failureThreshold: 5,
+        resetTimeout: 30000,
+        successThreshold: 2,
+        requestTimeout: 15000, // Score operations can be slow with AI
+      }),
+      discovery: new CircuitBreaker({
+        name: 'os-discovery',
+        failureThreshold: 3, // Discovery is critical, trip faster
+        resetTimeout: 60000, // Longer reset for external API calls
+        successThreshold: 2,
+        requestTimeout: 30000, // Discovery may involve external APIs
+      }),
+      outreach: new CircuitBreaker({
+        name: 'os-outreach',
+        failureThreshold: 5,
+        resetTimeout: 30000,
+        successThreshold: 2,
+        requestTimeout: 20000, // AI outreach can be slow
+      }),
+      general: new CircuitBreaker({
+        name: 'os-general',
+        failureThreshold: 5,
+        resetTimeout: 30000,
+        successThreshold: 2,
+        requestTimeout: 10000,
+      }),
+    };
 
     this.client = axios.create({
       baseURL: `${baseURL}/api/os`,
       timeout: config.timeout || 30000,
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': config.apiKey || OS_API_KEY,
+        // VS1: Use x-pr-os-token for OS authentication (secure SaaS→OS boundary)
+        'x-pr-os-token': config.apiKey || PR_OS_TOKEN,
         'X-Client': 'premiumradar-saas',
       },
     });
@@ -226,10 +347,45 @@ class OSClient {
 
   /**
    * Discovery - find leads from configured sources
+   * VS6: Protected by circuit breaker with retry and fallback
    */
   async discovery(request: DiscoveryRequest): Promise<OSResponse> {
-    const response = await this.client.post('/discovery', request);
-    return response.data;
+    // VS6: Execute with circuit breaker + retry + fallback
+    return this.circuitBreakers.discovery.execute(
+      async () => {
+        return retryWithBackoff(
+          async () => {
+            const response = await this.client.post('/discovery', request, {
+              headers: this.getContextHeaders(),
+            });
+            return response.data;
+          },
+          { maxRetries: 2, shouldRetry: isRetryableError }
+        );
+      },
+      // Fallback: Return empty discovery response
+      () => this.getFallbackDiscoveryResponse(request)
+    );
+  }
+
+  /**
+   * VS6: Fallback discovery response when OS is unavailable
+   */
+  private getFallbackDiscoveryResponse(request: DiscoveryRequest): OSResponse {
+    console.warn('[OS Client] Using fallback discovery response - OS unavailable');
+    return {
+      success: true,
+      data: {
+        companies: [],
+        signals: [],
+        total: 0,
+        region: request.region_code,
+        vertical: request.vertical_id,
+        fallback: true,
+        message: 'Discovery temporarily unavailable - please try again later',
+      },
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
@@ -242,6 +398,7 @@ class OSClient {
 
   /**
    * Score - calculate Q/T/L/E scores with region modifiers
+   * VS6: Protected by circuit breaker with retry and fallback
    *
    * Transforms SaaS request format to OS contract:
    * - entity_ids[0] → entity_id
@@ -271,8 +428,49 @@ class OSClient {
       osPayload.entity_id = request.entity_ids[0];
     }
 
-    const response = await this.client.post('/score', osPayload);
-    return response.data;
+    // VS6: Execute with circuit breaker + retry + fallback
+    return this.circuitBreakers.score.execute(
+      async () => {
+        return retryWithBackoff(
+          async () => {
+            const response = await this.client.post('/score', osPayload, {
+              headers: this.getContextHeaders(),
+            });
+            return response.data;
+          },
+          { maxRetries: 2, shouldRetry: isRetryableError }
+        );
+      },
+      // Fallback: Return minimal score response when OS is unavailable
+      () => this.getFallbackScoreResponse(request)
+    );
+  }
+
+  /**
+   * VS6: Fallback score response when OS is unavailable
+   */
+  private getFallbackScoreResponse(request: ScoreRequest): OSResponse {
+    console.warn('[OS Client] Using fallback score response - OS unavailable');
+    return {
+      success: true,
+      data: {
+        entity_id: request.entity_id || request.entity_ids?.[0] || null,
+        entity_type: request.entity_type || 'company',
+        scores: {
+          q_score: { value: 50, rating: 'FAIR', breakdown: {} },
+          t_score: { value: 50, category: 'FAIR', breakdown: {} },
+          l_score: { value: 50, tier: 'COOL', breakdown: {} },
+          e_score: { value: 50, strength: 'FAIR', breakdown: {} },
+          composite: { value: 50, tier: 'COOL', grade: 'C' },
+        },
+        explanations: {
+          composite: 'Score calculated using fallback values - OS temporarily unavailable',
+        },
+        scoring_profile: request.options?.profile || 'default',
+        fallback: true,
+      },
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
@@ -302,6 +500,7 @@ class OSClient {
 
   /**
    * Outreach - generate contact sequences
+   * VS6: Protected by circuit breaker with retry and fallback
    *
    * Transforms SaaS request format to OS contract:
    * - leads array with full lead data
@@ -329,8 +528,50 @@ class OSClient {
       }));
     }
 
-    const response = await this.client.post('/outreach', osPayload);
-    return response.data;
+    // VS6: Execute with circuit breaker + retry + fallback
+    return this.circuitBreakers.outreach.execute(
+      async () => {
+        return retryWithBackoff(
+          async () => {
+            const response = await this.client.post('/outreach', osPayload, {
+              headers: this.getContextHeaders(),
+            });
+            return response.data;
+          },
+          { maxRetries: 2, shouldRetry: isRetryableError }
+        );
+      },
+      // Fallback: Return placeholder outreach when OS is unavailable
+      () => this.getFallbackOutreachResponse(request)
+    );
+  }
+
+  /**
+   * VS6: Fallback outreach response when OS is unavailable
+   */
+  private getFallbackOutreachResponse(request: OutreachRequest): OSResponse {
+    console.warn('[OS Client] Using fallback outreach response - OS unavailable');
+    const leads = request.leads || [];
+    return {
+      success: true,
+      data: {
+        outreach_items: leads.map((lead) => ({
+          lead_id: lead.id,
+          lead_name: lead.name,
+          channel: request.options?.channel || 'email',
+          status: 'fallback',
+          message: {
+            subject: `Following up on your business needs`,
+            body: `Dear ${lead.name},\n\nI wanted to reach out regarding potential collaboration opportunities.\n\nOur outreach system is temporarily in fallback mode. A personalized message will be generated shortly.\n\nBest regards`,
+          },
+          fallback: true,
+        })),
+        total: leads.length,
+        fallback: true,
+        message: 'Outreach temporarily unavailable - using fallback templates',
+      },
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
@@ -347,10 +588,51 @@ class OSClient {
   /**
    * Pipeline - execute full OS pipeline
    * discovery → enrich → score → rank → outreach
+   * VS6: Protected by general circuit breaker (orchestrates multiple operations)
    */
   async pipeline(request: PipelineRequest): Promise<OSResponse> {
-    const response = await this.client.post('/pipeline', request);
-    return response.data;
+    // VS6: Execute with circuit breaker + retry + fallback
+    return this.circuitBreakers.general.execute(
+      async () => {
+        return retryWithBackoff(
+          async () => {
+            const response = await this.client.post('/pipeline', request, {
+              headers: this.getContextHeaders(),
+            });
+            return response.data;
+          },
+          { maxRetries: 1, shouldRetry: isRetryableError } // Fewer retries for long pipeline
+        );
+      },
+      // Fallback: Return empty pipeline response
+      () => this.getFallbackPipelineResponse(request)
+    );
+  }
+
+  /**
+   * VS6: Fallback pipeline response when OS is unavailable
+   */
+  private getFallbackPipelineResponse(request: PipelineRequest): OSResponse {
+    console.warn('[OS Client] Using fallback pipeline response - OS unavailable');
+    return {
+      success: true,
+      data: {
+        pipeline_id: `fallback-${Date.now()}`,
+        status: 'fallback',
+        stages: {
+          discovery: { status: 'skipped', companies: [] },
+          enrich: { status: 'skipped', enriched: [] },
+          score: { status: 'skipped', scores: [] },
+          rank: { status: 'skipped', ranked: [] },
+          outreach: { status: 'skipped', messages: [] },
+        },
+        region: request.region_code,
+        vertical: request.vertical_id,
+        fallback: true,
+        message: 'Pipeline temporarily unavailable - please try again later',
+      },
+      timestamp: new Date().toISOString(),
+    };
   }
 }
 

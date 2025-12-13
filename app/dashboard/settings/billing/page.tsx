@@ -1,12 +1,17 @@
 /**
  * Billing Settings Page
+ * VS12.6: Wired to real API data
  *
  * Manage subscription, view usage, and billing history.
+ * Now fetches real data from /api/billing/usage
+ *
+ * Authorization Code: VS12-FRONTEND-WIRING-20251213
  */
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { PricingCards, BillingHistory, UsageMeter } from '@/components/billing';
 import {
   useSubscriptionStore,
@@ -14,11 +19,8 @@ import {
   selectCurrentTier,
   selectIsActive,
   selectIsCanceled,
-  createMockSubscription,
-  createMockInvoice,
   type PlanTier,
   type UsageSummary,
-  type UsageMetric,
 } from '@/lib/billing';
 
 export default function BillingSettingsPage() {
@@ -30,21 +32,23 @@ export default function BillingSettingsPage() {
   const setInvoices = useSubscriptionStore((s) => s.setInvoices);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showPricing, setShowPricing] = useState(false);
 
-  // Mock usage data
-  const [usage] = useState<UsageSummary>({
-    workspaceId: 'ws_demo',
+  // VS12.6: Real usage data from API
+  const [usage, setUsage] = useState<UsageSummary>({
+    workspaceId: '',
     period: {
       start: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
       end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
     },
     metrics: {
-      api_calls: 45000,
-      exports: 234,
-      searches: 5600,
-      outreach_sent: 1200,
-      storage_mb: 3500,
+      api_calls: 0,
+      exports: 0,
+      searches: 0,
+      outreach_sent: 0,
+      storage_mb: 0,
     },
     limits: {
       api_calls: 100000,
@@ -55,28 +59,86 @@ export default function BillingSettingsPage() {
     },
   });
 
-  // Initialize with mock data
+  // VS12.6: Fetch real billing data from API
+  const fetchBillingData = useCallback(async () => {
+    setIsDataLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/billing/usage');
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to fetch billing data');
+      }
+
+      // Set subscription from API
+      if (result.data?.subscription) {
+        setSubscription({
+          id: result.data.subscription.id || 'sub_default',
+          workspaceId: result.data.subscription.workspaceId || 'ws_default',
+          tier: result.data.subscription.tier || 'starter',
+          status: result.data.subscription.status || 'active',
+          billingInterval: result.data.subscription.billingInterval || 'month',
+          stripeCustomerId: result.data.subscription.stripeCustomerId,
+          stripeSubscriptionId: result.data.subscription.stripeSubscriptionId,
+          currentPeriodStart: new Date(result.data.subscription.currentPeriodStart || Date.now()),
+          currentPeriodEnd: new Date(result.data.subscription.currentPeriodEnd || Date.now() + 30 * 24 * 60 * 60 * 1000),
+          cancelAtPeriodEnd: result.data.subscription.cancelAtPeriodEnd || false,
+          createdAt: new Date(result.data.subscription.createdAt || Date.now()),
+          updatedAt: new Date(result.data.subscription.updatedAt || Date.now()),
+        });
+      }
+
+      // Set invoices from API
+      if (result.data?.invoices) {
+        setInvoices(result.data.invoices.map((inv: {
+          id: string;
+          number: string;
+          amountDue: number;
+          amountPaid: number;
+          status: string;
+          createdAt: string;
+          pdfUrl?: string;
+        }) => ({
+          id: inv.id,
+          workspaceId: 'ws_default',
+          stripeInvoiceId: inv.id,
+          number: inv.number,
+          amountDue: inv.amountDue,
+          amountPaid: inv.amountPaid,
+          currency: 'usd',
+          status: inv.status as 'draft' | 'open' | 'paid' | 'void' | 'uncollectible',
+          createdAt: new Date(inv.createdAt),
+          pdfUrl: inv.pdfUrl,
+        })));
+      }
+
+      // Set usage from API
+      if (result.data?.usage) {
+        setUsage({
+          workspaceId: result.data.usage.workspaceId || 'ws_default',
+          period: {
+            start: new Date(result.data.usage.period?.start || new Date().setDate(1)),
+            end: new Date(result.data.usage.period?.end || new Date()),
+          },
+          metrics: result.data.usage.metrics || usage.metrics,
+          limits: result.data.usage.limits || usage.limits,
+        });
+      }
+
+    } catch (err) {
+      console.error('[Billing] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load billing data');
+    } finally {
+      setIsDataLoading(false);
+    }
+  }, [setSubscription, setInvoices, usage.metrics, usage.limits]);
+
+  // VS12.6: Fetch data on mount
   useEffect(() => {
-    setSubscription(
-      createMockSubscription({
-        tier: 'professional',
-        status: 'active',
-      })
-    );
-    setInvoices([
-      createMockInvoice({ number: 'INV-001', amountPaid: 14900 }),
-      createMockInvoice({
-        number: 'INV-002',
-        amountPaid: 14900,
-        createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-      }),
-      createMockInvoice({
-        number: 'INV-003',
-        amountPaid: 14900,
-        createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
-      }),
-    ]);
-  }, [setSubscription, setInvoices]);
+    fetchBillingData();
+  }, [fetchBillingData]);
 
   const handleSelectPlan = async (tier: PlanTier, interval: 'month' | 'year') => {
     setIsLoading(true);
@@ -131,12 +193,53 @@ export default function BillingSettingsPage() {
     }
   };
 
+  // VS12.6: Loading state
+  if (isDataLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Loading billing data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // VS12.6: Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Failed to load billing</h2>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <button
+            onClick={fetchBillingData}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h1 className="text-xl font-semibold text-gray-900">Billing & Subscription</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold text-gray-900">Billing & Subscription</h1>
+            <button
+              onClick={fetchBillingData}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Refresh billing data"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 

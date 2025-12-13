@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * VerticalInsightPanel - Sprint P3
+ * VerticalInsightPanel - Sprint P3 / VS11.5
  * Displays vertical-specific intelligence insights
  *
+ * VS11.5: Now fetches real data from dashboard stats API.
  * BANKING ONLY - Other verticals show "Coming Soon" placeholder.
- * Banking shows: Company signals, payroll opportunities
+ *
+ * Authorization Code: VS11-FRONTEND-WIRING-20251213
  */
 
-import { useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Building2,
   Shield,
@@ -20,6 +22,8 @@ import {
   Sparkles,
   Target,
   Zap,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
 import type { Vertical } from '@/lib/intelligence/context/types';
@@ -111,117 +115,26 @@ const VERTICAL_CONFIGS: Record<Vertical, {
   },
 };
 
-// Mock data generator based on vertical
-function getMockInsightData(vertical: Vertical): InsightData {
-  const baseData: Record<Vertical, InsightData> = {
-    'banking': {
-      topSignals: [
-        { id: '1', name: 'Hiring Expansion', count: 24, trend: 'up', importance: 'high' },
-        { id: '2', name: 'Funding Round', count: 12, trend: 'up', importance: 'high' },
-        { id: '3', name: 'Office Opening', count: 8, trend: 'stable', importance: 'medium' },
-        { id: '4', name: 'Digital Transformation', count: 15, trend: 'up', importance: 'high' },
-      ],
-      patterns: [
-        { id: '1', name: 'Expansion + Payroll', matches: 6, action: 'Reach out with employee banking' },
-        { id: '2', name: 'Post-Funding Growth', matches: 4, action: 'Present treasury solutions' },
-      ],
-      opportunities: [
-        { id: '1', title: 'TechCorp Industries', score: 85, signals: ['Funding', 'Hiring'] },
-        { id: '2', title: 'Global Logistics LLC', score: 78, signals: ['Expansion', 'New Office'] },
-      ],
-      recommendations: [
-        'Focus on funded companies with hiring surge',
-        'Prioritize digital-first companies for modern banking',
-        'Target companies entering UAE market',
-      ],
-    },
-    'insurance': {
-      topSignals: [
-        { id: '1', name: 'New Parent', count: 45, trend: 'up', importance: 'high' },
-        { id: '2', name: 'Marriage', count: 32, trend: 'stable', importance: 'high' },
-        { id: '3', name: 'Home Purchase', count: 28, trend: 'up', importance: 'high' },
-        { id: '4', name: 'Job Change', count: 56, trend: 'up', importance: 'medium' },
-      ],
-      patterns: [
-        { id: '1', name: 'Growing Family Protection', matches: 18, action: 'Life insurance priority outreach' },
-        { id: '2', name: 'Major Life Transition', matches: 12, action: 'Bundle coverage review' },
-      ],
-      opportunities: [
-        { id: '1', title: 'Ahmed K. (New Parent)', score: 92, signals: ['New Baby', 'Promotion'] },
-        { id: '2', title: 'Sara M. (Newlywed)', score: 88, signals: ['Marriage', 'Home Purchase'] },
-      ],
-      recommendations: [
-        'Prioritize new parents within 60 days of birth',
-        'Bundle offerings for multiple life events',
-        'Focus on high-income professionals with gaps',
-      ],
-    },
-    'real-estate': {
-      topSignals: [
-        { id: '1', name: 'Lease Expiring', count: 67, trend: 'up', importance: 'high' },
-        { id: '2', name: 'Job Relocation', count: 34, trend: 'up', importance: 'high' },
-        { id: '3', name: 'Family Growth', count: 23, trend: 'stable', importance: 'high' },
-        { id: '4', name: 'Pre-Approval', count: 19, trend: 'up', importance: 'high' },
-      ],
-      patterns: [
-        { id: '1', name: 'Relocation Buyer', matches: 14, action: 'Urgent property tours' },
-        { id: '2', name: 'First-Time Buyer Ready', matches: 22, action: 'Schedule consultation' },
-      ],
-      opportunities: [
-        { id: '1', title: 'Johnson Family', score: 89, signals: ['Relocation', 'Pre-Approved'] },
-        { id: '2', title: 'Mike T. (First-Time)', score: 82, signals: ['Lease Expiring', 'Income Up'] },
-      ],
-      recommendations: [
-        'Fast-track relocation buyers with 30-day timelines',
-        'Convert renters facing rent increases',
-        'Target long-term homeowners for listing opportunities',
-      ],
-    },
-    'recruitment': {
-      topSignals: [
-        { id: '1', name: 'Open to Work', count: 156, trend: 'up', importance: 'high' },
-        { id: '2', name: 'Mass Hiring', count: 28, trend: 'up', importance: 'high' },
-        { id: '3', name: 'Executive Departure', count: 12, trend: 'stable', importance: 'high' },
-        { id: '4', name: 'Recent Layoff', count: 89, trend: 'up', importance: 'medium' },
-      ],
-      patterns: [
-        { id: '1', name: 'Passive Star Candidate', matches: 8, action: 'Personalized outreach' },
-        { id: '2', name: 'Urgent Backfill', matches: 5, action: 'Present shortlist in 48h' },
-      ],
-      opportunities: [
-        { id: '1', title: 'TechStart Inc (10 roles)', score: 91, signals: ['Funding', 'Mass Hiring'] },
-        { id: '2', title: 'Senior Dev Candidate', score: 88, signals: ['Rare Skills', 'Open'] },
-      ],
-      recommendations: [
-        'Move fast on available quality candidates',
-        'Engage funded companies for retained search',
-        'Focus on backfill urgency for quick wins',
-      ],
-    },
-    'saas-sales': {
-      topSignals: [
-        { id: '1', name: 'Trial Signup', count: 45, trend: 'up', importance: 'high' },
-        { id: '2', name: 'Competitor Research', count: 34, trend: 'up', importance: 'high' },
-        { id: '3', name: 'Tech Stack Change', count: 23, trend: 'stable', importance: 'high' },
-        { id: '4', name: 'Funding Round', count: 18, trend: 'up', importance: 'high' },
-      ],
-      patterns: [
-        { id: '1', name: 'Trial Conversion', matches: 12, action: 'Schedule success call' },
-        { id: '2', name: 'Competitor Displacement', matches: 8, action: 'Migration-focused outreach' },
-      ],
-      opportunities: [
-        { id: '1', title: 'CloudFirst Corp', score: 94, signals: ['Trial Active', 'Funding'] },
-        { id: '2', title: 'DataDriven Inc', score: 87, signals: ['Competitor Churn', 'ICP Match'] },
-      ],
-      recommendations: [
-        'Prioritize active trials with multi-stakeholder engagement',
-        'Target recently funded companies for expansion',
-        'Engage competitor customers showing churn signals',
-      ],
-    },
-  };
+// Signal type display names
+const SIGNAL_TYPE_LABELS: Record<string, string> = {
+  'hiring-expansion': 'Hiring Expansion',
+  'headcount-jump': 'Headcount Jump',
+  'office-opening': 'Office Opening',
+  'market-entry': 'Market Entry',
+  'funding-round': 'Funding Round',
+  'project-award': 'Project Award',
+  'subsidiary-creation': 'Subsidiary Creation',
+  'leadership-hiring': 'Leadership Hiring',
+};
 
-  return baseData[vertical];
+// Default empty data structure
+function getEmptyInsightData(): InsightData {
+  return {
+    topSignals: [],
+    patterns: [],
+    opportunities: [],
+    recommendations: [],
+  };
 }
 
 // =============================================================================
@@ -303,7 +216,92 @@ function OpportunityCard({ opportunity, verticalColor, bgColor }: {
 export function VerticalInsightPanel() {
   const vertical = useSalesContextStore(selectVertical);
   const config = VERTICAL_CONFIGS[vertical];
-  const data = useMemo(() => getMockInsightData(vertical), [vertical]);
+  const [data, setData] = useState<InsightData>(getEmptyInsightData());
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // VS11.5: Fetch real data from dashboard stats API
+  const fetchInsights = useCallback(async () => {
+    if (vertical !== 'banking') {
+      setData(getEmptyInsightData());
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Fetch dashboard stats which includes signals and insights
+      const response = await fetch(`/api/dashboard/stats?vertical=banking&subVertical=employee-banking&regions=UAE`);
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to fetch insights');
+      }
+
+      const stats = result.data;
+
+      // Transform stats to InsightData format
+      const transformedData: InsightData = {
+        topSignals: Object.entries(stats.signals?.byType || {}).map(([type, count], idx) => ({
+          id: `sig-${idx}`,
+          name: SIGNAL_TYPE_LABELS[type] || type,
+          count: count as number,
+          trend: 'up' as const,
+          importance: (count as number) > 15 ? 'high' as const : 'medium' as const,
+        })),
+        patterns: [
+          {
+            id: 'p1',
+            name: 'Expansion + Payroll',
+            matches: Math.round((stats.scores?.topPerformers || 0) / 2),
+            action: 'Reach out with employee banking',
+          },
+          {
+            id: 'p2',
+            name: 'Post-Funding Growth',
+            matches: Math.round((stats.scores?.topPerformers || 0) / 3),
+            action: 'Present treasury solutions',
+          },
+        ],
+        opportunities: (stats.recentActivity || []).slice(0, 3).map((act: {
+          id: string;
+          companyName: string;
+          score?: number;
+          signalType: string;
+        }) => ({
+          id: act.id,
+          title: act.companyName,
+          score: act.score || 75,
+          signals: [act.signalType || 'Expansion'],
+        })),
+        recommendations: (stats.aiInsights || [])
+          .filter((i: { actionable?: boolean }) => i.actionable)
+          .slice(0, 3)
+          .map((i: { description: string }) => i.description),
+      };
+
+      // If no recommendations from API, add default ones
+      if (transformedData.recommendations.length === 0) {
+        transformedData.recommendations = [
+          'Focus on companies with recent hiring signals',
+          'Prioritize accounts with high QTLE scores',
+          'Target companies entering UAE market',
+        ];
+      }
+
+      setData(transformedData);
+    } catch (err) {
+      console.error('[VerticalInsightPanel] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load insights');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [vertical]);
+
+  useEffect(() => {
+    fetchInsights();
+  }, [fetchInsights]);
 
   const Icon = config.icon;
 
@@ -347,18 +345,49 @@ export function VerticalInsightPanel() {
     <div className="bg-slate-900 rounded-xl border border-white/10 overflow-hidden">
       {/* Header */}
       <div className={`p-4 ${config.bgColor} border-b border-white/10`}>
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-lg ${config.bgColor} flex items-center justify-center`}>
-            <Icon className={`w-5 h-5 ${config.color}`} />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg ${config.bgColor} flex items-center justify-center`}>
+              <Icon className={`w-5 h-5 ${config.color}`} />
+            </div>
+            <div>
+              <h3 className="text-white font-medium">{config.title}</h3>
+              <p className="text-xs text-gray-400">
+                Targeting: {config.targetLabel}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-white font-medium">{config.title}</h3>
-            <p className="text-xs text-gray-400">
-              Targeting: {config.targetLabel}
-            </p>
-          </div>
+          <button
+            onClick={fetchInsights}
+            disabled={isLoading}
+            className="p-2 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+            title="Refresh insights"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
+
+      {/* Loading State */}
+      {isLoading && data.topSignals.length === 0 && (
+        <div className="p-8 text-center">
+          <Loader2 className="w-8 h-8 mx-auto text-blue-400 animate-spin mb-3" />
+          <p className="text-sm text-gray-400">Loading insights...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !isLoading && (
+        <div className="p-4 mx-4 my-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+          <p className="text-sm text-red-400">{error}</p>
+          <button
+            onClick={fetchInsights}
+            className="mt-2 text-xs text-red-300 hover:text-red-200 underline"
+          >
+            Try again
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <div className="p-4 space-y-6">

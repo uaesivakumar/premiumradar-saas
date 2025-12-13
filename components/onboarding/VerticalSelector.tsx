@@ -146,17 +146,25 @@ export function VerticalSelector() {
     setIsSubmitting(true);
     setVertical(selectedVertical);
 
-    // S48: Lock the user to this vertical
-    // In production, use actual user ID from auth
-    const mockUserId = `user_${Date.now()}`;
+    // VS10.3: Lock user's vertical via API (uses real session user ID)
     try {
-      lockUserVertical(mockUserId, selectedVertical, 'user');
+      const response = await fetch('/api/auth/profile/lock-vertical', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vertical: selectedVertical,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        console.error('[VerticalSelector] Failed to lock vertical:', data.error);
+        // Continue anyway - vertical can be locked later
+      }
     } catch (error) {
       console.error('[VerticalSelector] Failed to lock vertical:', error);
+      // Continue anyway - don't block onboarding
     }
-
-    // Simulate loading intelligence modules
-    await new Promise(resolve => setTimeout(resolve, 1000));
 
     completeStep('vertical');
     // EB JOURNEY: Navigate to subVertical selection (not transition)

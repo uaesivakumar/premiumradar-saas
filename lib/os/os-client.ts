@@ -6,6 +6,12 @@
  * calls to the actual OS APIs that have full CRUD, versioning,
  * and hot-reload capabilities.
  *
+ * SECURITY (VS1):
+ * - Uses x-pr-os-token header for authentication
+ * - NEVER trusts client-sent tenant_id
+ *
+ * Authorization Code: VS1-VS9-APPROVED-20251213
+ *
  * OS APIs exposed:
  * - /api/os/config - System configuration (S55)
  * - /api/os/llm - LLM routing (S51)
@@ -15,7 +21,8 @@
  */
 
 const OS_BASE_URL = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
-const OS_API_KEY = process.env.UPR_OS_API_KEY || '';
+// VS1: Use PR_OS_TOKEN for SaaS→OS authentication
+const PR_OS_TOKEN = process.env.PR_OS_TOKEN || process.env.UPR_OS_API_KEY || '';
 
 // =============================================================================
 // TYPES
@@ -229,7 +236,8 @@ async function osRequest<T>(
       method,
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': OS_API_KEY,
+        // VS1: Use x-pr-os-token for OS authentication (secure SaaS→OS boundary)
+        'x-pr-os-token': PR_OS_TOKEN,
         'X-Request-Source': 'saas-superadmin',
         ...headers,
       },

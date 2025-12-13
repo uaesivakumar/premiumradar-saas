@@ -128,106 +128,11 @@ interface CommandCenterData {
   lastUpdated: string;
 }
 
-// Real data - Pre-launch phase (no revenue yet)
-// Last updated: Dec 5, 2025
-const mockData: CommandCenterData = {
-  pulse: {
-    mrr: 0,           // No revenue yet - product not live
-    mrrGrowth: 0,     // No growth yet
-    arr: 0,
-    users: {
-      total: 0,       // No users yet
-      active: 0,
-      dau: 0,
-    },
-    churn: 0,         // N/A - no users
-    burn: {
-      monthly: 213,   // Apollo $59 + Anthropic $100 + ChatGPT $21 + GCP ~$33 = ~$213
-      daily: 7.1,
-    },
-    runway: {
-      months: 4.7,    // $1000 / $213 = ~4.7 months
-      cashBalance: 1000,
-    },
-    margin: 0,        // No revenue
-    aiSavings: 0,     // Will track once OS routing is active
-  },
-  priorities: [
-    {
-      id: '1',
-      severity: 'info',
-      title: 'Product in pre-launch phase',
-      description: 'Focus on completing MVP and preparing for first customers.',
-      action: { label: 'View Roadmap', href: '/superadmin/siva' },
-    },
-    {
-      id: '2',
-      severity: 'warning',
-      title: 'Render subscription to be discontinued',
-      description: 'Currently paying $60.80/mo for Render. Migrate to GCP to save costs.',
-      metric: '$60.80',
-      action: { label: 'View Costs', href: '/superadmin/financials' },
-    },
-    {
-      id: '3',
-      severity: 'info',
-      title: 'SERP credits healthy',
-      description: '14,643 credits remaining (357 used of 15,000). No renewal needed.',
-      metric: '97.6%',
-    },
-  ],
-  modelUpdates: [
-    {
-      id: '1',
-      provider: 'anthropic',
-      model: 'Claude 3.5 Sonnet',
-      releaseDate: '2024-10-22',
-      isNew: false,
-      improvements: ['Best price/performance', 'Great for coding', 'Fast responses'],
-      costChange: -50,
-      qualityChange: 10,
-      actions: { canSwitch: true, canTest: true, canAddFallback: true },
-      estimatedMonthlySavings: 0,
-    },
-    {
-      id: '2',
-      provider: 'openai',
-      model: 'GPT-4o-mini',
-      releaseDate: '2024-07-18',
-      isNew: false,
-      improvements: ['Very cheap', 'Good for simple tasks', 'Fast'],
-      costChange: -90,
-      speedChange: 50,
-      actions: { canSwitch: true, canTest: true, canAddFallback: true },
-    },
-    {
-      id: '3',
-      provider: 'google',
-      model: 'Gemini 1.5 Flash',
-      releaseDate: '2024-05-14',
-      isNew: false,
-      improvements: ['1M token context', 'Multimodal', 'Cost effective'],
-      speedChange: 100,
-      costChange: -60,
-      actions: { canSwitch: true, canTest: true, canAddFallback: true },
-    },
-  ],
-  revenue: {
-    subscriptions: { amount: 0, count: 0 },  // No customers yet
-    apiOverages: 0,
-    total: 0,
-  },
-  costs: {
-    openai: 21,       // ChatGPT subscription ($21/mo), API not billed yet
-    anthropic: 100,   // Claude Pro subscription
-    apollo: 59,       // Basic Seat
-    serp: 0,          // Prepaid credits (15,000 searches)
-    gcp: 33,          // Redis $14 + Cloud SQL $12 + Networking $3 + misc $4
-    domains: 0,       // Included elsewhere or annual
-    total: 213,
-  },
-  lastUpdated: new Date().toISOString(),
-};
+/**
+ * VS12.7: Removed mockData fallback
+ * Command Center now requires real API data
+ * Authorization Code: VS12-FRONTEND-WIRING-20251213
+ */
 
 export default function CommandCenterPage() {
   const [data, setData] = useState<CommandCenterData | null>(null);
@@ -235,29 +140,26 @@ export default function CommandCenterPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
+  // VS12.7: Fetch real data from API (no mock fallback)
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const response = await fetch('/api/superadmin/command-center');
       const result = await response.json();
 
       if (result.success && result.data) {
         setData(result.data);
         setLastRefresh(new Date());
-        setError(null);
       } else {
-        // Fall back to mock data in development
-        console.log('[Command Center] Using mock data:', result.error);
-        setData(mockData);
-        setLastRefresh(new Date());
-        setError(null);
+        // VS12.7: Show error instead of falling back to mock data
+        console.error('[Command Center] API error:', result.error);
+        setError(result.error || 'Failed to load command center data');
       }
     } catch (err) {
-      // Fall back to mock data on error
-      console.log('[Command Center] API error, using mock data');
-      setData(mockData);
-      setLastRefresh(new Date());
-      setError(null);
+      // VS12.7: Show error instead of falling back to mock data
+      console.error('[Command Center] Fetch error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to connect to API');
     } finally {
       setIsLoading(false);
     }

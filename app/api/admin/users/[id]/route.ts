@@ -1,13 +1,17 @@
 /**
- * User Detail API - S149: Tenant Admin MVP
+ * User Detail API
+ * VS12.9: Wired to real database
  *
- * GET - Get user details
+ * GET - Get user details from database
  * PATCH - Update user role
  * DELETE - Remove user from workspace
+ *
+ * Authorization Code: VS12-FRONTEND-WIRING-20251213
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
+import { queryOne, query as dbQuery } from '@/lib/db/client';
 import type { TeamRole } from '@/lib/workspace/types';
 
 // Helper: Check if user can manage users
@@ -28,7 +32,19 @@ function canChangeRole(currentUserRole: string, targetRole: TeamRole, newRole: T
   return true;
 }
 
-// GET - Get user details
+// VS12.9: Database user interface
+interface DBUser {
+  id: string;
+  email: string;
+  full_name?: string;
+  role?: string;
+  status?: string;
+  tenant_id?: string;
+  created_at?: string;
+  last_login?: string;
+}
+
+// GET - Get user details from database
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -44,23 +60,41 @@ export async function GET(
       );
     }
 
-    // Mock user lookup (replace with DB)
-    const mockUser = {
-      id,
-      userId: `u-${id}`,
-      email: 'user@company.com',
-      name: 'Mock User',
-      role: 'analyst' as TeamRole,
-      status: 'active',
-      workspaceId: 'ws-default',
-      joinedAt: new Date('2024-01-15'),
-      lastActiveAt: new Date(),
-    };
+    // VS12.9: Fetch from database
+    try {
+      const user = await queryOne<DBUser>(
+        'SELECT id, email, full_name, role, status, tenant_id, created_at, last_login FROM users WHERE id = $1',
+        [id]
+      );
 
-    return NextResponse.json({
-      success: true,
-      data: mockUser,
-    });
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'User not found' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: user.id,
+          userId: user.id,
+          email: user.email,
+          name: user.full_name || user.email.split('@')[0],
+          role: user.role || 'viewer',
+          status: user.status || 'active',
+          workspaceId: user.tenant_id || 'ws-default',
+          joinedAt: user.created_at ? new Date(user.created_at) : undefined,
+          lastActiveAt: user.last_login ? new Date(user.last_login) : undefined,
+        },
+      });
+    } catch (dbError) {
+      console.error('[User API] Database error:', dbError);
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
   } catch (error) {
     console.error('[User API] GET error:', error);
     return NextResponse.json(
@@ -120,26 +154,51 @@ export async function PATCH(
       );
     }
 
-    // Mock: Check role change permission
-    const targetRole = 'analyst' as TeamRole; // Would come from DB
-    if (!canChangeRole(userRole, targetRole, newRole)) {
+    // VS12.9: Fetch current role from database
+    try {
+      const targetUser = await queryOne<{ role: string }>(
+        'SELECT role FROM users WHERE id = $1',
+        [id]
+      );
+
+      if (!targetUser) {
+        return NextResponse.json(
+          { success: false, error: 'User not found' },
+          { status: 404 }
+        );
+      }
+
+      const targetRole = (targetUser.role || 'viewer') as TeamRole;
+      if (!canChangeRole(userRole, targetRole, newRole)) {
+        return NextResponse.json(
+          { success: false, error: 'Not authorized to assign this role' },
+          { status: 403 }
+        );
+      }
+
+      // VS12.9: Update user role in database
+      await dbQuery(
+        'UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2',
+        [newRole, id]
+      );
+
+      console.log(`[User] Role changed: ${id} -> ${newRole}`);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          id,
+          role: newRole,
+          message: 'Role updated successfully',
+        },
+      });
+    } catch (dbError) {
+      console.error('[User API] Database error:', dbError);
       return NextResponse.json(
-        { success: false, error: 'Not authorized to assign this role' },
-        { status: 403 }
+        { success: false, error: 'Failed to update role' },
+        { status: 500 }
       );
     }
-
-    // TODO: Update user role in database
-    console.log(`[User] Role changed: ${id} -> ${newRole}`);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        id,
-        role: newRole,
-        message: 'Role updated successfully',
-      },
-    });
   } catch (error) {
     console.error('[User API] PATCH error:', error);
     return NextResponse.json(
@@ -181,25 +240,50 @@ export async function DELETE(
       );
     }
 
-    // Mock: Check if trying to remove owner
-    const targetRole = 'analyst' as TeamRole; // Would come from DB
-    if (targetRole === 'owner') {
+    // VS12.9: Check if trying to remove owner
+    try {
+      const targetUser = await queryOne<{ role: string }>(
+        'SELECT role FROM users WHERE id = $1',
+        [id]
+      );
+
+      if (!targetUser) {
+        return NextResponse.json(
+          { success: false, error: 'User not found' },
+          { status: 404 }
+        );
+      }
+
+      const targetRole = (targetUser.role || 'viewer') as TeamRole;
+      if (targetRole === 'owner') {
+        return NextResponse.json(
+          { success: false, error: 'Cannot remove workspace owner' },
+          { status: 403 }
+        );
+      }
+
+      // VS12.9: Soft delete user (set status to removed)
+      await dbQuery(
+        'UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2',
+        ['removed', id]
+      );
+
+      console.log(`[User] Removed from workspace: ${id}`);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          id,
+          message: 'User removed from workspace',
+        },
+      });
+    } catch (dbError) {
+      console.error('[User API] Database error:', dbError);
       return NextResponse.json(
-        { success: false, error: 'Cannot remove workspace owner' },
-        { status: 403 }
+        { success: false, error: 'Failed to remove user' },
+        { status: 500 }
       );
     }
-
-    // TODO: Remove user from workspace in database
-    console.log(`[User] Removed from workspace: ${id}`);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        id,
-        message: 'User removed from workspace',
-      },
-    });
   } catch (error) {
     console.error('[User API] DELETE error:', error);
     return NextResponse.json(

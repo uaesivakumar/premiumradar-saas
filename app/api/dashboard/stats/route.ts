@@ -469,57 +469,65 @@ function getVerticalInsights(vertical: string, subVertical: string): AIInsight[]
 }
 
 // =============================================================================
-// Mock Data (for development/fallback)
+// Fallback Data (VS11.6: Deterministic fallbacks - no Math.random())
+// Uses consistent placeholder data when database is unavailable
 // =============================================================================
 
 function getMockSignalSummary(vertical: string): SignalSummary {
+  // VS11.6: Deterministic counts based on signal type order
   const baseTypes = SIGNAL_TYPES_BY_VERTICAL[vertical] || ['hiring-expansion'];
   const byType: Record<string, number> = {};
 
+  // Use deterministic values based on index
+  const baseCounts = [24, 18, 12, 8, 15, 10, 6, 20];
   baseTypes.forEach((type, i) => {
-    byType[type] = Math.floor(Math.random() * 50) + 10;
+    byType[type] = baseCounts[i % baseCounts.length];
   });
 
   return {
     total: Object.values(byType).reduce((a, b) => a + b, 0),
     byType,
     byPriority: {
-      critical: Math.floor(Math.random() * 10) + 5,
-      high: Math.floor(Math.random() * 30) + 20,
-      medium: Math.floor(Math.random() * 50) + 30,
-      low: Math.floor(Math.random() * 40) + 20,
+      critical: 8,
+      high: 35,
+      medium: 45,
+      low: 25,
     },
-    recentCount: Math.floor(Math.random() * 20) + 10,
+    recentCount: 15,
   };
 }
 
 function getMockScoreSummary(): ScoreSummary {
+  // VS11.6: Deterministic score averages
   return {
-    avgQuality: Math.floor(Math.random() * 20) + 60,
-    avgTiming: Math.floor(Math.random() * 20) + 65,
-    avgLikelihood: Math.floor(Math.random() * 20) + 55,
-    avgEngagement: Math.floor(Math.random() * 20) + 50,
-    totalScored: Math.floor(Math.random() * 500) + 200,
-    topPerformers: Math.floor(Math.random() * 50) + 30,
+    avgQuality: 72,
+    avgTiming: 68,
+    avgLikelihood: 65,
+    avgEngagement: 58,
+    totalScored: 350,
+    topPerformers: 45,
   };
 }
 
 function getMockPipelineSummary(vertical: string): PipelineSummary {
-  const multiplier = vertical === 'banking' ? 1.5 : 1;
+  // VS11.6: Deterministic pipeline numbers
+  const isBanking = vertical === 'banking';
   return {
-    totalProspects: Math.floor((Math.random() * 2000 + 1000) * multiplier),
-    activeOpportunities: Math.floor((Math.random() * 100 + 50) * multiplier),
-    conversionRate: Math.floor(Math.random() * 15 + 10),
-    revenueProjection: Math.floor((Math.random() * 2000000 + 500000) * multiplier),
+    totalProspects: isBanking ? 2500 : 1800,
+    activeOpportunities: isBanking ? 120 : 85,
+    conversionRate: 18,
+    revenueProjection: isBanking ? 2800000 : 1500000,
   };
 }
 
 function getMockRecentActivity(vertical: string): ActivityItem[] {
+  // VS11.6: Deterministic activity feed
   const companies = vertical === 'banking'
-    ? ['Emirates NBD', 'ADCB', 'Mashreq Bank', 'Dubai Islamic Bank', 'RAK Bank']
+    ? ['Emirates Group', 'ADCB', 'Mashreq Bank', 'Dubai Islamic Bank', 'First Abu Dhabi Bank']
     : ['TechCorp', 'Innovation Hub', 'StartupXYZ', 'Enterprise Solutions', 'Global Trade'];
 
   const signalTypes = SIGNAL_TYPES_BY_VERTICAL[vertical] || ['hiring-expansion'];
+  const baseScores = [85, 78, 72, 68, 82];
 
   return companies.map((company, i) => ({
     id: `activity-${i}`,
@@ -527,37 +535,52 @@ function getMockRecentActivity(vertical: string): ActivityItem[] {
     action: `New ${signalTypes[i % signalTypes.length]} signal detected`,
     signalType: signalTypes[i % signalTypes.length],
     timestamp: new Date(Date.now() - i * 3600000).toISOString(),
-    score: Math.floor(Math.random() * 30) + 60,
+    score: baseScores[i],
   }));
 }
 
 function getMockInsights(vertical: string): AIInsight[] {
-  const baseInsights: AIInsight[] = [
+  // VS11.6: Deterministic insights (no randomization)
+  const bankingInsights: AIInsight[] = [
     {
-      id: 'mock-1',
+      id: 'insight-1',
       type: 'opportunity',
       priority: 'high',
-      title: 'Growth Opportunity Detected',
-      description: '3 companies showing strong expansion signals in your territory.',
+      title: 'Hiring Surge in Tech Sector',
+      description: '5 UAE tech companies showing expansion signals - ideal for employee banking pitch.',
       actionable: true,
     },
     {
-      id: 'mock-2',
+      id: 'insight-2',
       type: 'alert',
       priority: 'medium',
-      title: 'Market Shift Alert',
-      description: 'Industry trend indicates changing preferences. Review your approach.',
+      title: 'Q1 Budget Cycle Starting',
+      description: 'Many corporates finalizing banking relationships. Act now for payroll mandates.',
       actionable: true,
     },
     {
-      id: 'mock-3',
+      id: 'insight-3',
       type: 'recommendation',
-      priority: 'low',
-      title: 'Optimize Outreach',
-      description: 'Based on your conversion patterns, Tuesday mornings show best results.',
-      actionable: false,
+      priority: 'medium',
+      title: 'Focus on Series B Companies',
+      description: 'Post-funding companies with 50+ employees have highest conversion rates.',
+      actionable: true,
     },
   ];
 
-  return baseInsights;
+  // Return banking-specific insights for banking, generic otherwise
+  if (vertical === 'banking') {
+    return bankingInsights;
+  }
+
+  return [
+    {
+      id: 'insight-generic-1',
+      type: 'opportunity',
+      priority: 'high',
+      title: 'Growth Opportunity Detected',
+      description: 'Multiple companies showing strong expansion signals in your territory.',
+      actionable: true,
+    },
+  ];
 }

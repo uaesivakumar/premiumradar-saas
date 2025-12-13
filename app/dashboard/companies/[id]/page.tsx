@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Company Profile Page - S139: Company Profiles
+ * Company Profile Page
+ * VS12.9: Wired to real API (mock data removed)
  *
  * Full company profile with:
  * - Company header (logo, name, QTLE score)
@@ -9,6 +10,8 @@
  * - Key contacts list
  * - Activity timeline
  * - Quick actions (outreach, SIVA analysis)
+ *
+ * Authorization Code: VS12-FRONTEND-WIRING-20251213
  */
 
 import { useState, useEffect } from 'react';
@@ -39,189 +42,16 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'activity', label: 'Activity' },
 ];
 
-// Mock data for development - replace with API call
-function getMockCompanyData(id: string): {
+// VS12.9: Company data interface (replaces deprecated mock function)
+interface CompanyData {
   company: CompanyHeaderProps['company'];
   score: CompanyHeaderProps['score'];
   signals: SignalItem[];
   contacts: Contact[];
   activities: Activity[];
-} {
-  return {
-    company: {
-      id,
-      name: 'Emirates Group',
-      logo: undefined,
-      industry: 'Aviation & Travel',
-      description:
-        'Emirates Group is a global travel and tourism conglomerate based in Dubai, UAE. It is one of the largest airline holding companies worldwide.',
-      website: 'https://www.emirates.com',
-      linkedin: 'https://linkedin.com/company/emirates',
-      size: 'enterprise',
-      headcount: 105000,
-      headcountGrowth: 8,
-      region: 'UAE',
-      city: 'Dubai',
-      bankingTier: 'tier1',
-      freshness: 'fresh',
-    },
-    score: {
-      total: 87,
-      quality: 92,
-      timing: 85,
-      likelihood: 82,
-      engagement: 78,
-    },
-    signals: [
-      {
-        id: 's1',
-        type: 'hiring-expansion',
-        title: 'Major Hiring Initiative',
-        description:
-          'Emirates announced plans to hire 5,000 new cabin crew members and 1,000 ground staff across global locations.',
-        category: 'quality',
-        impact: 'positive',
-        source: 'Gulf News',
-        sourceUrl: 'https://gulfnews.com/emirates-hiring',
-        confidence: 95,
-        date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        scoreContribution: 12,
-      },
-      {
-        id: 's2',
-        type: 'office-opening',
-        title: 'New Regional Office',
-        description:
-          'Emirates opened a new regional headquarters in Singapore to support Asia-Pacific expansion.',
-        category: 'timing',
-        impact: 'positive',
-        source: 'Reuters',
-        sourceUrl: 'https://reuters.com/emirates-singapore',
-        confidence: 90,
-        date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-        scoreContribution: 8,
-      },
-      {
-        id: 's3',
-        type: 'funding-round',
-        title: 'Fleet Expansion Investment',
-        description: 'Emirates secured $2.5B financing for 15 new A380 aircraft delivery.',
-        category: 'likelihood',
-        impact: 'positive',
-        source: 'Bloomberg',
-        confidence: 88,
-        date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-        scoreContribution: 10,
-      },
-      {
-        id: 's4',
-        type: 'market-entry',
-        title: 'New Route Launch',
-        description: 'Emirates launched direct flights to 3 new destinations in South America.',
-        category: 'engagement',
-        impact: 'positive',
-        source: 'Aviation Week',
-        confidence: 85,
-        date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-        scoreContribution: 6,
-      },
-    ],
-    contacts: [
-      {
-        id: 'c1',
-        name: 'Ahmed Al Maktoum',
-        title: 'Chief Financial Officer',
-        department: 'Finance',
-        email: 'ahmed.maktoum@emirates.com',
-        linkedin: 'https://linkedin.com/in/ahmed-maktoum',
-        role: 'decision-maker',
-        relevanceScore: 95,
-        isStarred: true,
-      },
-      {
-        id: 'c2',
-        name: 'Sarah Chen',
-        title: 'Head of Corporate Banking Relations',
-        department: 'Treasury',
-        email: 'sarah.chen@emirates.com',
-        phone: '+971 4 555 1234',
-        linkedin: 'https://linkedin.com/in/sarah-chen',
-        role: 'champion',
-        relevanceScore: 88,
-        lastInteraction: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'c3',
-        name: 'Mohammed Hassan',
-        title: 'VP Human Resources',
-        department: 'HR',
-        email: 'm.hassan@emirates.com',
-        linkedin: 'https://linkedin.com/in/m-hassan',
-        role: 'influencer',
-        relevanceScore: 75,
-      },
-      {
-        id: 'c4',
-        name: 'Lisa Thompson',
-        title: 'Payroll Manager',
-        department: 'HR Operations',
-        email: 'l.thompson@emirates.com',
-        role: 'end-user',
-        relevanceScore: 62,
-      },
-    ],
-    activities: [
-      {
-        id: 'a1',
-        type: 'view',
-        title: 'Profile viewed',
-        timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-        user: { name: 'You' },
-      },
-      {
-        id: 'a2',
-        type: 'signal_detected',
-        title: 'New hiring signal detected',
-        description: 'Emirates announced major hiring initiative for 6,000 new employees.',
-        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        metadata: { signalType: 'hiring-expansion' },
-      },
-      {
-        id: 'a3',
-        type: 'score_change',
-        title: 'QTLE Score increased',
-        description: 'Score improved due to new hiring signals.',
-        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        metadata: { oldScore: 75, newScore: 87 },
-      },
-      {
-        id: 'a4',
-        type: 'siva_recommendation',
-        title: 'SIVA recommended outreach',
-        description:
-          'Based on recent hiring signals, SIVA recommends initiating employee banking pitch.',
-        timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'a5',
-        type: 'outreach_email',
-        title: 'Email sent to Sarah Chen',
-        description: 'Initial outreach regarding corporate banking services.',
-        timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-        user: { name: 'John Smith' },
-        metadata: { contactName: 'Sarah Chen' },
-      },
-      {
-        id: 'a6',
-        type: 'note',
-        title: 'Added internal note',
-        description: 'Sarah mentioned interest in payroll services during last meeting.',
-        timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-        user: { name: 'John Smith' },
-      },
-    ],
-  };
 }
+
+// VS12.9: Mock data function removed - all data comes from API
 
 export default function CompanyProfilePage() {
   const params = useParams();
@@ -231,32 +61,42 @@ export default function CompanyProfilePage() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<ReturnType<typeof getMockCompanyData> | null>(null);
+  const [data, setData] = useState<CompanyData | null>(null);
 
-  // Fetch company data
+  // VS11.2: Fetch company data from REAL API
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        // TODO: Replace with actual API call
-        // const response = await fetch(`/api/companies/${companyId}`);
-        // const result = await response.json();
+        // VS11.2: Real API call - no more mock data
+        const response = await fetch(`/api/companies/${companyId}`);
+        const result = await response.json();
 
-        // Using mock data for now
-        await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate API delay
-        const mockData = getMockCompanyData(companyId);
-        setData(mockData);
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Failed to load company');
+        }
+
+        // Transform API response to expected format
+        setData({
+          company: result.data.company,
+          score: result.data.score,
+          signals: result.data.signals,
+          contacts: result.data.contacts,
+          activities: result.data.activities,
+        });
       } catch (err) {
         console.error('[CompanyProfile] Error:', err);
-        setError('Failed to load company data');
+        setError(err instanceof Error ? err.message : 'Failed to load company data');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
+    if (companyId) {
+      fetchData();
+    }
   }, [companyId]);
 
   const handleStartOutreach = (contact: Contact) => {

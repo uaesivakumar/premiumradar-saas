@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Signal Intelligence Page - Sprint S138
+ * Signal Intelligence Page
+ * VS12.9: Wired to real OS API
  *
  * CRITICAL ARCHITECTURE CONSTRAINT:
  * Signal filtering must derive from Intelligence Packs, NOT hardcoded UI logic.
@@ -13,6 +14,7 @@
  * - Evidence sources for transparency
  *
  * This ensures ONE CONSCIOUSNESS of SIVA across all surfaces.
+ * Authorization Code: VS12-FRONTEND-WIRING-20251213
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -41,6 +43,7 @@ import {
   Sparkles,
   RefreshCw,
   Download,
+  Loader2,
 } from 'lucide-react';
 
 // =============================================================================
@@ -57,66 +60,6 @@ interface GroupedSignals {
 }
 
 // =============================================================================
-// Mock Data Generator (until API is connected)
-// =============================================================================
-
-function generateMockSignals(engine: SignalEngine): SignalInstance[] {
-  const allowedTypes = engine.getAllowedTypes();
-  const companies = [
-    'Emirates NBD', 'ADCB', 'Mashreq Bank', 'Dubai Islamic Bank', 'RAK Bank',
-    'Abu Dhabi Commercial Bank', 'First Abu Dhabi Bank', 'Sharjah Islamic Bank',
-    'National Bank of Fujairah', 'Commercial Bank of Dubai',
-  ];
-
-  const signals: SignalInstance[] = [];
-  const now = new Date();
-
-  for (let i = 0; i < 25; i++) {
-    const type = allowedTypes[i % allowedTypes.length];
-    const priorities: PriorityLevel[] = ['critical', 'high', 'medium', 'low'];
-    const priority = priorities[Math.floor(Math.random() * 4)] as PriorityLevel;
-    const companyName = companies[i % companies.length];
-    const detectedAt = new Date(now.getTime() - Math.random() * 7 * 24 * 60 * 60 * 1000);
-    const expiresAt = new Date(detectedAt.getTime() + 90 * 24 * 60 * 60 * 1000);
-
-    const signal: SignalInstance = {
-      id: `sig-${i + 1}`,
-      type,
-      companyId: `comp-${i + 1}`,
-      companyName,
-      title: `${type.replace(/-/g, ' ')} detected`,
-      description: `${companyName} showing ${type.replace(/-/g, ' ')} activity`,
-      priority,
-      confidence: 0.7 + Math.random() * 0.25,
-      relevance: 0.6 + Math.random() * 0.35,
-      source: ['Apollo', 'LinkedIn', 'News'][Math.floor(Math.random() * 3)],
-      detectedAt,
-      expiresAt,
-      metadata: {
-        headcountChange: Math.floor(Math.random() * 100) + 10,
-        timeToDecision: Math.floor(Math.random() * 60) + 14,
-        city: ['Dubai', 'Abu Dhabi', 'Sharjah'][Math.floor(Math.random() * 3)],
-      },
-      qtleContribution: {
-        quality: 50 + Math.floor(Math.random() * 40),
-        timing: 50 + Math.floor(Math.random() * 40),
-        likelihood: 50 + Math.floor(Math.random() * 40),
-        engagement: 50 + Math.floor(Math.random() * 40),
-      },
-      evidence: [{
-        sourceType: 'news' as const,
-        extractedAt: detectedAt,
-        confidence: 0.7 + Math.random() * 0.25,
-      }],
-    };
-
-    signals.push(signal);
-  }
-
-  return signals;
-}
-
-// =============================================================================
 // Component
 // =============================================================================
 
@@ -128,6 +71,7 @@ export default function SignalsPage() {
   // State
   const [signals, setSignals] = useState<SignalInstance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<PriorityLevel | null>(null);
@@ -142,26 +86,148 @@ export default function SignalsPage() {
   // Get allowed signal types from Pack
   const allowedTypes = useMemo(() => signalEngine.getAllowedTypes(), [signalEngine]);
 
-  // Fetch and filter signals
-  useEffect(() => {
+  // VS12.9: Fetch real signals from OS API
+  const fetchSignals = useCallback(async () => {
     setLoading(true);
+    setError(null);
 
-    // Simulate API call - in production this would fetch from /api/signals
-    const timer = setTimeout(() => {
-      const mockSignals = generateMockSignals(signalEngine);
-      setSignals(mockSignals);
-      setLoading(false);
+    try {
+      // Fetch from OS discovery API
+      const response = await fetch('/api/os/discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: 'default',
+          region_code: regions?.[0] || 'UAE',
+          vertical_id: vertical || 'banking',
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to fetch signals');
+      }
+
+      // Transform OS discovery data to SignalInstance format
+      const opportunities = result.data?.opportunities || [];
+      const transformedSignals: SignalInstance[] = [];
+
+      opportunities.forEach((opp: {
+        company_id?: string;
+        company_name?: string;
+        signals?: Array<{
+          type?: string;
+          title?: string;
+          description?: string;
+          confidence?: number;
+          date?: string;
+          source?: string;
+        }>;
+        scores?: { quality?: number; timing?: number; likelihood?: number; engagement?: number };
+        region?: string;
+      }, oppIndex: number) => {
+        // Each opportunity may have multiple signals
+        const oppSignals = opp.signals || [];
+        const priorities: PriorityLevel[] = ['critical', 'high', 'medium', 'low'];
+
+        oppSignals.forEach((sig, sigIndex: number) => {
+          const signalType = sig.type || 'opportunity';
+          const detectedAt = new Date(sig.date || Date.now());
+          const expiresAt = new Date(detectedAt.getTime() + 90 * 24 * 60 * 60 * 1000);
+          const confidence = sig.confidence ? sig.confidence / 100 : 0.75;
+
+          // Determine priority based on confidence
+          let priority: PriorityLevel = 'medium';
+          if (confidence > 0.9) priority = 'critical';
+          else if (confidence > 0.8) priority = 'high';
+          else if (confidence > 0.6) priority = 'medium';
+          else priority = 'low';
+
+          const signal: SignalInstance = {
+            id: `sig-${oppIndex}-${sigIndex}`,
+            type: signalType as SalesSignalType,
+            companyId: opp.company_id || `comp-${oppIndex}`,
+            companyName: opp.company_name || 'Unknown Company',
+            title: sig.title || `${signalType.replace(/-/g, ' ')} detected`,
+            description: sig.description || `${opp.company_name} showing ${signalType.replace(/-/g, ' ')} activity`,
+            priority,
+            confidence,
+            relevance: confidence,
+            source: sig.source || 'OS Intelligence',
+            detectedAt,
+            expiresAt,
+            metadata: {
+              city: opp.region || 'UAE',
+            },
+            qtleContribution: {
+              quality: opp.scores?.quality || 70,
+              timing: opp.scores?.timing || 70,
+              likelihood: opp.scores?.likelihood || 70,
+              engagement: opp.scores?.engagement || 70,
+            },
+            evidence: [{
+              sourceType: 'enrichment' as const,
+              extractedAt: detectedAt,
+              confidence,
+            }],
+          };
+
+          transformedSignals.push(signal);
+        });
+
+        // If no signals, create a default one from the opportunity
+        if (oppSignals.length === 0) {
+          const signal: SignalInstance = {
+            id: `sig-${oppIndex}-0`,
+            type: 'opportunity' as SalesSignalType,
+            companyId: opp.company_id || `comp-${oppIndex}`,
+            companyName: opp.company_name || 'Unknown Company',
+            title: 'Opportunity detected',
+            description: `${opp.company_name} identified as potential opportunity`,
+            priority: 'medium',
+            confidence: 0.75,
+            relevance: 0.75,
+            source: 'OS Intelligence',
+            detectedAt: new Date(),
+            expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+            metadata: {
+              city: opp.region || 'UAE',
+            },
+            qtleContribution: {
+              quality: opp.scores?.quality || 70,
+              timing: opp.scores?.timing || 70,
+              likelihood: opp.scores?.likelihood || 70,
+              engagement: opp.scores?.engagement || 70,
+            },
+            evidence: [{
+              sourceType: 'enrichment' as const,
+              extractedAt: new Date(),
+              confidence: 0.75,
+            }],
+          };
+          transformedSignals.push(signal);
+        }
+      });
+
+      setSignals(transformedSignals);
 
       // Expand first category by default
-      const grouped = signalEngine.groupByCategory(mockSignals);
+      const grouped = signalEngine.groupByCategory(transformedSignals);
       const categories = Object.keys(grouped);
       if (categories.length > 0) {
         setExpandedCategories(new Set([categories[0]]));
       }
-    }, 500);
+    } catch (err) {
+      console.error('[Signals] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load signals');
+    } finally {
+      setLoading(false);
+    }
+  }, [vertical, regions, signalEngine]);
 
-    return () => clearTimeout(timer);
-  }, [signalEngine]);
+  useEffect(() => {
+    fetchSignals();
+  }, [fetchSignals]);
 
   // Apply filters
   const filteredSignals = useMemo(() => {
@@ -263,12 +329,33 @@ export default function SignalsPage() {
       .join(' ');
   };
 
+  // VS12.9: Loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Loading signals from Intelligence Pack...</p>
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Loading signals from OS...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // VS12.9: Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Failed to load signals</h2>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <button
+            onClick={fetchSignals}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
         </div>
       </div>
     );

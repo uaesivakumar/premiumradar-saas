@@ -50,8 +50,26 @@ export function SIVASignupPage() {
     setError(null);
 
     try {
-      // TODO: Integrate with NextAuth signUp
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // VS10.2: Real signup API call
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          name,
+          vertical: 'banking', // Default to banking (only active vertical)
+          subVertical: 'employee-banking',
+          regionCountry: 'UAE',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setError(data.error || 'Failed to create account. Please try again.');
+        return;
+      }
 
       // Redirect to onboarding flow
       router.push('/onboarding/welcome');

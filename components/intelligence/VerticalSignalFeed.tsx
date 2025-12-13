@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * VerticalSignalFeed - Sprint P3
+ * VerticalSignalFeed - Sprint P3 / VS11.4
  * Real-time feed of vertical-specific signals
  *
+ * VS11.4: Now fetches real signals from OS discovery API.
  * BANKING ONLY - Other verticals show "Coming Soon" placeholder.
- * Banking shows: Real-time company signals with actions.
+ *
+ * Authorization Code: VS11-FRONTEND-WIRING-20251213
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2,
@@ -20,6 +22,8 @@ import {
   ArrowRight,
   Zap,
   Star,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
 import type { Vertical } from '@/lib/intelligence/context/types';
@@ -41,185 +45,29 @@ interface SignalItem {
 }
 
 // =============================================================================
-// MOCK DATA
+// SIGNAL TYPE MAPPINGS
 // =============================================================================
 
-const MOCK_SIGNALS: Record<Vertical, SignalItem[]> = {
-  'banking': [
-    {
-      id: '1',
-      type: 'Hiring Expansion',
-      title: 'TechCorp hiring 50+ employees',
-      description: 'Major hiring push across engineering and sales',
-      entity: 'TechCorp Industries',
-      timestamp: new Date(Date.now() - 15 * 60000),
-      score: 87,
-      priority: 'high',
-      suggestedAction: 'Reach out with employee banking proposal',
-    },
-    {
-      id: '2',
-      type: 'Series B Funding',
-      title: 'CloudFirst raises $30M',
-      description: 'Series B led by top-tier VC',
-      entity: 'CloudFirst Corp',
-      timestamp: new Date(Date.now() - 45 * 60000),
-      score: 92,
-      priority: 'critical',
-      suggestedAction: 'Contact CFO for treasury services',
-    },
-    {
-      id: '3',
-      type: 'New Office',
-      title: 'GlobalTech opens Dubai office',
-      description: 'Expanding MENA operations',
-      entity: 'GlobalTech LLC',
-      timestamp: new Date(Date.now() - 90 * 60000),
-      score: 78,
-      priority: 'high',
-      suggestedAction: 'Offer local banking onboarding',
-    },
-  ],
-  'insurance': [
-    {
-      id: '1',
-      type: 'New Parent',
-      title: 'Ahmed K. welcomed new baby',
-      description: 'First child, needs family protection',
-      entity: 'Ahmed K.',
-      timestamp: new Date(Date.now() - 30 * 60000),
-      score: 95,
-      priority: 'critical',
-      suggestedAction: 'Congratulate and offer protection review',
-    },
-    {
-      id: '2',
-      type: 'Marriage',
-      title: 'Sara M. recently married',
-      description: 'Combined household, needs coverage review',
-      entity: 'Sara M.',
-      timestamp: new Date(Date.now() - 2 * 60 * 60000),
-      score: 88,
-      priority: 'high',
-      suggestedAction: 'Offer newlywed protection bundle',
-    },
-    {
-      id: '3',
-      type: 'Job Promotion',
-      title: 'Omar H. promoted to Director',
-      description: '40% salary increase, underinsured',
-      entity: 'Omar H.',
-      timestamp: new Date(Date.now() - 4 * 60 * 60000),
-      score: 82,
-      priority: 'high',
-      suggestedAction: 'Review coverage adequacy',
-    },
-  ],
-  'real-estate': [
-    {
-      id: '1',
-      type: 'Lease Expiring',
-      title: 'Johnson family lease ends in 45 days',
-      description: 'Looking to buy first home',
-      entity: 'Johnson Family',
-      timestamp: new Date(Date.now() - 1 * 60 * 60000),
-      score: 91,
-      priority: 'critical',
-      suggestedAction: 'Schedule buyer consultation',
-    },
-    {
-      id: '2',
-      type: 'Job Relocation',
-      title: 'Mike T. relocating to Dubai',
-      description: 'Starting new role in 30 days',
-      entity: 'Mike T.',
-      timestamp: new Date(Date.now() - 3 * 60 * 60000),
-      score: 94,
-      priority: 'critical',
-      suggestedAction: 'Offer urgent property search',
-    },
-    {
-      id: '3',
-      type: 'Pre-Approval',
-      title: 'Chen family got mortgage pre-approval',
-      description: 'Approved for $500K, actively looking',
-      entity: 'Chen Family',
-      timestamp: new Date(Date.now() - 6 * 60 * 60000),
-      score: 89,
-      priority: 'high',
-      suggestedAction: 'Send matching property list',
-    },
-  ],
-  'recruitment': [
-    {
-      id: '1',
-      type: 'Open to Work',
-      title: 'Senior Developer available',
-      description: 'React/Node expert, ex-FAANG',
-      entity: 'Alex Chen',
-      timestamp: new Date(Date.now() - 20 * 60000),
-      score: 93,
-      priority: 'critical',
-      suggestedAction: 'Match with open tech roles',
-    },
-    {
-      id: '2',
-      type: 'Mass Hiring',
-      title: 'StartupXYZ hiring 20 engineers',
-      description: 'Post-Series A expansion',
-      entity: 'StartupXYZ',
-      timestamp: new Date(Date.now() - 2 * 60 * 60000),
-      score: 88,
-      priority: 'high',
-      suggestedAction: 'Propose retained search partnership',
-    },
-    {
-      id: '3',
-      type: 'Executive Departure',
-      title: 'CFO leaving FinanceCo',
-      description: 'Urgent backfill needed',
-      entity: 'FinanceCo Ltd',
-      timestamp: new Date(Date.now() - 4 * 60 * 60000),
-      score: 95,
-      priority: 'critical',
-      suggestedAction: 'Present executive shortlist',
-    },
-  ],
-  'saas-sales': [
-    {
-      id: '1',
-      type: 'Trial Signup',
-      title: 'DataDriven Inc started trial',
-      description: '5 users active, enterprise ICP',
-      entity: 'DataDriven Inc',
-      timestamp: new Date(Date.now() - 1 * 60 * 60000),
-      score: 92,
-      priority: 'critical',
-      suggestedAction: 'Schedule onboarding success call',
-    },
-    {
-      id: '2',
-      type: 'Competitor Churn',
-      title: 'CloudFirst evaluating alternatives',
-      description: 'Unhappy with current vendor',
-      entity: 'CloudFirst Corp',
-      timestamp: new Date(Date.now() - 5 * 60 * 60000),
-      score: 89,
-      priority: 'high',
-      suggestedAction: 'Migration-focused outreach',
-    },
-    {
-      id: '3',
-      type: 'Funding Round',
-      title: 'TechStart raises Series A',
-      description: '$15M raised, scaling ops',
-      entity: 'TechStart Inc',
-      timestamp: new Date(Date.now() - 8 * 60 * 60000),
-      score: 86,
-      priority: 'high',
-      suggestedAction: 'Present growth solutions',
-    },
-  ],
+const SIGNAL_TYPE_LABELS: Record<string, string> = {
+  'hiring-expansion': 'Hiring Expansion',
+  'headcount-jump': 'Headcount Jump',
+  'office-opening': 'Office Opening',
+  'market-entry': 'Market Entry',
+  'funding-round': 'Funding Round',
+  'project-award': 'Project Award',
+  'subsidiary-creation': 'Subsidiary Creation',
+  'leadership-hiring': 'Leadership Hiring',
+};
+
+const SIGNAL_ACTIONS: Record<string, string> = {
+  'hiring-expansion': 'Reach out with employee banking proposal',
+  'headcount-jump': 'Present payroll solutions for growing team',
+  'office-opening': 'Offer local banking onboarding',
+  'market-entry': 'Welcome to UAE with corporate banking intro',
+  'funding-round': 'Contact CFO for treasury services',
+  'project-award': 'Propose working capital solutions',
+  'subsidiary-creation': 'Offer multi-entity banking setup',
+  'leadership-hiring': 'Connect with new leadership on banking needs',
 };
 
 const VERTICAL_ICONS: Record<Vertical, React.ElementType> = {
@@ -264,6 +112,13 @@ function getPriorityStyles(priority: SignalItem['priority']): string {
     default:
       return 'border-white/10 bg-white/5';
   }
+}
+
+function scoreToPriority(score: number): SignalItem['priority'] {
+  if (score >= 85) return 'critical';
+  if (score >= 70) return 'high';
+  if (score >= 50) return 'medium';
+  return 'low';
 }
 
 // =============================================================================
@@ -336,15 +191,83 @@ export function VerticalSignalFeed() {
   const vertical = useSalesContextStore(selectVertical);
   const [signals, setSignals] = useState<SignalItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'critical' | 'high'>('all');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Only load signals for banking
-    if (vertical === 'banking') {
-      setSignals(MOCK_SIGNALS[vertical]);
-    } else {
+  // VS11.4: Fetch real signals from OS discovery API
+  const fetchSignals = useCallback(async () => {
+    if (vertical !== 'banking') {
       setSignals([]);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/os/discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vertical: 'banking',
+          sub_vertical: 'employee-banking',
+          region_code: 'UAE',
+          limit: 10,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to fetch signals');
+      }
+
+      // Transform OS discovery results to SignalItem format
+      const transformedSignals: SignalItem[] = (result.data?.leads || result.data?.companies || [])
+        .slice(0, 10)
+        .map((lead: {
+          id?: string;
+          name?: string;
+          company_name?: string;
+          signals?: Array<{
+            type?: string;
+            title?: string;
+            description?: string;
+            date?: string;
+          }>;
+          score?: number;
+          qtle_score?: number;
+        }, idx: number) => {
+          const topSignal = lead.signals?.[0] || {};
+          const signalType = topSignal.type || 'hiring-expansion';
+          const score = lead.score || lead.qtle_score || 70;
+
+          return {
+            id: lead.id || `signal-${idx}`,
+            type: SIGNAL_TYPE_LABELS[signalType] || signalType,
+            title: topSignal.title || `${lead.name || lead.company_name} - ${SIGNAL_TYPE_LABELS[signalType] || 'New Signal'}`,
+            description: topSignal.description || `Signal detected for ${lead.name || lead.company_name}`,
+            entity: lead.name || lead.company_name || 'Unknown Company',
+            timestamp: new Date(topSignal.date || Date.now()),
+            score,
+            priority: scoreToPriority(score),
+            suggestedAction: SIGNAL_ACTIONS[signalType] || 'Review and reach out',
+          };
+        });
+
+      setSignals(transformedSignals);
+    } catch (err) {
+      console.error('[VerticalSignalFeed] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load signals');
+      setSignals([]);
+    } finally {
+      setIsLoading(false);
     }
   }, [vertical]);
+
+  useEffect(() => {
+    fetchSignals();
+  }, [fetchSignals]);
 
   // Only Banking is active - other verticals show Coming Soon
   const isActive = vertical === 'banking';
@@ -381,7 +304,17 @@ export function VerticalSignalFeed() {
       {/* Header */}
       <div className="p-4 border-b border-white/10">
         <div className="flex items-center justify-between">
-          <h3 className="text-white font-medium">Signal Feed</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-white font-medium">Signal Feed</h3>
+            <button
+              onClick={fetchSignals}
+              disabled={isLoading}
+              className="p-1 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+              title="Refresh signals"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
           <div className="flex gap-1">
             {(['all', 'critical', 'high'] as const).map((f) => (
               <button
@@ -400,6 +333,27 @@ export function VerticalSignalFeed() {
         </div>
       </div>
 
+      {/* Loading State */}
+      {isLoading && signals.length === 0 && (
+        <div className="p-8 text-center">
+          <Loader2 className="w-8 h-8 mx-auto text-blue-400 animate-spin mb-3" />
+          <p className="text-sm text-gray-400">Loading signals from OS...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !isLoading && (
+        <div className="p-4 mx-4 my-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+          <p className="text-sm text-red-400">{error}</p>
+          <button
+            onClick={fetchSignals}
+            className="mt-2 text-xs text-red-300 hover:text-red-200 underline"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {/* Signal List */}
       <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
         <AnimatePresence mode="popLayout">
@@ -408,7 +362,7 @@ export function VerticalSignalFeed() {
           ))}
         </AnimatePresence>
 
-        {filteredSignals.length === 0 && (
+        {!isLoading && !error && filteredSignals.length === 0 && (
           <div className="text-center py-8 text-gray-500">
             <p className="text-sm">No signals matching filter</p>
           </div>

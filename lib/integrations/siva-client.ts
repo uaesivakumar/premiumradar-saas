@@ -429,14 +429,19 @@ export interface SIVAError {
 // =============================================================================
 
 const UPR_OS_URL = process.env.UPR_OS_URL || 'https://upr-os.sivakumar.ai';
+// VS10.5: Use PR_OS_TOKEN for SaaS→OS authentication (same as os-client.ts)
+const PR_OS_TOKEN = process.env.PR_OS_TOKEN || process.env.UPR_OS_API_KEY || '';
 const SIVA_TIMEOUT_MS = 10000; // 10s timeout
 
 /**
  * Get headers for SIVA requests
+ * VS10.5: Added x-pr-os-token for secure OS authentication
  */
 function getHeaders(): HeadersInit {
   return {
     'Content-Type': 'application/json',
+    // VS10.5: Secure SaaS→OS boundary with token authentication
+    'x-pr-os-token': PR_OS_TOKEN,
     'X-Module-Caller': 'premiumradar-saas',
     'X-Request-Source': 'saas-siva-client',
   };

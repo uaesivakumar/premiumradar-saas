@@ -1,12 +1,17 @@
 /**
  * Team Settings Page
+ * VS12.5: Wired to real API data
  *
  * Manage workspace team members and permissions.
+ * Now fetches real data from /api/admin/users
+ *
+ * Authorization Code: VS12-FRONTEND-WIRING-20251213
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import {
   WorkspaceSelector,
   TeamManager,
@@ -17,10 +22,8 @@ import {
   useWorkspaceStore,
   selectCurrentWorkspace,
   selectIsOwner,
-  createMockWorkspace,
-  createMockMember,
 } from '@/lib/workspace';
-import type { TeamRole, TeamMember } from '@/lib/workspace';
+import type { TeamRole, TeamMember, Workspace } from '@/lib/workspace';
 
 export default function TeamSettingsPage() {
   const currentWorkspace = useWorkspaceStore(selectCurrentWorkspace);
@@ -35,60 +38,93 @@ export default function TeamSettingsPage() {
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initialize with mock data for demo
-  useEffect(() => {
-    const mockWorkspace = createMockWorkspace({
-      id: 'ws_demo',
-      name: 'Acme Corporation',
-      slug: 'acme-corp',
-      plan: 'professional',
-    });
+  // VS12.5: Fetch real team data from API
+  const fetchTeamData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-    const mockMembers: TeamMember[] = [
-      createMockMember({
-        id: 'mem_1',
-        userId: 'user_1',
-        workspaceId: 'ws_demo',
-        role: 'owner',
-        name: 'Ahmed Al-Rashid',
-        email: 'ahmed@acme.ae',
-        status: 'active',
-      }),
-      createMockMember({
-        id: 'mem_2',
-        userId: 'user_2',
-        workspaceId: 'ws_demo',
-        role: 'admin',
-        name: 'Sara Hassan',
-        email: 'sara@acme.ae',
-        status: 'active',
-      }),
-      createMockMember({
-        id: 'mem_3',
-        userId: 'user_3',
-        workspaceId: 'ws_demo',
-        role: 'analyst',
-        name: 'Omar Khalid',
-        email: 'omar@acme.ae',
-        status: 'active',
-      }),
-      createMockMember({
-        id: 'mem_4',
-        userId: 'user_4',
-        workspaceId: 'ws_demo',
-        role: 'viewer',
-        name: 'Fatima Noor',
-        email: 'fatima@acme.ae',
-        status: 'invited',
-      }),
-    ];
+    try {
+      // Fetch users from admin API
+      const response = await fetch('/api/admin/users');
+      const result = await response.json();
 
-    setWorkspaces([mockWorkspace]);
-    setCurrentWorkspace(mockWorkspace);
-    setMembers(mockMembers);
-    setCurrentUserRole('owner');
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to fetch team data');
+      }
+
+      // Transform API response to workspace format
+      const users = result.data?.users || [];
+      const tenantName = result.data?.tenant?.name || 'My Workspace';
+      const tenantId = result.data?.tenant?.id || 'ws_default';
+
+      // Create workspace from tenant data
+      const workspace: Workspace = {
+        id: tenantId,
+        name: tenantName,
+        slug: tenantName.toLowerCase().replace(/\s+/g, '-'),
+        ownerId: users.find((u: { role?: string }) => u.role === 'owner')?.id || users[0]?.id || '',
+        plan: 'professional',
+        settings: {
+          maxMembers: 10,
+          allowInvites: true,
+          defaultRole: 'viewer',
+          requireApproval: false,
+          features: {
+            discovery: true,
+            outreach: true,
+            analytics: true,
+            apiAccess: false,
+            customBranding: false,
+          },
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Transform users to team members
+      const members: TeamMember[] = users.map((user: {
+        id: string;
+        email: string;
+        name?: string;
+        full_name?: string;
+        role?: string;
+        status?: string;
+        created_at?: string;
+        last_login?: string;
+      }) => ({
+        id: `mem_${user.id}`,
+        userId: user.id,
+        workspaceId: tenantId,
+        role: (user.role as TeamRole) || 'viewer',
+        name: user.name || user.full_name || user.email.split('@')[0],
+        email: user.email,
+        avatarUrl: undefined,
+        status: user.status === 'active' ? 'active' : 'invited',
+        joinedAt: user.created_at ? new Date(user.created_at) : new Date(),
+        lastActiveAt: user.last_login ? new Date(user.last_login) : undefined,
+      }));
+
+      setWorkspaces([workspace]);
+      setCurrentWorkspace(workspace);
+      setMembers(members);
+      // Set current user role based on first user (assumes logged-in user is first)
+      setCurrentUserRole(members[0]?.role || 'viewer');
+
+    } catch (err) {
+      console.error('[Team Settings] Error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load team data');
+    } finally {
+      setIsLoading(false);
+    }
   }, [setWorkspaces, setCurrentWorkspace, setMembers, setCurrentUserRole]);
+
+  // VS12.5: Fetch data on mount
+  useEffect(() => {
+    fetchTeamData();
+  }, [fetchTeamData]);
 
   const handleInvite = async (email: string, role: TeamRole) => {
     // Simulate API call
@@ -117,6 +153,38 @@ export default function TeamSettingsPage() {
     updateMember(member.id, { role: newRole });
   };
 
+  // VS12.5: Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Loading team data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // VS12.5: Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Failed to load team</h2>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <button
+            onClick={fetchTeamData}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -127,6 +195,13 @@ export default function TeamSettingsPage() {
               <WorkspaceSelector className="w-64" />
               <div className="h-6 w-px bg-gray-200" />
               <h1 className="text-xl font-semibold text-gray-900">Team Settings</h1>
+              <button
+                onClick={fetchTeamData}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Refresh team data"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
             </div>
 
             {isOwner && (
