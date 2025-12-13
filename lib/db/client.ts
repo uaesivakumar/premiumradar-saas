@@ -26,7 +26,9 @@ function parseCloudSQLConfig(url: string): PoolConfig {
     // postgresql://user:pass@/dbname?host=/cloudsql/project:region:instance
     const match = url.match(/postgresql:\/\/([^:]+):([^@]+)@\/([^?]+)\?host=(.+)/);
     if (match) {
-      const [, user, password, database, host] = match;
+      const [, user, encodedPassword, database, host] = match;
+      // Decode URL-encoded password (handles special chars like / = + etc.)
+      const password = decodeURIComponent(encodedPassword);
       return {
         user,
         password,
