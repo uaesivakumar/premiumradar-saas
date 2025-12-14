@@ -24,7 +24,7 @@ import { OutputObjectRenderer } from './OutputObjectRenderer';
 import { ReasoningOverlay, ReasoningToggle } from './ReasoningOverlay';
 
 export function SIVASurface() {
-  const { messages, outputObjects, state, reasoningSteps, showReasoningOverlay, toggleReasoningOverlay, submitQuery, reset } = useSIVAStore();
+  const { messages, outputObjects, state, reasoningSteps, showReasoningOverlay, toggleReasoningOverlay, submitQuery } = useSIVAStore();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -39,11 +39,6 @@ export function SIVASurface() {
   const [hasRunProactive, setHasRunProactive] = useState(false);
   const [loadingError, setLoadingError] = useState<string | null>(null);
 
-  // FORCED STATE RESET ON DASHBOARD LOAD - Kills zombie sessions
-  useEffect(() => {
-    console.log('[SIVA Surface] Mounting - Resetting any zombie sessions');
-    reset();
-  }, [reset]);
 
   // Auto-scroll to latest content
   useEffect(() => {
@@ -87,7 +82,19 @@ export function SIVASurface() {
   }, [vertical, subVertical, hasRunProactive, messages.length, outputObjects.length, submitQuery]);
 
   const hasContent = messages.length > 0 || outputObjects.length > 0;
-  const isThinking = state === 'thinking' || state === 'listening';
+
+  // STATE-DRIVEN RENDERING (not data truthiness)
+  const isActivelyWorking = state === 'thinking' || state === 'listening' || state === 'generating';
+  const isComplete = state === 'complete' || state === 'idle';
+  const isError = state === 'error';
+
+  // Show thinking ONLY when actively working
+  const showThinking = isActivelyWorking || isProactiveLoading;
+  // Show results when complete AND has content
+  const showResults = isComplete && hasContent;
+  // Show empty state when idle with no content and not loading
+  const showEmpty = isComplete && !hasContent && !isProactiveLoading && !loadingError;
+
   const currentStep = reasoningSteps.find(s => s.status === 'active');
 
   return (
@@ -135,7 +142,7 @@ export function SIVASurface() {
       >
         <div className="max-w-4xl mx-auto">
           {/* Empty State - SIVA Awakening (only when truly idle) */}
-          {!hasContent && !isProactiveLoading && !isThinking && (
+          {showEmpty && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -217,7 +224,7 @@ export function SIVASurface() {
 
           {/* Proactive Loading State - SIVA Thinking For You */}
           <AnimatePresence>
-            {(isProactiveLoading || isThinking) && !hasContent && !loadingError && (
+            {showThinking && !hasContent && !loadingError && (
               <SIVAThinkingState
                 regions={regions}
                 primaryColor={industryConfig.primaryColor}
@@ -226,7 +233,7 @@ export function SIVASurface() {
           </AnimatePresence>
 
           {/* Conversation + Output Objects */}
-          {hasContent && (
+          {showResults && (
             <div className="space-y-6">
               {/* Messages with Reasoning Prelude */}
               {messages.map((message, idx) => (
@@ -281,7 +288,7 @@ export function SIVASurface() {
               </AnimatePresence>
 
               {/* Reasoning Prelude - Shows BEFORE results */}
-              {isThinking && (
+              {isActivelyWorking && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
