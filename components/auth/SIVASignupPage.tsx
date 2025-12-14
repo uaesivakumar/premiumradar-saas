@@ -71,8 +71,8 @@ export function SIVASignupPage() {
         return;
       }
 
-      // Redirect to onboarding flow
-      router.push('/onboarding/welcome');
+      // VS12: Redirect to email verification page
+      router.push(data.redirectTo || '/verify-email');
     } catch {
       setError('Failed to create account. Please try again.');
     } finally {
@@ -81,10 +81,8 @@ export function SIVASignupPage() {
   };
 
   const handleSocialLogin = async (provider: 'google' | 'microsoft' | 'github') => {
-    // TODO: Integrate with NextAuth signIn(provider)
-    console.log('Social signup:', provider);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    router.push('/onboarding/welcome');
+    // Social login not yet configured - show message
+    setError(`${provider.charAt(0).toUpperCase() + provider.slice(1)} signup is not yet configured. Please use email/password.`);
   };
 
   return (

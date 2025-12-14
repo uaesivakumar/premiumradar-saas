@@ -393,6 +393,16 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
     console.log('[LLM] Raw response length:', content.length);
     console.log('[LLM] First 500 chars:', content.substring(0, 500));
 
+    // Strip markdown code blocks if present (LLM often wraps JSON in ```json ... ```)
+    let cleanedContent = content.trim();
+    if (cleanedContent.startsWith('```')) {
+      // Remove opening ```json or ``` and closing ```
+      cleanedContent = cleanedContent
+        .replace(/^```(?:json)?\s*\n?/i, '')  // Remove opening
+        .replace(/\n?```\s*$/i, '');           // Remove closing
+      console.log('[LLM] Stripped markdown code blocks from response');
+    }
+
     let parsed: { companies?: Array<{
       name: string;
       domain?: string;
@@ -407,7 +417,7 @@ ${isEmployeeBanking ? 'PRIORITY: Companies with clear hiring numbers or workforc
     }> } = { companies: [] };
 
     try {
-      const rawParsed = JSON.parse(content);
+      const rawParsed = JSON.parse(cleanedContent);
       console.log('[LLM] Parsed successfully. Type:', typeof rawParsed, 'Is array:', Array.isArray(rawParsed));
 
       // Handle both array and object with companies key

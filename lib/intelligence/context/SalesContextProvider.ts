@@ -48,6 +48,7 @@ export function createSalesContext(
     userId: string;
     vertical: Vertical;
     subVertical: SubVertical;
+    regionCountry?: string;  // Country level e.g., 'UAE'
     regions: string[];  // Multi-region array e.g., ['dubai', 'abu-dhabi']
     subVerticalLocked?: boolean;
     salesConfig?: Partial<SalesConfig>;
@@ -63,6 +64,7 @@ export function createSalesContext(
     vertical: options.vertical,
     subVertical: options.subVertical,
     subVerticalLocked: options.subVerticalLocked ?? false,
+    regionCountry: options.regionCountry || 'UAE',  // Default to UAE
     regions: options.regions,
     targetEntity,
     salesConfig: {

@@ -21,9 +21,7 @@ import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store
 import {
   ScoreEngine,
   type QTLEBreakdown,
-  type EntityScoreInput,
 } from '@/lib/intelligence/score-engine';
-import { type SignalInstance, SignalEngine } from '@/lib/intelligence/signal-engine';
 import {
   Target,
   TrendingUp,
@@ -55,92 +53,33 @@ interface ScoredEntity {
 }
 
 // =============================================================================
-// Mock Data Generator
+// API Response Type
 // =============================================================================
 
-function generateMockEntities(scoreEngine: ScoreEngine, signalEngine: SignalEngine): ScoredEntity[] {
-  const companies = [
-    { name: 'Emirates NBD', industry: 'Banking', city: 'Dubai', headcount: 12000, growth: 15 },
-    { name: 'ADCB', industry: 'Banking', city: 'Abu Dhabi', headcount: 8500, growth: 8 },
-    { name: 'Mashreq Bank', industry: 'Banking', city: 'Dubai', headcount: 5000, growth: 22 },
-    { name: 'Dubai Islamic Bank', industry: 'Banking', city: 'Dubai', headcount: 7000, growth: 12 },
-    { name: 'RAK Bank', industry: 'Banking', city: 'Ras Al Khaimah', headcount: 3500, growth: 18 },
-    { name: 'First Abu Dhabi Bank', industry: 'Banking', city: 'Abu Dhabi', headcount: 9500, growth: 10 },
-    { name: 'Commercial Bank of Dubai', industry: 'Banking', city: 'Dubai', headcount: 4000, growth: 25 },
-    { name: 'National Bank of Fujairah', industry: 'Banking', city: 'Fujairah', headcount: 2000, growth: 5 },
-  ];
-
-  const allowedTypes = signalEngine.getAllowedTypes();
-
-  return companies.map((company, idx) => {
-    // Generate mock signals for this company using signal engine types
-    const numSignals = 2 + Math.floor(Math.random() * 3);
-    const signals: SignalInstance[] = [];
-
-    for (let i = 0; i < numSignals; i++) {
-      const type = allowedTypes[i % allowedTypes.length];
-      const now = new Date();
-      const detectedAt = new Date(now.getTime() - Math.random() * 30 * 24 * 60 * 60 * 1000);
-      const expiresAt = new Date(detectedAt.getTime() + 90 * 24 * 60 * 60 * 1000);
-
-      const signal: SignalInstance = {
-        id: `sig-${idx}-${i}`,
-        type,
-        companyId: `comp-${idx}`,
-        companyName: company.name,
-        title: `${type.replace(/-/g, ' ')} detected`,
-        description: `${company.name} showing ${type.replace(/-/g, ' ')} activity`,
-        priority: ['critical', 'high', 'medium', 'low'][Math.floor(Math.random() * 4)] as 'critical' | 'high' | 'medium' | 'low',
-        confidence: 0.7 + Math.random() * 0.25,
-        relevance: 0.6 + Math.random() * 0.35,
-        source: ['Apollo', 'LinkedIn', 'News'][Math.floor(Math.random() * 3)],
-        detectedAt,
-        expiresAt,
-        metadata: {},
-        qtleContribution: {
-          quality: 50 + Math.floor(Math.random() * 40),
-          timing: 50 + Math.floor(Math.random() * 40),
-          likelihood: 50 + Math.floor(Math.random() * 40),
-          engagement: 50 + Math.floor(Math.random() * 40),
-        },
-        evidence: [{
-          sourceType: 'news' as const,
-          extractedAt: detectedAt,
-          confidence: 0.7 + Math.random() * 0.25,
-        }],
+interface ScoreAPIResponse {
+  success: boolean;
+  data: {
+    scores: Array<{
+      id: string;
+      companyId: string;
+      companyName: string;
+      industry: string;
+      city: string;
+      headcount: number;
+      headcountGrowth: number;
+      score: {
+        quality: number;
+        timing: number;
+        likelihood: number;
+        engagement: number;
+        composite: number;
       };
-      signals.push(signal);
-    }
-
-    // Build entity input for score engine
-    const entityInput: EntityScoreInput = {
-      id: `company-${idx + 1}`,
-      companyName: company.name,
-      industry: company.industry,
-      size: company.headcount >= 5000 ? 'enterprise' : company.headcount >= 1000 ? 'mid-market' : 'smb',
-      location: company.city,
-      signals: signals,
-      engagementHistory: {
-        interactions: Math.floor(Math.random() * 10),
-        emailOpens: Math.floor(Math.random() * 20),
-        meetings: Math.floor(Math.random() * 3),
-        avgResponseTime: 24 + Math.floor(Math.random() * 48),
-      },
-    };
-
-    const breakdown = scoreEngine.calculateScore(entityInput);
-
-    return {
-      id: `company-${idx + 1}`,
-      name: company.name,
-      industry: company.industry,
-      city: company.city,
-      headcount: company.headcount,
-      headcountGrowth: company.growth,
-      score: breakdown,
-      signalCount: signals.length,
-    };
-  });
+      scoreBreakdown: Record<string, number>;
+      signalCount: number;
+    }>;
+    total: number;
+    message?: string;
+  };
 }
 
 // =============================================================================
@@ -148,39 +87,95 @@ function generateMockEntities(scoreEngine: ScoreEngine, signalEngine: SignalEngi
 // =============================================================================
 
 export default function ScoresPage() {
-  const { vertical, subVertical, verticalName, subVerticalName } = useSalesContext();
+  const { vertical, subVertical, regions, verticalName, subVerticalName } = useSalesContext();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
 
   // State
   const [entities, setEntities] = useState<ScoredEntity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedEntity, setSelectedEntity] = useState<ScoredEntity | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'composite' | 'quality' | 'timing' | 'likelihood' | 'engagement'>('composite');
 
-  // Initialize engines with Pack configuration
+  // Initialize engines with Pack configuration (for score breakdown display)
   const scoreEngine = useMemo(() => {
     return new ScoreEngine(vertical || 'banking', subVertical || 'employee-banking');
   }, [vertical, subVertical]);
 
-  const signalEngine = useMemo(() => {
-    return new SignalEngine(vertical || 'banking', subVertical || 'employee-banking');
-  }, [vertical, subVertical]);
-
-  // Fetch and score entities
+  // Fetch REAL scores from API
   useEffect(() => {
-    setLoading(true);
+    const fetchScores = async () => {
+      setLoading(true);
+      setError(null);
 
-    const timer = setTimeout(() => {
-      const scoredEntities = generateMockEntities(scoreEngine, signalEngine);
-      setEntities(scoredEntities);
-      setSelectedEntity(scoredEntities[0] || null);
-      setLoading(false);
-    }, 500);
+      try {
+        const params = new URLSearchParams({
+          vertical: vertical || 'banking',
+          subVertical: subVertical || 'employee-banking',
+          regions: (regions || ['UAE']).join(','),
+        });
 
-    return () => clearTimeout(timer);
-  }, [scoreEngine, signalEngine]);
+        const response = await fetch(`/api/scores?${params}`);
+        const data: ScoreAPIResponse = await response.json();
+
+        if (data.success && data.data.scores.length > 0) {
+          // Transform API response to ScoredEntity format
+          const scoredEntities: ScoredEntity[] = data.data.scores.map((s) => ({
+            id: s.id,
+            name: s.companyName,
+            industry: s.industry,
+            city: s.city,
+            headcount: s.headcount,
+            headcountGrowth: s.headcountGrowth,
+            score: {
+              score: {
+                quality: s.score.quality,
+                timing: s.score.timing,
+                likelihood: s.score.likelihood,
+                engagement: s.score.engagement,
+                composite: s.score.composite,
+              },
+              // Convert scoreBreakdown object to ScoreFactor array
+              factors: Object.entries(s.scoreBreakdown || {}).map(([key, value], idx) => ({
+                id: `factor-${idx}`,
+                name: key,
+                dimension: 'quality' as const,
+                contribution: value as number,
+                weight: 0.25,
+                description: `${key} factor`,
+                source: 'database',
+              })),
+              reasoning: 'Score calculated from database records',
+              confidence: 0.8,
+              evidence: [],
+              lastUpdated: new Date(),
+            },
+            signalCount: s.signalCount,
+          }));
+
+          setEntities(scoredEntities);
+          setSelectedEntity(scoredEntities[0] || null);
+        } else {
+          // No data - show empty state
+          setEntities([]);
+          setSelectedEntity(null);
+          if (data.data.message) {
+            setError(data.data.message);
+          }
+        }
+      } catch (err) {
+        console.error('[Scores] Fetch error:', err);
+        setError('Failed to fetch scores. Please try again.');
+        setEntities([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchScores();
+  }, [vertical, subVertical, regions]);
 
   // Filter and sort entities
   const filteredEntities = useMemo(() => {

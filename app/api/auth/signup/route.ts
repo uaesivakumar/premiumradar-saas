@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { createUser, emailExists, createEmailVerificationToken } from '@/lib/db/users';
+import { createUser, emailExists, createEmailVerificationCode } from '@/lib/db/users';
 import { isPersonalEmailDomain, analyzeEmail } from '@/lib/auth/identity/domain-extractor';
 import { createSession, setSessionCookies } from '@/lib/auth/session/enhanced-session';
 import { sendEmail } from '@/lib/email/send';
@@ -35,7 +35,9 @@ interface SignupResponse {
   message?: string;
   error?: string;
   userId?: string;
+  email?: string;
   requiresVerification?: boolean;
+  redirectTo?: string;
 }
 
 // ============================================================
@@ -137,24 +139,26 @@ export async function POST(request: NextRequest): Promise<NextResponse<SignupRes
       companyIndustry: undefined, // TODO: Enrich via OS if needed
     });
 
-    // Create email verification token
-    const verificationToken = await createEmailVerificationToken(userWithProfile.id);
+    // Create email verification code (VS12: 6-digit code)
+    const verificationCode = await createEmailVerificationCode(userWithProfile.id);
 
-    // Send verification email
+    // Send verification email with code
     try {
       await sendEmail({
         to: normalizedEmail,
-        subject: 'Verify your PremiumRadar account',
+        subject: 'Your PremiumRadar verification code',
         html: `
-          <h1>Welcome to PremiumRadar!</h1>
-          <p>Hi ${name || 'there'},</p>
-          <p>Thanks for signing up. Please verify your email address by clicking the link below:</p>
-          <p><a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/verify?token=${verificationToken}">
-            Verify Email Address
-          </a></p>
-          <p>This link will expire in 24 hours.</p>
-          <p>If you didn't create this account, you can safely ignore this email.</p>
-          <p>Best,<br>The PremiumRadar Team</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #333;">Welcome to PremiumRadar!</h1>
+            <p>Hi ${name || 'there'},</p>
+            <p>Thanks for signing up. Enter this verification code to verify your email address:</p>
+            <div style="background-color: #f5f5f5; padding: 20px; text-align: center; margin: 24px 0; border-radius: 8px;">
+              <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #333;">${verificationCode}</span>
+            </div>
+            <p style="color: #666; font-size: 14px;">This code will expire in 15 minutes.</p>
+            <p>If you didn't create this account, you can safely ignore this email.</p>
+            <p>Best,<br>The PremiumRadar Team</p>
+          </div>
         `,
       });
     } catch (emailError) {
@@ -196,11 +200,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<SignupRes
       tenantId: userWithProfile.tenant_id,
     });
 
+    // Build redirect URL with user info for verify-email page
+    const redirectTo = `/verify-email?userId=${userWithProfile.id}&email=${encodeURIComponent(normalizedEmail)}`;
+
     return NextResponse.json({
       success: true,
-      message: 'Account created successfully. Please check your email to verify your account.',
+      message: 'Account created successfully. Please check your email for your verification code.',
       userId: userWithProfile.id,
+      email: normalizedEmail,
       requiresVerification: true,
+      redirectTo,
     });
 
   } catch (error) {

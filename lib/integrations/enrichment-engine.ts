@@ -1,27 +1,27 @@
 /**
  * Generic Enrichment Engine
  *
- * Provides unified data enrichment that reads from vertical config.
- * NO vertical-specific logic hardcoded - all behavior comes from config.
+ * CRITICAL ARCHITECTURE (DO NOT CHANGE):
+ * =====================================
+ * 1. DISCOVERY (Find companies with hiring signals):
+ *    - SERP API: Search Google News for hiring/expansion news
+ *    - LLM: Extract company names from news articles
+ *    - This is the PRIMARY source of leads
+ *
+ * 2. ENRICHMENT (Add details to discovered companies):
+ *    - Apollo: Headcount, growth metrics, HR contacts
+ *    - Apollo is ONLY for enrichment, NOT discovery
+ *    - If Apollo fails, companies still show (just without enrichment data)
  *
  * Flow:
- * 1. Get vertical config from DB (cached)
- * 2. Use enrichmentSources to determine which APIs to call
- * 3. Filter signals based on allowedSignalTypes
- * 4. Apply scoring using scoringWeights and scoringFactors
+ * SERP News → LLM Extraction → Companies Discovered → Apollo Enrichment (optional)
  *
- * Supports:
- * - Apollo: Company data, headcount, hiring signals
- * - SERP: News, hiring announcements, expansion signals
- * - LinkedIn: Profile enrichment (future)
- * - Crunchbase: Funding, growth signals (future)
+ * NO vertical-specific logic hardcoded - all behavior comes from config.
  */
 
 import {
-  searchUAEEmployers,
   searchHRContacts,
   enrichCompany,
-  getHiringSignals,
   toEBEmployer,
   type ApolloCompany,
   type ApolloContact,
@@ -42,6 +42,8 @@ import {
   type VerticalConfigData,
   type EnrichmentSourceConfig,
 } from '@/lib/admin/vertical-config-service';
+// Note: Using simplified discovery scoring instead of full VerticalScoringEngine
+// to avoid complex type conversions. Apollo enrichment scoring uses full engine.
 
 // =============================================================================
 // TYPES
@@ -64,6 +66,7 @@ export interface EnrichedEntity {
   // Scoring (uses vertical config weights)
   score: number;
   scoreBreakdown: Record<string, number>;
+  grade?: 'hot' | 'warm' | 'cold';  // Discovery grade for UI display
 
   // Signals (filtered by allowedSignalTypes)
   signals: ExtractedSignal[];
@@ -192,6 +195,79 @@ function calculateScore(
   const normalizedScore = Math.min(100, Math.round(totalScore));
 
   return { score: normalizedScore, breakdown };
+}
+
+/**
+ * Calculate DISCOVERY score using config weights
+ * NO HARDCODING - all weights come from Super Admin vertical config
+ *
+ * Score based on:
+ * - Signal count and types (from config allowedSignalTypes)
+ * - Signal confidence (from LLM extraction)
+ * - Signal freshness (configurable via scoringFactors)
+ */
+function calculateDiscoveryScore(
+  signals: ExtractedSignal[],
+  company: ExtractedCompany,
+  config?: VerticalConfigData
+): { score: number; breakdown: Record<string, number>; grade: 'hot' | 'warm' | 'cold' } {
+  const breakdown: Record<string, number> = {};
+
+  // Get weights from config or use defaults from vertical config
+  const scoringFactors = config?.scoringFactors || [];
+
+  // Factor 1: Signal count (more signals = higher score)
+  const signalCountFactor = scoringFactors.find(f => f.id === 'news-signals');
+  const signalCountWeight = signalCountFactor?.weight || 0.3;
+  const signalCountScore = Math.min(100, signals.length * 25); // Max at 4 signals
+  breakdown['signal-count'] = Math.round(signalCountScore * signalCountWeight);
+
+  // Factor 2: Signal confidence (average confidence of signals)
+  const confidenceFactor = scoringFactors.find(f => f.id === 'signal-confidence');
+  const confidenceWeight = confidenceFactor?.weight || 0.3;
+  const avgConfidence = signals.length > 0
+    ? signals.reduce((sum, s) => sum + (s.confidence || 0.7), 0) / signals.length
+    : 0;
+  const confidenceScore = avgConfidence * 100;
+  breakdown['signal-confidence'] = Math.round(confidenceScore * confidenceWeight);
+
+  // Factor 3: Signal freshness (recent signals score higher)
+  const freshnessFactor = scoringFactors.find(f => f.id === 'signal-freshness');
+  const freshnessWeight = freshnessFactor?.weight || 0.2;
+  const freshness = determineFreshness(signals);
+  const freshnessScore = freshness === 'fresh' ? 100 : freshness === 'recent' ? 70 : 40;
+  breakdown['signal-freshness'] = Math.round(freshnessScore * freshnessWeight);
+
+  // Factor 4: Signal diversity (different signal types)
+  const diversityFactor = scoringFactors.find(f => f.id === 'signal-diversity');
+  const diversityWeight = diversityFactor?.weight || 0.2;
+  const uniqueTypes = new Set(signals.map(s => s.type)).size;
+  const diversityScore = Math.min(100, uniqueTypes * 33); // Max at 3 unique types
+  breakdown['signal-diversity'] = Math.round(diversityScore * diversityWeight);
+
+  // Calculate total score
+  const totalScore = Object.values(breakdown).reduce((sum, val) => sum + val, 0);
+  const normalizedScore = Math.min(100, Math.round(totalScore));
+
+  // Determine grade using config thresholds or defaults
+  // Thresholds can be set per-vertical in Super Admin
+  const hotThreshold = config?.scoringWeights?.quality !== undefined
+    ? 70  // If config exists, use standard thresholds
+    : 70;
+  const warmThreshold = config?.scoringWeights?.quality !== undefined
+    ? 40
+    : 40;
+
+  let grade: 'hot' | 'warm' | 'cold';
+  if (normalizedScore >= hotThreshold) {
+    grade = 'hot';
+  } else if (normalizedScore >= warmThreshold) {
+    grade = 'warm';
+  } else {
+    grade = 'cold';
+  }
+
+  return { score: normalizedScore, breakdown, grade };
 }
 
 /**
@@ -338,66 +414,39 @@ export async function searchAndEnrich(
     }
   }
 
-  // 5. ENRICHMENT using Apollo (Secondary - enriches discovered companies)
-  // Apollo adds: headcount, growth metrics, contacts
-  const apolloSource = enabledSources.find((s: EnrichmentSourceConfig) => s.type === 'apollo');
+  // 5. DISCOVERY SCORING (SERP + LLM only - NO Apollo during discovery)
+  // Apollo is ONLY used when user explicitly requests enrichment/contacts
+  console.log('[Enrichment] STEP 2: Discovery scoring (SERP + LLM data only)...');
+  console.log(`[Enrichment] Scoring ${discoveredCompanies.length} discovered companies...`);
 
-  console.log('[Enrichment] STEP 2: Apollo ENRICHMENT (Secondary)...');
-  console.log(`[Enrichment] Enriching ${discoveredCompanies.length} discovered companies with Apollo data...`);
-
-  // Process discovered companies and enrich with Apollo
+  // Process discovered companies - calculate discovery score WITHOUT Apollo
   for (const company of discoveredCompanies.slice(0, params.limit || 25)) {
     // Filter signals by config (only EB-relevant signals)
     const filteredSignals = filterSignalsByConfig(company.signals, config);
     signalCount += filteredSignals.length;
 
-    // Try to enrich with Apollo if enabled
-    let apolloData: ApolloCompany | null = null;
-    if (apolloSource && company.domain) {
-      try {
-        apolloData = await enrichCompany(company.domain);
-        if (apolloData && !sourcesUsed.includes('apollo')) {
-          sourcesUsed.push('apollo');
-        }
-      } catch (error) {
-        console.warn(`[Enrichment] Apollo enrichment failed for ${company.name}:`, error);
-      }
-    }
-
-    // Calculate score using discovered signals + Apollo data
-    const { score, breakdown } = calculateScore(
-      {
-        headcount: apolloData?.estimated_num_employees || company.headcount || 0,
-        headcountGrowth: apolloData?.employee_growth_6_months || 0,
-        openJobs: apolloData?.num_open_jobs || company.hiringCount,
-        hiringVelocity: apolloData?.hiring_velocity,
-      },
-      filteredSignals,
-      true, // Region match assumed since we searched by region
-      config
-    );
+    // Calculate DISCOVERY score using Super Admin config weights
+    // NO HARDCODING - all weights come from vertical config in database
+    const { score, breakdown, grade } = calculateDiscoveryScore(filteredSignals, company, config);
 
     if (params.minScore && score < params.minScore) continue;
 
     const enrichedEntity: EnrichedEntity = {
-      id: apolloData?.id || `serp-${company.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`,
+      id: `serp-${company.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`,
       name: company.name,
       type: verticalConfig.radarTarget === 'companies' ? 'company' : 'individual',
-      industry: apolloData?.industry || company.industry,
-      size: (apolloData?.estimated_num_employees || company.headcount || 0) >= 1000 ? 'enterprise' :
-            (apolloData?.estimated_num_employees || company.headcount || 0) >= 200 ? 'mid-market' : 'smb',
-      headcount: apolloData?.estimated_num_employees || company.headcount,
-      headcountGrowth: apolloData?.employee_growth_6_months,
+      industry: company.industry,
+      size: 'smb', // Unknown until enriched with Apollo
       region: params.region,
-      city: apolloData?.city || company.city || targetCities[0],
-      description: apolloData?.description || `${company.name} - discovered via hiring signals in ${params.region}`,
-      website: apolloData?.website_url || (company.domain ? `https://${company.domain}` : undefined),
-      linkedIn: apolloData?.linkedin_url,
+      city: company.city || targetCities[0],
+      description: `${company.name} - discovered via hiring signals in ${params.region}`,
+      website: company.domain ? `https://${company.domain}` : undefined,
       score,
       scoreBreakdown: breakdown,
+      grade,  // Hot/Warm/Cold from discovery scoring
       signals: filteredSignals,
       freshness: determineFreshness(filteredSignals),
-      dataSources: apolloData ? ['serp', 'llm', 'apollo'] : ['serp', 'llm'],
+      dataSources: ['serp', 'llm'],
       lastEnriched: new Date(),
     };
 

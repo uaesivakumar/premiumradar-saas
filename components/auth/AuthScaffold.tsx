@@ -46,41 +46,9 @@ export function AuthScaffold({
 
   return (
     <div className="space-y-6">
-      {/* Social Login Buttons - PremiumRadar Style */}
-      <div className="space-y-3">
-        <SocialButton
-          provider="google"
-          onClick={() => handleSocialClick('google')}
-          isLoading={socialLoading === 'google'}
-          disabled={!!socialLoading || isLoading}
-          primaryColor={industryConfig.primaryColor}
-        />
-        <SocialButton
-          provider="microsoft"
-          onClick={() => handleSocialClick('microsoft')}
-          isLoading={socialLoading === 'microsoft'}
-          disabled={!!socialLoading || isLoading}
-          primaryColor={industryConfig.primaryColor}
-        />
-        <SocialButton
-          provider="github"
-          onClick={() => handleSocialClick('github')}
-          isLoading={socialLoading === 'github'}
-          disabled={!!socialLoading || isLoading}
-          primaryColor={industryConfig.primaryColor}
-        />
-      </div>
-
-      {/* Divider */}
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-white/10" />
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-4 bg-transparent text-gray-500">
-            or continue with email
-          </span>
-        </div>
+      {/* Work Email Notice */}
+      <div className="text-center text-sm text-gray-400 bg-white/5 rounded-lg px-4 py-3">
+        <span className="text-blue-400">Work email required</span> — Personal email providers (Gmail, Yahoo, etc.) are not allowed.
       </div>
 
       {/* Form Content */}

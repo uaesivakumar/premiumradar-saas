@@ -204,7 +204,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<LoginResp
       tenantName: userWithProfile.tenant?.name,
       role: userWithProfile.role,
       mfaEnabled: userWithProfile.mfa_enabled,
-      mfaVerified: userWithProfile.mfa_enabled ? !!mfaCode : false,
+      // If MFA is enabled, require verification. If not enabled, consider verified (nothing to verify)
+      mfaVerified: userWithProfile.mfa_enabled ? !!mfaCode : true,
       plan: (userWithProfile.tenant?.plan as 'free' | 'starter' | 'professional' | 'enterprise') || 'free',
       subscriptionStatus: (userWithProfile.tenant?.subscription_status as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid') || 'active',
       ipAddress: ip,

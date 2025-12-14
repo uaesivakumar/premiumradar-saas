@@ -206,7 +206,8 @@ export interface SalesContext {
   subVerticalLocked: boolean;
 
   // Geographic scope - MULTI-REGION
-  regions: string[];  // e.g., ['dubai', 'abu-dhabi']
+  regionCountry: string;  // e.g., 'UAE' - country level for config lookup
+  regions: string[];  // e.g., ['dubai', 'abu-dhabi'] - cities for filtering
 
   // Target entity type (derived from vertical, but stored for convenience)
   targetEntity: RadarTarget;

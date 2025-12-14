@@ -259,9 +259,10 @@ async function fetchSignalSummary(
     }
 
     return { total, byType, byPriority, recentCount };
-  } catch {
-    // Return mock data if database not available
-    return getMockSignalSummary(context.vertical);
+  } catch (error) {
+    console.error('[Dashboard] Signal query error:', error);
+    // Return EMPTY data - NO mock fallback
+    return { total: 0, byType: {}, byPriority: { critical: 0, high: 0, medium: 0, low: 0 }, recentCount: 0 };
   }
 }
 
@@ -301,9 +302,12 @@ async function fetchScoreSummary(
       };
     }
 
-    return getMockScoreSummary();
-  } catch {
-    return getMockScoreSummary();
+    // Return EMPTY data - NO mock fallback
+    return { avgQuality: 0, avgTiming: 0, avgLikelihood: 0, avgEngagement: 0, totalScored: 0, topPerformers: 0 };
+  } catch (error) {
+    console.error('[Dashboard] Score query error:', error);
+    // Return EMPTY data - NO mock fallback
+    return { avgQuality: 0, avgTiming: 0, avgLikelihood: 0, avgEngagement: 0, totalScored: 0, topPerformers: 0 };
   }
 }
 
@@ -338,9 +342,12 @@ async function fetchPipelineSummary(
       };
     }
 
-    return getMockPipelineSummary(context.vertical);
-  } catch {
-    return getMockPipelineSummary(context.vertical);
+    // Return EMPTY data - NO mock fallback
+    return { totalProspects: 0, activeOpportunities: 0, conversionRate: 0, revenueProjection: 0 };
+  } catch (error) {
+    console.error('[Dashboard] Pipeline query error:', error);
+    // Return EMPTY data - NO mock fallback
+    return { totalProspects: 0, activeOpportunities: 0, conversionRate: 0, revenueProjection: 0 };
   }
 }
 
@@ -379,8 +386,10 @@ async function fetchRecentActivity(
       timestamp: row.created_at,
       score: row.score ? Math.round(parseFloat(row.score)) : undefined,
     }));
-  } catch {
-    return getMockRecentActivity(context.vertical);
+  } catch (error) {
+    console.error('[Dashboard] Activity query error:', error);
+    // Return EMPTY data - NO mock fallback
+    return [];
   }
 }
 
@@ -425,12 +434,14 @@ async function generateAIInsights(
       });
     }
 
-    // Add vertical-specific insights
+    // Add vertical-specific insights (these are real, based on context)
     insights.push(...getVerticalInsights(context.vertical, context.subVertical));
 
-  } catch {
-    // Return mock insights if database not available
-    insights.push(...getMockInsights(context.vertical));
+  } catch (error) {
+    console.error('[Dashboard] Insights query error:', error);
+    // Return EMPTY - NO mock fallback
+    // Keep only vertical insights which are real guidance
+    insights.push(...getVerticalInsights(context.vertical, context.subVertical));
   }
 
   return insights.slice(0, 5); // Max 5 insights
@@ -469,118 +480,6 @@ function getVerticalInsights(vertical: string, subVertical: string): AIInsight[]
 }
 
 // =============================================================================
-// Fallback Data (VS11.6: Deterministic fallbacks - no Math.random())
-// Uses consistent placeholder data when database is unavailable
+// VS12: Mock data functions REMOVED
+// Dashboard now returns real data or empty data - NO fake numbers
 // =============================================================================
-
-function getMockSignalSummary(vertical: string): SignalSummary {
-  // VS11.6: Deterministic counts based on signal type order
-  const baseTypes = SIGNAL_TYPES_BY_VERTICAL[vertical] || ['hiring-expansion'];
-  const byType: Record<string, number> = {};
-
-  // Use deterministic values based on index
-  const baseCounts = [24, 18, 12, 8, 15, 10, 6, 20];
-  baseTypes.forEach((type, i) => {
-    byType[type] = baseCounts[i % baseCounts.length];
-  });
-
-  return {
-    total: Object.values(byType).reduce((a, b) => a + b, 0),
-    byType,
-    byPriority: {
-      critical: 8,
-      high: 35,
-      medium: 45,
-      low: 25,
-    },
-    recentCount: 15,
-  };
-}
-
-function getMockScoreSummary(): ScoreSummary {
-  // VS11.6: Deterministic score averages
-  return {
-    avgQuality: 72,
-    avgTiming: 68,
-    avgLikelihood: 65,
-    avgEngagement: 58,
-    totalScored: 350,
-    topPerformers: 45,
-  };
-}
-
-function getMockPipelineSummary(vertical: string): PipelineSummary {
-  // VS11.6: Deterministic pipeline numbers
-  const isBanking = vertical === 'banking';
-  return {
-    totalProspects: isBanking ? 2500 : 1800,
-    activeOpportunities: isBanking ? 120 : 85,
-    conversionRate: 18,
-    revenueProjection: isBanking ? 2800000 : 1500000,
-  };
-}
-
-function getMockRecentActivity(vertical: string): ActivityItem[] {
-  // VS11.6: Deterministic activity feed
-  const companies = vertical === 'banking'
-    ? ['Emirates Group', 'ADCB', 'Mashreq Bank', 'Dubai Islamic Bank', 'First Abu Dhabi Bank']
-    : ['TechCorp', 'Innovation Hub', 'StartupXYZ', 'Enterprise Solutions', 'Global Trade'];
-
-  const signalTypes = SIGNAL_TYPES_BY_VERTICAL[vertical] || ['hiring-expansion'];
-  const baseScores = [85, 78, 72, 68, 82];
-
-  return companies.map((company, i) => ({
-    id: `activity-${i}`,
-    companyName: company,
-    action: `New ${signalTypes[i % signalTypes.length]} signal detected`,
-    signalType: signalTypes[i % signalTypes.length],
-    timestamp: new Date(Date.now() - i * 3600000).toISOString(),
-    score: baseScores[i],
-  }));
-}
-
-function getMockInsights(vertical: string): AIInsight[] {
-  // VS11.6: Deterministic insights (no randomization)
-  const bankingInsights: AIInsight[] = [
-    {
-      id: 'insight-1',
-      type: 'opportunity',
-      priority: 'high',
-      title: 'Hiring Surge in Tech Sector',
-      description: '5 UAE tech companies showing expansion signals - ideal for employee banking pitch.',
-      actionable: true,
-    },
-    {
-      id: 'insight-2',
-      type: 'alert',
-      priority: 'medium',
-      title: 'Q1 Budget Cycle Starting',
-      description: 'Many corporates finalizing banking relationships. Act now for payroll mandates.',
-      actionable: true,
-    },
-    {
-      id: 'insight-3',
-      type: 'recommendation',
-      priority: 'medium',
-      title: 'Focus on Series B Companies',
-      description: 'Post-funding companies with 50+ employees have highest conversion rates.',
-      actionable: true,
-    },
-  ];
-
-  // Return banking-specific insights for banking, generic otherwise
-  if (vertical === 'banking') {
-    return bankingInsights;
-  }
-
-  return [
-    {
-      id: 'insight-generic-1',
-      type: 'opportunity',
-      priority: 'high',
-      title: 'Growth Opportunity Detected',
-      description: 'Multiple companies showing strong expansion signals in your territory.',
-      actionable: true,
-    },
-  ];
-}

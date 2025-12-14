@@ -292,6 +292,11 @@ export async function middleware(request: NextRequest) {
 
   // Handle protected dashboard routes
   if (pathname.startsWith('/dashboard')) {
+    // CRITICAL: Require authenticated session
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+
     // Check if onboarding is complete (if user has started onboarding)
     if (onboardingState && !isOnboardingComplete && onboardingState.startedAt) {
       const currentStep = onboardingState.currentStep || 'welcome';

@@ -1,0 +1,37 @@
+<svg width="32" height="32" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_grad" x1="0" y1="0" x2="500" y2="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E0E7FF"/>
+    </linearGradient>
+    <linearGradient id="brand_grad" x1="100" y1="100" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Bright circular background -->
+  <circle cx="250" cy="250" r="245" fill="url(#bg_grad)"/>
+
+  <!-- Subtle radar rings -->
+  <g stroke="#3B82F6" stroke-width="4" fill="none" opacity="0.25">
+    <circle cx="250" cy="250" r="200"/>
+    <circle cx="250" cy="250" r="160"/>
+    <circle cx="250" cy="250" r="120"/>
+  </g>
+
+  <!-- 4-pointed compass star -->
+  <path d="M250 50 L270 180 L450 250 L270 320 L250 450 L230 320 L50 250 L230 180 Z" fill="url(#brand_grad)"/>
+
+  <!-- P letterform - white cutout circle -->
+  <circle cx="250" cy="250" r="75" fill="#FFFFFF"/>
+
+  <!-- P letter - bold and visible -->
+  <path d="M225 195 L225 305 L250 305 L250 265 L275 265 C300 265 320 248 320 225 C320 202 300 185 275 185 L250 185 L250 195 Z M250 205 L270 205 C288 205 300 215 300 225 C300 235 288 245 270 245 L250 245 Z" fill="url(#brand_grad)"/>
+
+  <!-- AI Sparkles - bright and visible -->
+  <path d="M365 155 L375 182 L402 192 L375 202 L365 229 L355 202 L328 192 L355 182 Z" fill="#3B82F6"/>
+  <path d="M385 295 L395 322 L422 332 L395 342 L385 369 L375 342 L348 332 L375 322 Z" fill="#3B82F6"/>
+  <path d="M135 155 L145 182 L172 192 L145 202 L135 229 L125 202 L98 192 L125 182 Z" fill="#3B82F6"/>
+  <path d="M115 295 L125 322 L152 332 L125 342 L115 369 L105 342 L78 332 L105 322 Z" fill="#3B82F6"/>
+</svg>

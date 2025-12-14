@@ -14,9 +14,10 @@ import { useSIVAStore, AgentType } from '@/lib/stores/siva-store';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useSalesContextStore, selectVertical } from '@/lib/stores/sales-context-store';
 import { getQuickActionsForVertical } from '@/lib/vertical';
+import { PremiumRadarLogo } from '@/components/brand/PremiumRadarLogo';
 
 export function SIVAInputBar() {
-  const { inputValue, setInputValue, submitQuery, state } = useSIVAStore();
+  const { inputValue, setInputValue, submitQuery, state, outputObjects } = useSIVAStore();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
 
@@ -29,6 +30,33 @@ export function SIVAInputBar() {
   const [isFocused, setIsFocused] = useState(false);
 
   const isProcessing = state !== 'idle';
+  const hasResults = outputObjects.length > 0;
+
+  // Context-aware: Minimize input bar when SIVA is actively working
+  const isMinimized = state === 'thinking' || state === 'listening';
+
+  // Dynamic placeholder text while SIVA is thinking
+  const [thinkingPlaceholderIndex, setThinkingPlaceholderIndex] = useState(0);
+  const thinkingPlaceholders = [
+    'Hold on — I\'m reviewing signals…',
+    'Almost there — prioritizing employers…',
+    'Finding what matters most…',
+  ];
+
+  useEffect(() => {
+    if (!isProcessing) {
+      setThinkingPlaceholderIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setThinkingPlaceholderIndex((prev) => (prev + 1) % thinkingPlaceholders.length);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [isProcessing, thinkingPlaceholders.length]);
+
+  const placeholderText = isProcessing
+    ? thinkingPlaceholders[thinkingPlaceholderIndex]
+    : 'Ask SIVA anything...';
 
   // Auto-resize textarea
   useEffect(() => {
@@ -73,9 +101,9 @@ export function SIVAInputBar() {
 
   return (
     <div className="relative">
-      {/* Quick Actions */}
+      {/* Quick Actions - Hidden when results are present (SmartNextSteps handles that) */}
       <AnimatePresence>
-        {showQuickActions && !inputValue && (
+        {showQuickActions && !inputValue && !hasResults && !isProcessing && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -101,33 +129,21 @@ export function SIVAInputBar() {
         )}
       </AnimatePresence>
 
-      {/* Main Input Container */}
+      {/* Main Input Container - Context-aware styling */}
       <motion.div
         className={`relative bg-slate-800/80 backdrop-blur-xl rounded-2xl border transition-all duration-300 ${
           isFocused ? 'border-blue-500/50 shadow-lg shadow-blue-500/10' : 'border-white/10'
-        }`}
+        } ${isMinimized ? 'opacity-60' : ''}`}
         animate={{
-          scale: isFocused ? 1.01 : 1,
+          scale: isFocused ? 1.01 : isMinimized ? 0.98 : 1,
         }}
       >
         {/* Input Row */}
         <div className="flex items-end gap-3 p-3">
-          {/* SIVA Icon */}
-          <motion.div
-            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{
-              background: `linear-gradient(135deg, ${industryConfig.primaryColor}, ${industryConfig.secondaryColor})`,
-            }}
-            animate={{
-              scale: isProcessing ? [1, 1.1, 1] : 1,
-            }}
-            transition={{
-              repeat: isProcessing ? Infinity : 0,
-              duration: 1.5,
-            }}
-          >
-            <Sparkles className="w-5 h-5 text-white" />
-          </motion.div>
+          {/* PremiumRadar Icon */}
+          <div className="flex-shrink-0">
+            <PremiumRadarLogo size="sm" color={industryConfig.primaryColor} animate={isProcessing} />
+          </div>
 
           {/* Text Input */}
           <div className="flex-1 relative">
@@ -144,7 +160,7 @@ export function SIVAInputBar() {
                 setIsFocused(false);
                 setTimeout(() => setShowQuickActions(false), 200);
               }}
-              placeholder="Ask SIVA anything..."
+              placeholder={placeholderText}
               disabled={isProcessing}
               rows={1}
               className="w-full bg-transparent text-white placeholder-gray-500 resize-none focus:outline-none text-base leading-relaxed py-2 disabled:opacity-50"

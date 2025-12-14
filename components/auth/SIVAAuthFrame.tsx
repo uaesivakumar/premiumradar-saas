@@ -8,8 +8,8 @@
 
 import { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
+import { PremiumRadarLogo } from '@/components/brand/PremiumRadarLogo';
 
 interface SIVAAuthFrameProps {
   children: ReactNode;
@@ -88,24 +88,15 @@ export function SIVAAuthFrame({ children, title, subtitle }: SIVAAuthFrameProps)
           transition={{ delay: 0.2 }}
           className="text-center mb-8"
         >
-          {/* SIVA Orb Icon */}
+          {/* PremiumRadar Logo */}
           <motion.div
-            className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center"
-            style={{
-              background: `linear-gradient(135deg, ${industryConfig.primaryColor}30, ${industryConfig.secondaryColor}30)`,
-              border: `1px solid ${industryConfig.primaryColor}20`,
-            }}
+            className="mx-auto mb-4"
             animate={{
               scale: [1, 1.05, 1],
-              boxShadow: [
-                `0 0 40px ${industryConfig.primaryColor}20`,
-                `0 0 60px ${industryConfig.primaryColor}30`,
-                `0 0 40px ${industryConfig.primaryColor}20`,
-              ],
             }}
             transition={{ duration: 3, repeat: Infinity }}
           >
-            <Sparkles className="w-8 h-8 text-white/80" />
+            <PremiumRadarLogo size="lg" color={industryConfig.primaryColor} animate />
           </motion.div>
 
           {/* Logo */}

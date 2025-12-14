@@ -34,6 +34,7 @@ const TYPE_CONFIG = {
   ranking: { label: 'Rankings', gradient: 'from-amber-500 to-orange-500' },
   outreach: { label: 'Outreach', gradient: 'from-green-500 to-emerald-500' },
   insight: { label: 'Insight', gradient: 'from-indigo-500 to-purple-500' },
+  contacts: { label: 'Contacts', gradient: 'from-indigo-500 to-purple-500' },
   message: { label: 'Message', gradient: 'from-teal-500 to-cyan-500' },
 };
 

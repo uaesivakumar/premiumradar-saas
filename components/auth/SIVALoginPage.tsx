@@ -32,23 +32,32 @@ export function SIVALoginPage() {
     setError(null);
 
     try {
-      // TODO: Integrate with NextAuth signIn
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Call real login API
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-      // For now, redirect to onboarding or dashboard
-      router.push('/onboarding/welcome');
-    } catch {
-      setError('Invalid email or password. Please try again.');
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Invalid email or password');
+      }
+
+      // Login successful - redirect based on onboarding status
+      // For now, go to dashboard (profile check can redirect to onboarding if needed)
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid email or password. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSocialLogin = async (provider: 'google' | 'microsoft' | 'github') => {
-    // TODO: Integrate with NextAuth signIn(provider)
-    console.log('Social login:', provider);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    router.push('/onboarding/welcome');
+    // Social login not yet configured - show message
+    setError(`${provider.charAt(0).toUpperCase() + provider.slice(1)} login is not yet configured. Please use email/password.`);
   };
 
   return (

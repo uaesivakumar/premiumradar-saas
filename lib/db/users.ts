@@ -419,27 +419,91 @@ export async function adminOverrideVertical(
 }
 
 // ============================================================
-// EMAIL VERIFICATION
+// EMAIL VERIFICATION (VS12: Code-based)
 // ============================================================
 
 /**
- * Create email verification token
+ * Generate a cryptographically random 6-digit code
  */
-export async function createEmailVerificationToken(userId: string): Promise<string> {
-  const token = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-  await insert(
-    `INSERT INTO email_verification_tokens (user_id, token, expires_at)
-     VALUES ($1, $2, $3)`,
-    [userId, token, expiresAt]
-  );
-
-  return token;
+function generateVerificationCode(): string {
+  // Generate 6 random digits
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  return code;
 }
 
 /**
- * Verify email token
+ * Create email verification code (VS12: 6-digit code instead of link)
+ * Returns the 6-digit code to be sent via email
+ */
+export async function createEmailVerificationCode(userId: string): Promise<string> {
+  const code = generateVerificationCode();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes (shorter for codes)
+
+  // Delete any existing codes for this user
+  await query(
+    `DELETE FROM email_verification_tokens WHERE user_id = $1`,
+    [userId]
+  );
+
+  // Insert new code
+  await insert(
+    `INSERT INTO email_verification_tokens (user_id, token, expires_at)
+     VALUES ($1, $2, $3)`,
+    [userId, code, expiresAt]
+  );
+
+  return code;
+}
+
+/**
+ * Verify 6-digit email code (VS12)
+ * Returns user if code is valid, null otherwise
+ */
+export async function verifyEmailCode(userId: string, code: string): Promise<User | null> {
+  const record = await queryOne<{ user_id: string; token: string; expires_at: Date; used: boolean }>(
+    `SELECT user_id, token, expires_at, used FROM email_verification_tokens
+     WHERE user_id = $1 AND token = $2`,
+    [userId, code]
+  );
+
+  if (!record) {
+    return null; // Code not found
+  }
+
+  if (record.used) {
+    return null; // Already used
+  }
+
+  if (new Date() > new Date(record.expires_at)) {
+    return null; // Expired
+  }
+
+  // Mark code as used
+  await query(
+    `UPDATE email_verification_tokens SET used = true, used_at = NOW() WHERE user_id = $1 AND token = $2`,
+    [userId, code]
+  );
+
+  // Mark user email as verified
+  const user = await queryOne<User>(
+    `UPDATE users SET email_verified = true, email_verified_at = NOW() WHERE id = $1 RETURNING *`,
+    [record.user_id]
+  );
+
+  return user;
+}
+
+/**
+ * Legacy: Create email verification token (for backward compatibility)
+ * @deprecated Use createEmailVerificationCode instead
+ */
+export async function createEmailVerificationToken(userId: string): Promise<string> {
+  return createEmailVerificationCode(userId);
+}
+
+/**
+ * Legacy: Verify email token (for backward compatibility)
+ * @deprecated Use verifyEmailCode instead
  */
 export async function verifyEmailToken(token: string): Promise<User | null> {
   const record = await queryOne<{ user_id: string; expires_at: Date; used: boolean }>(

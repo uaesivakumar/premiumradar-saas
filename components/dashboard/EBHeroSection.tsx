@@ -56,27 +56,28 @@ export function EBHeroSection({ className = '' }: EBHeroSectionProps) {
   const colors = getColors();
   const firstName = profile.name?.split(' ')[0] || 'there';
 
-  // Quick stats for Employee Banking
+  // Quick stats for Employee Banking - now shows placeholder until data loaded
+  // These should be populated from real dashboard stats API
   const quickStats = [
     {
       label: 'Companies Tracked',
-      value: '847',
+      value: '-',  // Populated by dashboard stats
       icon: <Building2 className="w-4 h-4" />,
     },
     {
       label: 'Hiring Signals',
-      value: '23',
+      value: '-',  // Populated by signals API
       icon: <Users className="w-4 h-4" />,
       highlight: true,
     },
     {
       label: 'Hot Prospects',
-      value: '12',
+      value: '-',  // Populated by scores API
       icon: <Target className="w-4 h-4" />,
     },
     {
-      label: 'Win Rate',
-      value: '34%',
+      label: 'QTLE Avg',
+      value: '-',  // Populated by scores API
       icon: <TrendingUp className="w-4 h-4" />,
     },
   ];
@@ -152,7 +153,7 @@ export function EBHeroSection({ className = '' }: EBHeroSectionProps) {
               className="text-white/70 max-w-md"
             >
               {subVertical === 'employee-banking' ? (
-                <>Your radar is tracking <span className="text-white font-medium">hiring signals</span> across {regionsDisplay}. 23 new opportunities detected today.</>
+                <>Your radar is tracking <span className="text-white font-medium">hiring signals</span> across {regionsDisplay}. Ask SIVA to discover opportunities.</>
               ) : (
                 <>Your intelligence layer is ready. Here&apos;s what&apos;s happening in your territory.</>
               )}

@@ -34,36 +34,37 @@ export interface QuickAction {
   agent: 'discovery' | 'ranking' | 'outreach' | 'demo' | 'intelligence';
 }
 
+// AI-Native Quick Actions: Conversational intents, not feature buttons
 const VERTICAL_QUICK_ACTIONS: Record<Vertical, QuickAction[]> = {
   'banking': [
-    { label: 'Find Hiring Companies', query: 'Find employers in UAE with hiring expansion signals', agent: 'discovery' },
-    { label: 'Score EB Pipeline', query: 'Rank employers by payroll acquisition potential', agent: 'ranking' },
-    { label: 'Draft Payroll Outreach', query: 'Write a payroll-focused outreach for top hiring employers', agent: 'outreach' },
-    { label: 'Prioritize Employers', query: 'Prioritize employers based on headcount growth and hiring signals', agent: 'intelligence' },
+    { label: 'Help me find strong opportunities', query: 'Find employers in UAE with hiring expansion signals', agent: 'discovery' },
+    { label: 'Show me who\'s worth calling now', query: 'Rank employers by payroll acquisition potential', agent: 'ranking' },
+    { label: 'Draft outreach for my best prospect', query: 'Write a payroll-focused outreach for top hiring employers', agent: 'outreach' },
+    { label: 'Explain what I\'m seeing', query: 'Prioritize employers based on headcount growth and hiring signals', agent: 'intelligence' },
   ],
   'insurance': [
-    { label: 'Find prospects', query: 'Find insurance prospects with life event signals', agent: 'discovery' },
-    { label: 'Rank leads', query: 'Rank my top insurance leads by likelihood score', agent: 'ranking' },
-    { label: 'Draft outreach', query: 'Write a personalized outreach for a life insurance prospect', agent: 'outreach' },
-    { label: 'Show demo', query: 'Show me a demo of the insurance prospecting flow', agent: 'demo' },
+    { label: 'Help me find prospects', query: 'Find insurance prospects with life event signals', agent: 'discovery' },
+    { label: 'Show me my best leads', query: 'Rank my top insurance leads by likelihood score', agent: 'ranking' },
+    { label: 'Draft a personalized message', query: 'Write a personalized outreach for a life insurance prospect', agent: 'outreach' },
+    { label: 'Coming soon...', query: 'Show me a demo of the insurance prospecting flow', agent: 'demo' },
   ],
   'real-estate': [
-    { label: 'Find buyers', query: 'Find property buyers with relocation or family growth signals', agent: 'discovery' },
-    { label: 'Rank prospects', query: 'Rank my top real estate prospects by timing score', agent: 'ranking' },
-    { label: 'Draft outreach', query: 'Write an outreach email for a first-time home buyer', agent: 'outreach' },
-    { label: 'Show demo', query: 'Show me a demo of the real estate prospecting flow', agent: 'demo' },
+    { label: 'Help me find buyers', query: 'Find property buyers with relocation or family growth signals', agent: 'discovery' },
+    { label: 'Show me ready-to-buy prospects', query: 'Rank my top real estate prospects by timing score', agent: 'ranking' },
+    { label: 'Draft outreach for a buyer', query: 'Write an outreach email for a first-time home buyer', agent: 'outreach' },
+    { label: 'Coming soon...', query: 'Show me a demo of the real estate prospecting flow', agent: 'demo' },
   ],
   'recruitment': [
-    { label: 'Find candidates', query: 'Find candidates with job change signals in tech sector', agent: 'discovery' },
-    { label: 'Rank talent', query: 'Rank my top candidates by quality and engagement', agent: 'ranking' },
-    { label: 'Draft outreach', query: 'Write a recruiting outreach for a senior engineer', agent: 'outreach' },
-    { label: 'Show demo', query: 'Show me a demo of the talent discovery flow', agent: 'demo' },
+    { label: 'Help me find candidates', query: 'Find candidates with job change signals in tech sector', agent: 'discovery' },
+    { label: 'Show me top talent', query: 'Rank my top candidates by quality and engagement', agent: 'ranking' },
+    { label: 'Draft a recruiting message', query: 'Write a recruiting outreach for a senior engineer', agent: 'outreach' },
+    { label: 'Coming soon...', query: 'Show me a demo of the talent discovery flow', agent: 'demo' },
   ],
   'saas-sales': [
-    { label: 'Find companies', query: 'Find SaaS companies with growth signals and funding rounds', agent: 'discovery' },
-    { label: 'Rank accounts', query: 'Rank my top SaaS accounts by expansion potential', agent: 'ranking' },
-    { label: 'Draft outreach', query: 'Write a solution-focused outreach for a SaaS prospect', agent: 'outreach' },
-    { label: 'Show demo', query: 'Show me a demo of the SaaS sales discovery flow', agent: 'demo' },
+    { label: 'Help me find target accounts', query: 'Find SaaS companies with growth signals and funding rounds', agent: 'discovery' },
+    { label: 'Show me best accounts', query: 'Rank my top SaaS accounts by expansion potential', agent: 'ranking' },
+    { label: 'Draft a solution pitch', query: 'Write a solution-focused outreach for a SaaS prospect', agent: 'outreach' },
+    { label: 'Coming soon...', query: 'Show me a demo of the SaaS sales discovery flow', agent: 'demo' },
   ],
 };
 

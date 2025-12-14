@@ -51,6 +51,7 @@ function createInitialContext(): SalesContext {
     vertical: 'banking',
     subVertical: 'employee-banking',
     subVerticalLocked: false, // Not locked until onboarding complete
+    regionCountry: 'UAE', // Country level - loaded from user profile
     regions: [], // Empty - must be selected during onboarding
     targetEntity: 'companies', // Banking targets companies
     salesConfig: {
