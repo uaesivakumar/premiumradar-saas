@@ -479,6 +479,18 @@ interface OSDiscoveryResponse {
         source: string;
         confidence: number;
       }>;
+      // Sprint 76: SIVA scores from live discovery
+      sivaScores?: {
+        overall?: number;
+        quality?: number;
+        timing?: number;
+        productFit?: number;
+        tier?: string;
+        qualityTier?: string;
+        urgency?: string;
+        recommendedProducts?: string[];
+        reasoning?: string[];
+      };
     }>;
     total?: number;
   };
@@ -776,7 +788,7 @@ async function generateDiscoveryOutput(query: string, agent: AgentType): Promise
   console.log('[SIVA] Companies mapped with real scores:', scoredCompanies.filter(c => c.sivaIntelligence).length, 'of', scoredCompanies.length);
 
   // Sort by score
-  scoredCompanies.sort((a, b) => b.score - a.score);
+  scoredCompanies.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
   const topCompany = scoredCompanies[0];
 
