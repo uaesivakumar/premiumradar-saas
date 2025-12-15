@@ -36,21 +36,23 @@ export type SIVAState =
 // HARD TIMEOUT GUARD - SIVA CAN NEVER HANG
 // =============================================================================
 
-const HARD_TIMEOUT_MS = 4500;
+// Discovery needs 90s (real SerpAPI queries), other ops need 10s
+const DISCOVERY_TIMEOUT_MS = 90000;
+const DEFAULT_TIMEOUT_MS = 10000;
 
 /**
  * Wraps any async call with a hard timeout.
- * If the call doesn't complete within HARD_TIMEOUT_MS, returns fallback.
+ * If the call doesn't complete within timeout, returns fallback.
  * RULE: NO await without guarded()
  */
-async function guarded<T>(fn: Promise<T>, fallback: T): Promise<T> {
+async function guarded<T>(fn: Promise<T>, fallback: T, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<T> {
   return Promise.race([
     fn,
     new Promise<T>(resolve =>
       setTimeout(() => {
-        console.warn('[SIVA] TIMEOUT - returning fallback after', HARD_TIMEOUT_MS, 'ms');
+        console.warn('[SIVA] TIMEOUT - returning fallback after', timeoutMs, 'ms');
         resolve(fallback);
-      }, HARD_TIMEOUT_MS)
+      }, timeoutMs)
     )
   ]);
 }
@@ -255,10 +257,13 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
       setState('generating');
 
       // Generate output using UPR OS - WRAPPED IN GUARDED
-      console.log('[SIVA] Calling generateOutput with guarded()...');
+      // Discovery needs 90s (real SerpAPI queries), other agents need 10s
+      const timeout = agent === 'discovery' ? DISCOVERY_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
+      console.log(`[SIVA] Calling generateOutput with guarded() timeout=${timeout}ms...`);
       const output = await guarded(
         generateOutput(agent, query),
-        { message: 'Request timed out. Please try again.', objects: [] } // STAGING = PRODUCTION: No fake data
+        { message: 'Request timed out. Please try again.', objects: [] }, // STAGING = PRODUCTION: No fake data
+        timeout
       );
       console.log('[SIVA] Output received:', output.message?.substring(0, 50), '... objects:', output.objects?.length);
 
