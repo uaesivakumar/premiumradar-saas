@@ -57,13 +57,13 @@ async function checkDatabase(): Promise<ServiceStatus> {
 }
 
 async function checkOSService(): Promise<ServiceStatus> {
-  const osUrl = process.env.OS_SERVICE_URL || process.env.NEXT_PUBLIC_OS_URL;
+  const osUrl = process.env.UPR_OS_BASE_URL || process.env.OS_SERVICE_URL || process.env.NEXT_PUBLIC_OS_URL;
 
   if (!osUrl) {
     return {
       name: 'os-service',
       status: 'unknown',
-      message: 'OS_SERVICE_URL not configured',
+      message: 'UPR_OS_BASE_URL not configured',
     };
   }
 
