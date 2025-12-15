@@ -558,24 +558,27 @@ async function callOSDiscovery(): Promise<OSDiscoveryResponse> {
       body: JSON.stringify({
         region_code: context.regionCountry || 'UAE',
         vertical_id: context.vertical,
-        config: {
+        industry: 'banking',
+        filters: {
+          location: context.regionCountry || 'UAE',
+        },
+        options: {
+          maxResults: 100,
+          minQuality: 0,
           profile,
           sub_vertical: context.subVertical,
-          regions: context.regions,
-          filters: {
-            location: context.regionCountry || 'UAE',
-            signals: ['hiring-expansion', 'headcount-jump', 'office-opening', 'market-entry'],
-          },
-          options: {
-            maxResults: 10,
-            minQuality: 0.5,
-          },
         },
       }),
     });
 
     const data = await response.json();
-    console.log('[SIVA←OS] Discovery response:', data.success ? 'success' : data.error);
+    console.log('[SIVA←OS] Discovery response:', {
+      success: data.success,
+      error: data.error,
+      signalCount: data.data?.signals?.length || 0,
+      companyCount: data.data?.companies?.length || 0,
+      hasData: !!data.data
+    });
     return data;
   } catch (error) {
     console.error('[SIVA→OS] Discovery error:', error);
@@ -701,11 +704,19 @@ async function generateDiscoveryOutput(query: string, agent: AgentType): Promise
   const regionDisplay = formatRegions(context.regions);
 
   // Call UPR OS Discovery
+  console.log('[SIVA:Discovery] Calling OS...');
   const osResponse = await callOSDiscovery();
+  console.log('[SIVA:Discovery] OS response received:', {
+    success: osResponse.success,
+    hasData: !!osResponse.data,
+    companies: osResponse.data?.companies?.length || 0,
+    signals: osResponse.data?.signals?.length || 0,
+  });
 
   // STAGING = PRODUCTION: No fallbacks, no fake data
   // If discovery fails, show the error
   if (!osResponse.success || !osResponse.data) {
+    console.log('[SIVA:Discovery] FAIL - no success or no data');
     return {
       message: `Discovery failed: ${osResponse.error || 'Unable to connect to OS'}`,
       objects: [],
@@ -715,15 +726,18 @@ async function generateDiscoveryOutput(query: string, agent: AgentType): Promise
   const companies = osResponse.data.companies || [];
   const signals = osResponse.data.signals || [];
 
+  console.log('[SIVA:Discovery] Extracted:', { companies: companies.length, signals: signals.length });
+
   // STAGING = PRODUCTION: If OS returns empty, show empty state
   if (companies.length === 0 && signals.length === 0) {
+    console.log('[SIVA:Discovery] EMPTY - no companies or signals');
     return {
       message: `No employers found matching your criteria in ${regionDisplay}. Try adjusting your filters.`,
       objects: [],
     };
   }
 
-  console.log('[SIVA] Processing', companies.length, 'real companies from OS');
+  console.log('[SIVA:Discovery] Processing', companies.length, 'real companies from OS');
 
   // Score the companies via OS
   console.log('[SIVA] Calling OS Score for real data');
