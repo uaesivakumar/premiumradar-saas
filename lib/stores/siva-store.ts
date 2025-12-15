@@ -214,6 +214,10 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
     console.log('[SIVA] === ORCHESTRATION START ===');
     console.log('[SIVA] Query:', query);
 
+    // Detect agent early to set appropriate timeout
+    const agent = detectAgent(query);
+    const autoFailTimeout = agent === 'discovery' ? DISCOVERY_TIMEOUT_MS + 5000 : DEFAULT_TIMEOUT_MS + 5000;
+
     // Auto-fail timer - SIVA can NEVER hang
     const autoFailTimer = setTimeout(() => {
       const currentState = get().state;
@@ -227,7 +231,7 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
         });
         setTimeout(() => setState('idle'), 1000);
       }
-    }, HARD_TIMEOUT_MS + 500);
+    }, autoFailTimeout);
 
     try {
       addMessage({ role: 'user', content: query });
@@ -235,8 +239,6 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
 
       console.log('[SIVA] State: LISTENING');
       setState('listening');
-
-      const agent = detectAgent(query);
       setActiveAgent(agent);
       console.log('[SIVA] Agent detected:', agent);
 
