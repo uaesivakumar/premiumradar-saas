@@ -272,7 +272,7 @@ class OSClient {
         failureThreshold: 3, // Discovery is critical, trip faster
         resetTimeout: 60000, // Longer reset for external API calls
         successThreshold: 2,
-        requestTimeout: 30000, // Discovery may involve external APIs
+        requestTimeout: 150000, // Discovery involves SerpAPI - can take 2+ minutes
       }),
       outreach: new CircuitBreaker({
         name: 'os-outreach',
@@ -292,7 +292,7 @@ class OSClient {
 
     this.client = axios.create({
       baseURL: `${baseURL}/api/os`,
-      timeout: config.timeout || 30000,
+      timeout: config.timeout || 150000, // Discovery can take 2+ minutes with SerpAPI
       headers: {
         'Content-Type': 'application/json',
         // VS1: Use x-pr-os-token for OS authentication (secure SaaS→OS boundary)

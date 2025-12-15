@@ -4846,6 +4846,163 @@ function calculateQTLE(company, persona, salesContext) {
   };
 }`,
       },
+      {
+        id: 'live-discovery-intelligence',
+        title: 'Live Discovery Intelligence (S77)',
+        content: 'Live Discovery is SIVA\'s real-time intelligence engine that pulls fresh company data on-demand. Unlike batch systems that rely on stale pre-cached data, Live Discovery queries external sources in real-time, extracts signals using AI, and scores results - all within seconds of a user request.',
+        keyPoints: [
+          'On-demand: User requests → SIVA searches → Fresh results',
+          'No caching dependency: Works even with empty radar DB',
+          'AI-powered extraction: Tool 13 parses real news/data',
+          'Super Admin configurable: Query templates per vertical/region',
+          'Database-driven: No hardcoded queries',
+        ],
+        deepDive: `LIVE DISCOVERY ARCHITECTURE:
+
+┌─────────────────────────────────────────────────────────┐
+│                    USER REQUEST                          │
+│  "Show me companies with hiring signals in UAE"         │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│              STEP 1: LOAD QUERY TEMPLATES               │
+│                                                          │
+│  Database: discovery_query_templates                     │
+│  Priority matching: vertical → sub_vertical → region    │
+│                                                          │
+│  Example templates loaded:                               │
+│  1. "{region} companies hiring expansion"               │
+│  2. "{region} new office opening announcement"          │
+│  3. "{region} company funding round"                    │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│              STEP 2: SERP API SEARCH                    │
+│                                                          │
+│  Execute queries against Google via SERP API            │
+│  Returns: URLs, titles, snippets from news/web          │
+│  Freshness: Last 30 days (configurable)                 │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│              STEP 3: SIVA EXTRACTION (Tool 13)          │
+│                                                          │
+│  HiringSignalExtractionTool processes each result:      │
+│  - Parse company name, signal type                      │
+│  - Extract confidence score                              │
+│  - Identify signal-specific details                      │
+│  - Handle ambiguous or partial matches                   │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│              STEP 4: QTLE SCORING                       │
+│                                                          │
+│  Each extracted company gets scored:                     │
+│  - Q-Score: Based on signal strength                    │
+│  - T-Score: Freshness multiplier                         │
+│  - Composite calculation                                 │
+│  - Tier assignment (HOT/WARM/COLD)                      │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│              STEP 5: RETURN FRESH RESULTS               │
+│                                                          │
+│  Response includes:                                      │
+│  - Ranked companies with scores                         │
+│  - Signal evidence with sources                          │
+│  - Freshness indicators (real-time data)                │
+└─────────────────────────────────────────────────────────┘
+
+LIVE vs CACHED DISCOVERY:
+
+┌──────────────────┬─────────────────┬──────────────────────┐
+│ Aspect           │ Cached (Legacy) │ Live (New)           │
+├──────────────────┼─────────────────┼──────────────────────┤
+│ Data freshness   │ Up to 24h old   │ Real-time            │
+│ Source           │ Pre-run batches │ On-demand queries    │
+│ Dependency       │ Needs radar DB  │ Works independently  │
+│ Customization    │ Code changes    │ Super Admin UI       │
+│ Response time    │ ~200ms          │ ~3-5 seconds         │
+│ Empty DB         │ Shows nothing   │ Still finds leads    │
+└──────────────────┴─────────────────┴──────────────────────┘`,
+        codeExample: `// Live Discovery Request
+POST /api/os/discovery
+{
+  "mode": "live",  // NEW: "live" or "cached"
+  "context": {
+    "vertical": "banking",
+    "subVertical": "employee_banking",
+    "region": "UAE"
+  },
+  "signal_types": ["hiring-expansion", "headcount-jump"],
+  "max_results": 10
+}
+
+// Response
+{
+  "success": true,
+  "data": {
+    "companies": [
+      {
+        "name": "TechCorp UAE",
+        "signals": [
+          {
+            "type": "hiring-expansion",
+            "evidence": "Hiring 50+ engineers per LinkedIn",
+            "confidence": 0.89,
+            "source_url": "https://...",
+            "freshness": "2 hours ago"
+          }
+        ],
+        "scores": { "q": 85, "t": 1.3, "composite": 92 },
+        "tier": "HOT"
+      }
+    ],
+    "discovery_mode": "live",
+    "queries_executed": 3,
+    "results_processed": 25,
+    "extraction_time_ms": 2340
+  }
+}`,
+        techRationale: `WHY LIVE DISCOVERY?
+
+1. FRESH DATA WINS DEALS
+Batch systems show yesterday's news. Live Discovery shows
+what happened THIS MORNING. First mover advantage matters.
+
+2. NO COLD START PROBLEM
+New tenants don't need to wait for batch runs. Live Discovery
+works immediately - just needs a user request.
+
+3. SUPER ADMIN CONTROL
+Product team can tune queries per vertical/region without
+code deploys. Add new signal queries in seconds.
+
+4. GRACEFUL FALLBACK
+If Live Discovery fails, system falls back to cached data
+(if available). User always gets something.
+
+5. COST EFFICIENCY
+Only query when user asks. No wasted API calls on companies
+no one cares about.`,
+        futureCompatibility: `LIVE DISCOVERY ROADMAP:
+
+2025 Q1:
+- Multi-source parallel search (SERP + LinkedIn + News)
+- Query optimization based on usage analytics
+
+2025 Q2:
+- Streaming results (show as they come)
+- User-defined custom queries
+
+2025 Q3:
+- ML-based query generation
+- Cross-region intelligence sharing
+
+2026+:
+- Predictive discovery (before user asks)
+- Voice-triggered discovery ("SIVA, find me hiring companies")`,
+      },
     ],
   },
   {

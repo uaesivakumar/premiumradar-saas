@@ -28,6 +28,7 @@ import {
   TrendingUp,
   DollarSign,
   Zap,
+  Search,
 } from 'lucide-react';
 
 interface OSStatus {
@@ -103,6 +104,17 @@ const OS_SECTIONS = [
     borderColor: 'border-orange-500/20',
     href: '/superadmin/os/config',
     sprint: 'S55',
+  },
+  {
+    id: 'discovery',
+    title: 'Discovery Templates',
+    description: 'Live discovery search queries per vertical/region',
+    icon: Search,
+    color: 'text-cyan-400',
+    bgColor: 'bg-cyan-500/10',
+    borderColor: 'border-cyan-500/20',
+    href: '/superadmin/os/discovery-templates',
+    sprint: 'S77',
   },
 ];
 
