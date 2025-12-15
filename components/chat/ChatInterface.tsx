@@ -7,7 +7,55 @@ import { useLocaleStore } from '@/lib/stores/locale-store';
 import { MessageBubble, Message } from './MessageBubble';
 import { QuickIntentCards } from './QuickIntentCards';
 import { TypingIndicator } from './TypingIndicator';
-import { generateMockResponse } from '@/lib/utils/mock-ai';
+
+// Sprint 76: Use real SIVA API instead of mock
+const UPR_OS_URL = process.env.NEXT_PUBLIC_UPR_OS_URL || 'https://upr-os.sivakumar.ai';
+
+/**
+ * Call SIVA Chat API for intelligent responses
+ */
+async function callSivaChat(message: string, context?: Record<string, unknown>): Promise<string> {
+  try {
+    const response = await fetch(`${UPR_OS_URL}/api/chat/nlu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-Source': 'saas-chat-interface',
+      },
+      body: JSON.stringify({
+        message,
+        context: {
+          vertical: 'banking',
+          sub_vertical: 'employee-banking',
+          region: 'UAE',
+          ...context,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Chat API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && data.response) {
+      return data.response;
+    }
+
+    // Fallback to natural language response from the API
+    if (data.intent && data.tools_suggested) {
+      const toolsList = data.tools_suggested.join(', ');
+      return `I understand you're asking about ${data.intent}. I can help with ${toolsList}. Let me analyze this for you using SIVA intelligence.`;
+    }
+
+    return data.message || 'I can help you with that. What specific information would you like?';
+  } catch (error) {
+    console.error('[ChatInterface] SIVA API error:', error);
+    // Graceful fallback
+    return 'I\'m analyzing your request. Our intelligence system is processing your query about the banking sector.';
+  }
+}
 
 interface ChatInterfaceProps {
   isOpen: boolean;
@@ -54,13 +102,16 @@ export function ChatInterface({ isOpen, onClose }: ChatInterfaceProps) {
     // Detect industry from user input
     detectFromInput(text);
 
-    // Simulate AI typing
+    // Show typing indicator
     setIsTyping(true);
 
-    // Generate mock response with delay
-    const response = await generateMockResponse(text, detectedIndustry);
+    try {
+      // Sprint 76: Call real SIVA API
+      const response = await callSivaChat(text, {
+        industry: detectedIndustry,
+        locale,
+      });
 
-    setTimeout(() => {
       setIsTyping(false);
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -69,7 +120,17 @@ export function ChatInterface({ isOpen, onClose }: ChatInterfaceProps) {
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
-    }, 1500 + Math.random() * 1000);
+    } catch (error) {
+      console.error('[ChatInterface] Error:', error);
+      setIsTyping(false);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'I encountered an issue processing your request. Please try again.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

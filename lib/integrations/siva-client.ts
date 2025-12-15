@@ -751,6 +751,189 @@ export async function scoreAndRank(
 }
 
 // =============================================================================
+// PROACTIVE INSIGHTS API (Sprint 76)
+// =============================================================================
+
+export interface ProactiveInsight {
+  priority: number;
+  type: string;
+  icon: string;
+  title: string;
+  message: string;
+  action: string;
+}
+
+export interface ProactiveInsightsResponse {
+  success: boolean;
+  company: {
+    id: string;
+    name: string;
+    sector: string;
+    location: string;
+    signal_count: number;
+  };
+  scores: {
+    quality: number;
+    timing: number;
+    product_fit: number;
+    overall: number;
+  };
+  insights: ProactiveInsight[];
+  signals_summary: {
+    total: number;
+    types: string[];
+    latest_date: string;
+    avg_confidence: number;
+  };
+  recommended_actions: Array<{
+    priority: 'high' | 'medium' | 'low';
+    action: string;
+    description: string;
+    channel: string;
+  }>;
+  analysis_time_ms: number;
+  generated_at: string;
+  fromCache?: boolean;
+  api_latency_ms?: number;
+}
+
+export interface DashboardInsightsResponse {
+  success: boolean;
+  companies: ProactiveInsightsResponse[];
+  summary: {
+    total_analyzed: number;
+    high_priority: number;
+    avg_score: number;
+  };
+  generated_at: string;
+  api_latency_ms?: number;
+}
+
+/**
+ * Get proactive insights for a company
+ * Called when user views a company card/page
+ *
+ * @param params - Company identification
+ * @returns ProactiveInsightsResponse with auto-generated insights
+ */
+export async function getProactiveInsights(params: {
+  companyId?: string;
+  companyName?: string;
+  domain?: string;
+  tenantId?: string;
+}): Promise<ProactiveInsightsResponse> {
+  return sivaRequest<ProactiveInsightsResponse>('/api/siva/insights', {
+    company_id: params.companyId,
+    company_name: params.companyName,
+    domain: params.domain,
+    tenant_id: params.tenantId,
+  });
+}
+
+/**
+ * Get dashboard insights for top companies
+ *
+ * @param tenantId - Tenant ID
+ * @param limit - Max companies to analyze
+ * @returns DashboardInsightsResponse with top company insights
+ */
+export async function getDashboardInsights(
+  tenantId?: string,
+  limit: number = 5
+): Promise<DashboardInsightsResponse> {
+  const url = `${UPR_OS_URL}/api/siva/dashboard?tenant_id=${tenantId || ''}&limit=${limit}`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: getHeaders(),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Dashboard insights failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Run full SIVA analysis on a company
+ *
+ * @param params - Company data and options
+ * @returns Full analysis with company context, insights, and signals
+ */
+export async function analyzeCompany(params: {
+  companyId?: string;
+  companyName?: string;
+  includeOutreach?: boolean;
+  tenantId?: string;
+}): Promise<{
+  success: boolean;
+  company: Record<string, unknown>;
+  analysis: {
+    scores: Record<string, number>;
+    insights: ProactiveInsight[];
+    recommended_actions: Array<Record<string, unknown>>;
+  };
+  signals: {
+    total: number;
+    types: string[];
+    details: Array<Record<string, unknown>>;
+  };
+  api_latency_ms: number;
+  analyzed_at: string;
+}> {
+  return sivaRequest('/api/siva/analyze', {
+    company_id: params.companyId,
+    company_name: params.companyName,
+    include_outreach: params.includeOutreach || false,
+    tenant_id: params.tenantId,
+  });
+}
+
+/**
+ * Search companies with SIVA context
+ *
+ * @param params - Search parameters
+ * @returns Companies with SIVA enrichment
+ */
+export async function searchCompaniesWithContext(params: {
+  query?: string;
+  sector?: string;
+  location?: string;
+  minScore?: number;
+  tenantId?: string;
+  limit?: number;
+}): Promise<{
+  success: boolean;
+  results: Array<Record<string, unknown>>;
+  total: number;
+  api_latency_ms: number;
+}> {
+  return sivaRequest('/api/siva/search', {
+    query: params.query,
+    sector: params.sector,
+    location: params.location,
+    min_score: params.minScore,
+    tenant_id: params.tenantId,
+    limit: params.limit || 20,
+  });
+}
+
+/**
+ * Clear cache for a company (after data update)
+ */
+export async function clearCompanyCache(companyId: string): Promise<{ success: boolean; message: string }> {
+  const url = `${UPR_OS_URL}/api/siva/cache/${companyId}`;
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+
+  return response.json();
+}
+
+// =============================================================================
 // EXPORT
 // =============================================================================
 
@@ -771,6 +954,13 @@ export const sivaClient = {
 
   // High-level helpers
   scoreAndRank,
+
+  // Proactive Insights (Sprint 76)
+  getProactiveInsights,
+  getDashboardInsights,
+  analyzeCompany,
+  searchCompaniesWithContext,
+  clearCompanyCache,
 };
 
 export default sivaClient;

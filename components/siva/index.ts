@@ -1,5 +1,5 @@
 /**
- * SIVA Components - Sprint S26-S30
+ * SIVA Components - Sprint S26-S30, Sprint 76
  * AI Surface Extension - Full Pageless Workspace
  */
 
@@ -17,3 +17,6 @@ export { ReasoningOverlay, ReasoningToggle } from './ReasoningOverlay';
 
 // S27: Output Objects
 export * from './objects';
+
+// Sprint 76: Proactive Intelligence
+export { SivaInsightsPanel } from './SivaInsightsPanel';
