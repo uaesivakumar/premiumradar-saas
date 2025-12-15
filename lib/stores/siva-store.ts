@@ -218,14 +218,11 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
       if (currentState !== 'idle' && currentState !== 'complete') {
         console.error('[SIVA] AUTO-FAIL: Stuck in', currentState, 'for too long');
         setState('error');
-        // Force render synthetic results
-        const fallbackOutput = buildSyntheticDiscovery();
+        // STAGING = PRODUCTION: Show error, no fake data
         addMessage({
           role: 'siva',
-          content: fallbackOutput.message,
-          outputObjects: fallbackOutput.objects,
+          content: 'Request timed out. Please try again.',
         });
-        fallbackOutput.objects.forEach((obj) => addOutputObject(obj));
         setTimeout(() => setState('idle'), 1000);
       }
     }, HARD_TIMEOUT_MS + 500);
@@ -261,7 +258,7 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
       console.log('[SIVA] Calling generateOutput with guarded()...');
       const output = await guarded(
         generateOutput(agent, query),
-        buildSyntheticDiscovery() // Fallback if timeout
+        { message: 'Request timed out. Please try again.', objects: [] } // STAGING = PRODUCTION: No fake data
       );
       console.log('[SIVA] Output received:', output.message?.substring(0, 50), '... objects:', output.objects?.length);
 
@@ -294,18 +291,17 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
       console.error('[SIVA] === ORCHESTRATION ERROR ===', error);
       clearTimeout(autoFailTimer);
 
-      // Add error message with fallback results
-      const fallbackOutput = buildSyntheticDiscovery();
+      // STAGING = PRODUCTION: Show error, no fake data
       addMessage({
         role: 'siva',
-        content: fallbackOutput.message,
-        outputObjects: fallbackOutput.objects,
+        content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
       });
-      fallbackOutput.objects.forEach((obj) => addOutputObject(obj));
 
-      // Reset state
-      setState('idle');
-      setActiveAgent(null);
+      setState('error');
+      setTimeout(() => {
+        setState('idle');
+        setActiveAgent(null);
+      }, 1000);
     }
   },
 }));
@@ -700,85 +696,66 @@ async function generateDiscoveryOutput(query: string, agent: AgentType): Promise
   // Call UPR OS Discovery
   const osResponse = await callOSDiscovery();
 
+  // STAGING = PRODUCTION: No fallbacks, no fake data
+  // If discovery fails, show the error
   if (!osResponse.success || !osResponse.data) {
     return {
-      message: `Discovery failed: ${osResponse.error || 'Unable to connect to UPR OS'}. Please check system status.`,
+      message: `Discovery failed: ${osResponse.error || 'Unable to connect to OS'}`,
       objects: [],
     };
   }
 
-  let companies = osResponse.data.companies || [];
+  const companies = osResponse.data.companies || [];
   const signals = osResponse.data.signals || [];
-  let useDemo = false;
 
-  // If OS returns empty, use demo data for product demonstration
+  // STAGING = PRODUCTION: If OS returns empty, show empty state
   if (companies.length === 0 && signals.length === 0) {
-    console.log('[SIVA] OS returned empty, using demo data');
-    companies = getDemoCompanies(regionDisplay);
-    useDemo = true;
+    return {
+      message: `No employers found matching your criteria in ${regionDisplay}. Try adjusting your filters.`,
+      objects: [],
+    };
   }
 
-  console.log('[SIVA] Processing', companies.length, 'companies, useDemo:', useDemo);
+  console.log('[SIVA] Processing', companies.length, 'real companies from OS');
 
-  // Score the companies - skip OS scoring for demo data (use pre-set scores)
-  let scoredCompanies;
+  // Score the companies via OS
+  console.log('[SIVA] Calling OS Score for real data');
+  const scoredCompanies = await Promise.all(
+    companies.slice(0, 5).map(async (company) => {
+      try {
+        const scoreResponse = await Promise.race([
+          callOSScore(
+            company.id,
+            { name: company.name, domain: company.domain, industry: company.industry },
+            company.signals?.map(s => ({ type: s.type, source: s.source, confidence: s.confidence })) || []
+          ),
+          new Promise<OSScoreResponse>((_, reject) =>
+            setTimeout(() => reject(new Error('Score timeout')), 5000)
+          ),
+        ]);
 
-  if (useDemo) {
-    // Demo data - use synthetic scores, no OS call needed
-    console.log('[SIVA] Using synthetic scores for demo data');
-    scoredCompanies = companies.map((company, idx) => ({
-      ...company,
-      score: 85 - (idx * 8), // 85, 77, 69, 61, 53
-      grade: idx === 0 ? 'hot' : idx < 3 ? 'warm' : 'cold',
-      ebScores: {
-        'Hiring Intensity': 80 - (idx * 5),
-        'EB Fit': 75 - (idx * 6),
-        'Decision Maker Quality': 70 - (idx * 4),
-        'Signal Evidence': 65 - (idx * 5),
-      },
-    }));
-  } else {
-    // Real data - call OS for scoring with timeout
-    console.log('[SIVA] Calling OS Score for real data');
-    scoredCompanies = await Promise.all(
-      companies.slice(0, 5).map(async (company) => {
-        try {
-          const scoreResponse = await Promise.race([
-            callOSScore(
-              company.id,
-              { name: company.name, domain: company.domain, industry: company.industry },
-              company.signals?.map(s => ({ type: s.type, source: s.source, confidence: s.confidence })) || []
-            ),
-            // 5 second timeout per company
-            new Promise<OSScoreResponse>((_, reject) =>
-              setTimeout(() => reject(new Error('Score timeout')), 5000)
-            ),
-          ]);
-
-          return {
-            ...company,
-            score: scoreResponse.data?.scores?.composite?.value || 50,
-            grade: scoreResponse.data?.scores?.composite?.tier || 'warm',
-            ebScores: scoreResponse.data?.scores ? mapScoresToEBFormat({
-              'EB Fit': scoreResponse.data.scores.q_score?.value || 0,
-              'Hiring Intensity': scoreResponse.data.scores.t_score?.value || 0,
-              'Decision Maker Quality': scoreResponse.data.scores.l_score?.value || 0,
-              'Signal Evidence': scoreResponse.data.scores.e_score?.value || 0,
-            }) : {},
-          };
-        } catch (err) {
-          console.error('[SIVA] Score failed for', company.name, err);
-          // Fallback score on error
-          return {
-            ...company,
-            score: 50,
-            grade: 'warm',
-            ebScores: { 'Hiring Intensity': 50, 'EB Fit': 50, 'Decision Maker Quality': 50, 'Signal Evidence': 50 },
-          };
-        }
-      })
-    );
-  }
+        return {
+          ...company,
+          score: scoreResponse.data?.scores?.composite?.value || 50,
+          grade: scoreResponse.data?.scores?.composite?.tier || 'warm',
+          ebScores: scoreResponse.data?.scores ? mapScoresToEBFormat({
+            'EB Fit': scoreResponse.data.scores.q_score?.value || 0,
+            'Hiring Intensity': scoreResponse.data.scores.t_score?.value || 0,
+            'Decision Maker Quality': scoreResponse.data.scores.l_score?.value || 0,
+            'Signal Evidence': scoreResponse.data.scores.e_score?.value || 0,
+          }) : {},
+        };
+      } catch (err) {
+        console.error('[SIVA] Score failed for', company.name, err);
+        return {
+          ...company,
+          score: 0,
+          grade: 'unknown',
+          ebScores: {},
+        };
+      }
+    })
+  );
 
   console.log('[SIVA] Scoring complete, companies:', scoredCompanies.length);
 
@@ -1181,117 +1158,5 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Demo companies for product demonstration when OS returns empty
-function getDemoCompanies(region: string) {
-  return [
-    {
-      id: 'demo-1',
-      name: 'Careem',
-      domain: 'careem.com',
-      industry: 'Technology / Ride-hailing',
-      city: 'Dubai',
-      headcount: 2500,
-      size: 'enterprise',
-      signals: [
-        { type: 'hiring-expansion', title: 'Hiring Expansion', source: 'LinkedIn', confidence: 0.9 },
-        { type: 'headcount-jump', title: 'Headcount Growth +15%', source: 'Apollo', confidence: 0.85 },
-      ],
-    },
-    {
-      id: 'demo-2',
-      name: 'Noon',
-      domain: 'noon.com',
-      industry: 'E-commerce / Retail',
-      city: 'Dubai',
-      headcount: 3200,
-      size: 'enterprise',
-      signals: [
-        { type: 'office-opening', title: 'New Office in Abu Dhabi', source: 'News', confidence: 0.88 },
-        { type: 'hiring-expansion', title: 'Hiring 200+ Roles', source: 'LinkedIn', confidence: 0.92 },
-      ],
-    },
-    {
-      id: 'demo-3',
-      name: 'Talabat',
-      domain: 'talabat.com',
-      industry: 'Food Delivery / Technology',
-      city: 'Dubai',
-      headcount: 1800,
-      size: 'mid-market',
-      signals: [
-        { type: 'hiring-expansion', title: 'Hiring Expansion', source: 'LinkedIn', confidence: 0.87 },
-      ],
-    },
-    {
-      id: 'demo-4',
-      name: 'Kitopi',
-      domain: 'kitopi.com',
-      industry: 'Food Tech / Cloud Kitchens',
-      city: 'Dubai',
-      headcount: 800,
-      size: 'mid-market',
-      signals: [
-        { type: 'funding-round', title: 'Series C Funding', source: 'Crunchbase', confidence: 0.95 },
-        { type: 'headcount-jump', title: 'Headcount Growth +20%', source: 'Apollo', confidence: 0.82 },
-      ],
-    },
-    {
-      id: 'demo-5',
-      name: 'Property Finder',
-      domain: 'propertyfinder.ae',
-      industry: 'Real Estate / Technology',
-      city: 'Dubai',
-      headcount: 650,
-      size: 'mid-market',
-      signals: [
-        { type: 'market-entry', title: 'Expanding to Saudi Arabia', source: 'News', confidence: 0.78 },
-      ],
-    },
-  ];
-}
-
-// Synthetic fallback - GUARANTEED to render, used when OS fails/times out
-function buildSyntheticDiscovery(): { message: string; objects: PartialOutputObject[] } {
-  console.log('[SIVA] Building synthetic discovery fallback');
-  const companies = getDemoCompanies('Dubai, Abu Dhabi');
-  const scoredCompanies = companies.map((company, idx) => ({
-    name: company.name,
-    industry: company.industry,
-    score: 85 - (idx * 8),
-    grade: idx === 0 ? 'hot' : idx < 3 ? 'warm' : 'cold',
-    signal: company.signals[0]?.title || 'Hiring Signal',
-    signalType: company.signals[0]?.type || 'hiring-expansion',
-    source: company.signals[0]?.source || 'Demo',
-    website: company.domain ? `https://${company.domain}` : '',
-    size: company.size,
-    city: company.city,
-    headcount: company.headcount,
-    ebScores: {
-      'Hiring Intensity': 80 - (idx * 5),
-      'EB Fit': 75 - (idx * 6),
-      'Decision Maker Quality': 70 - (idx * 4),
-      'Signal Evidence': 65 - (idx * 5),
-    },
-  }));
-
-  return {
-    message: `Five employers stand out today for employee banking in Dubai, Abu Dhabi. ${scoredCompanies[0].name} leads with a strong hiring surge.`,
-    objects: [
-      {
-        type: 'discovery',
-        title: 'Discovery Results',
-        data: {
-          companies: scoredCompanies,
-          query: 'Find employers with strong hiring signals',
-          totalResults: scoredCompanies.length,
-          context: 'employee_banking',
-          profile: 'banking_employee',
-          osSource: false, // Indicates fallback data
-        },
-        pinned: false,
-        expanded: true,
-        agent: 'discovery',
-      },
-    ],
-  };
-}
+// DELETED: getDemoCompanies and buildSyntheticDiscovery
+// STAGING = PRODUCTION: No fake data, no fallbacks, no demos

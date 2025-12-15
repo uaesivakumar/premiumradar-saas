@@ -1,11 +1,11 @@
 /**
  * Session Management
- * Sprint S54: Admin Panel
  *
- * Server session utilities for authentication
+ * Server session utilities - uses internal JWT auth (NO SUPABASE)
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { getSessionFromCookies } from './session/enhanced-session';
+import { getUserWithProfile } from '@/lib/db/users';
 
 export interface UserSession {
   user: {
@@ -21,51 +21,32 @@ export interface UserSession {
 }
 
 /**
- * Get the current server session
+ * Get the current server session from JWT cookie
  * Returns null if not authenticated
  */
 export async function getServerSession(): Promise<UserSession | null> {
-  const supabase = createClient();
+  const result = await getSessionFromCookies();
 
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
+  if (!result.success || !result.session) {
     return null;
   }
 
-  // Get user's tenant and permissions
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*, tenant:tenants(*), role:roles(*)')
-    .eq('id', user.id)
-    .single();
+  const session = result.session;
 
-  // Type assertions for nested objects from DB
-  const profileData = profile as Record<string, unknown> | null;
-  const tenant = profileData?.tenant as Record<string, unknown> | null;
-  const role = profileData?.role as Record<string, unknown> | null;
-
-  if (!tenant) {
-    return null;
-  }
-
-  // Extract permissions from role
-  const permissions = (role?.permissions as string[]) || [];
+  // Get additional user data from DB if needed
+  const userWithProfile = await getUserWithProfile(session.user_id);
 
   return {
     user: {
-      id: user.id,
-      email: user.email || '',
-      name: (profileData?.full_name as string) || (profileData?.name as string) || undefined,
-      role: role?.name as string | undefined,
-      permissions,
+      id: session.user_id,
+      email: session.email,
+      name: session.name,
+      role: session.role,
+      permissions: [], // Can be extended from DB
     },
-    tenantId: tenant.id as string,
-    tenantName: tenant.name as string | undefined,
-    expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+    tenantId: session.tenant_id,
+    tenantName: session.tenant_name || userWithProfile?.tenant?.name,
+    expiresAt: new Date(session.exp * 1000),
   };
 }
 

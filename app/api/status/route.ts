@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { query } from '@/lib/db/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,17 +38,8 @@ const startTime = Date.now();
 async function checkDatabase(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
-    const supabase = createClient();
-    const { error } = await supabase.from('profiles').select('id');
-
-    if (error) {
-      return {
-        name: 'database',
-        status: 'down',
-        latencyMs: Date.now() - start,
-        message: error.message,
-      };
-    }
+    // Simple connectivity check using internal DB client
+    await query('SELECT 1');
 
     return {
       name: 'database',
