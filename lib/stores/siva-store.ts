@@ -36,8 +36,8 @@ export type SIVAState =
 // HARD TIMEOUT GUARD - SIVA CAN NEVER HANG
 // =============================================================================
 
-// Discovery needs 90s (real SerpAPI queries), other ops need 10s
-const DISCOVERY_TIMEOUT_MS = 90000;
+// Discovery needs 150s (real SerpAPI queries can be slow), other ops need 10s
+const DISCOVERY_TIMEOUT_MS = 150000;
 const DEFAULT_TIMEOUT_MS = 10000;
 
 /**
@@ -472,6 +472,7 @@ interface OSDiscoveryResponse {
       size?: string;
       headcount?: number;
       city?: string;
+      signalCount?: number;
       signals?: Array<{
         type: string;
         title: string;
@@ -739,46 +740,40 @@ async function generateDiscoveryOutput(query: string, agent: AgentType): Promise
 
   console.log('[SIVA:Discovery] Processing', companies.length, 'real companies from OS');
 
-  // Score the companies via OS
-  console.log('[SIVA] Calling OS Score for real data');
-  const scoredCompanies = await Promise.all(
-    companies.slice(0, 5).map(async (company) => {
-      try {
-        const scoreResponse = await Promise.race([
-          callOSScore(
-            company.id,
-            { name: company.name, domain: company.domain, industry: company.industry },
-            company.signals?.map(s => ({ type: s.type, source: s.source, confidence: s.confidence })) || []
-          ),
-          new Promise<OSScoreResponse>((_, reject) =>
-            setTimeout(() => reject(new Error('Score timeout')), 5000)
-          ),
-        ]);
+  // Sprint 76: Use real SIVA scores from OS response
+  // Companies now come with sivaScores from the backend
+  const scoredCompanies = companies.slice(0, 50).map((company) => {
+    // Use real SIVA scores if available, otherwise fallback to signal-based estimate
+    const sivaScores = company.sivaScores;
+    const hasRealScores = sivaScores && sivaScores.overall !== undefined;
 
-        return {
-          ...company,
-          score: scoreResponse.data?.scores?.composite?.value || 50,
-          grade: scoreResponse.data?.scores?.composite?.tier || 'warm',
-          ebScores: scoreResponse.data?.scores ? mapScoresToEBFormat({
-            'EB Fit': scoreResponse.data.scores.q_score?.value || 0,
-            'Hiring Intensity': scoreResponse.data.scores.t_score?.value || 0,
-            'Decision Maker Quality': scoreResponse.data.scores.l_score?.value || 0,
-            'Signal Evidence': scoreResponse.data.scores.e_score?.value || 0,
-          }) : {},
-        };
-      } catch (err) {
-        console.error('[SIVA] Score failed for', company.name, err);
-        return {
-          ...company,
-          score: 0,
-          grade: 'unknown',
-          ebScores: {},
-        };
-      }
-    })
-  );
+    return {
+      ...company,
+      // Use real SIVA overall score or fallback
+      score: hasRealScores ? sivaScores.overall : Math.min(100, 40 + (company.signalCount || 1) * 15),
+      // Use real SIVA tier or fallback
+      grade: hasRealScores
+        ? sivaScores.tier?.toLowerCase() || 'warm'
+        : (company.signalCount || 1) >= 3 ? 'hot' : (company.signalCount || 1) >= 2 ? 'warm' : 'cool',
+      // Real SIVA scores for EB display
+      ebScores: hasRealScores ? {
+        'EB Fit': sivaScores.quality || 0,
+        'Hiring Intensity': sivaScores.timing || 0,
+        'Product Fit': sivaScores.productFit || 0,
+        'Overall': sivaScores.overall || 0,
+      } : {},
+      // Additional SIVA intelligence
+      sivaIntelligence: hasRealScores ? {
+        tier: sivaScores.tier,
+        qualityTier: sivaScores.qualityTier,
+        urgency: sivaScores.urgency,
+        recommendedProducts: sivaScores.recommendedProducts || [],
+        reasoning: sivaScores.reasoning || [],
+      } : null,
+    };
+  });
 
-  console.log('[SIVA] Scoring complete, companies:', scoredCompanies.length);
+  console.log('[SIVA] Companies mapped with real scores:', scoredCompanies.filter(c => c.sivaIntelligence).length, 'of', scoredCompanies.length);
 
   // Sort by score
   scoredCompanies.sort((a, b) => b.score - a.score);
