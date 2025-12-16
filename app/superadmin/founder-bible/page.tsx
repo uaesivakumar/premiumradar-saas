@@ -1269,7 +1269,7 @@ const TWELVE_LAWS = [
 // ============================================================================
 
 function ArchitectureSection() {
-  const [activeArch, setActiveArch] = useState<'siva' | 'sce' | 'packs' | 'agents'>('siva');
+  const [activeArch, setActiveArch] = useState<'layers' | 'siva' | 'sce' | 'packs' | 'agents'>('layers');
 
   return (
     <div className="max-w-7xl mx-auto px-6">
@@ -1283,7 +1283,8 @@ function ArchitectureSection() {
       {/* Architecture Tabs */}
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
         {[
-          { id: 'siva', label: 'SIVA OS Kernel', icon: '🧠' },
+          { id: 'layers', label: 'System Layers', icon: '🏛️' },
+          { id: 'siva', label: 'SIVA Intelligence', icon: '🧠' },
           { id: 'sce', label: 'SalesContext Engine', icon: '🎯' },
           { id: 'packs', label: 'Intelligence Packs', icon: '📦' },
           { id: 'agents', label: 'Multi-Agent System', icon: '🤖' },
@@ -1310,6 +1311,7 @@ function ArchitectureSection() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
         >
+          {activeArch === 'layers' && <SystemLayersDiagram />}
           {activeArch === 'siva' && <SIVAKernelDiagram />}
           {activeArch === 'sce' && <SCEDiagram />}
           {activeArch === 'packs' && <PacksDiagram />}
@@ -1320,10 +1322,200 @@ function ArchitectureSection() {
   );
 }
 
+function SystemLayersDiagram() {
+  return (
+    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+      <h2 className="text-2xl font-bold mb-6">PremiumRadar System Layers</h2>
+      <p className="text-slate-400 mb-8">
+        The definitive architecture showing how SaaS Frontend, UPR OS, and SIVA relate to each other.
+        <span className="text-amber-400 ml-2">🔒 Locked Architecture - Dec 2025</span>
+      </p>
+
+      {/* Main Architecture Diagram */}
+      <div className="bg-slate-950 rounded-xl p-6 font-mono text-xs overflow-x-auto mb-8">
+        <pre className="text-emerald-400">{`
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     PREMIUMRADAR PRODUCT                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌───────────────────────────────────────────────────────────────────┐     │
+│   │              SaaS Frontend (Next.js) - premiumradar-saas          │     │
+│   │                                                                   │     │
+│   │   • UI Components (Dashboard, Discovery UI, Super Admin)          │     │
+│   │   • SIVA Chat = Just a text box (ZERO intelligence here)          │     │
+│   │   • User Authentication                                           │     │
+│   │   • Never calls SIVA directly, never calls OpenAI directly        │     │
+│   └───────────────────────────────────────────────────────────────────┘     │
+│                                    │                                        │
+│                                    │ API Calls (ONLY to UPR-OS)             │
+│                                    ▼                                        │
+│   ┌───────────────────────────────────────────────────────────────────┐     │
+│   │              UPR-OS (Authority + Infrastructure) - upr-os         │     │
+│   │                                                                   │     │
+│   │   ┌─────────────────────────────────────────────────────────┐     │     │
+│   │   │  OS-OWNED SERVICES (Mechanical, Expensive, Async)       │     │     │
+│   │   │                                                         │     │     │
+│   │   │  • Auth / Tenancy                                       │     │     │
+│   │   │  • Config APIs (verticals, territories, providers)      │     │     │
+│   │   │  • Discovery Pool + Crawler   ← NOT SIVA (OS owns)      │     │     │
+│   │   │  • Enrichment Services        ← NOT SIVA (OS owns)      │     │     │
+│   │   │  • Lead Assignment + Distribution                       │     │     │
+│   │   │  • PostgreSQL (state, memory, signals)                  │     │     │
+│   │   │  • External API Broker (SERP, Apollo, OpenAI keys)      │     │     │
+│   │   └─────────────────────────────────────────────────────────┘     │     │
+│   │                                │                                  │     │
+│   │                                │ Governs & Provides Context       │     │
+│   │                                ▼                                  │     │
+│   │   ┌─────────────────────────────────────────────────────────┐     │     │
+│   │   │     SIVA (Resident Intelligence Service)                │     │     │
+│   │   │     Under UPR-OS Authority - Cannot run without OS      │     │     │
+│   │   │                                                         │     │     │
+│   │   │   • Persona Engine (rules defined by OS, executed here) │     │     │
+│   │   │   • Decision Logic                                      │     │     │
+│   │   │   • Reasoning Orchestration                             │     │     │
+│   │   │   • Uses SIVA Tools (stateless, cheap, fast)            │     │     │
+│   │   │                                                         │     │     │
+│   │   │   ┌─────────────────────────────────────────────────┐   │     │     │
+│   │   │   │  SIVA TOOLS (Stateless, Cheap, Fast, Reasoning) │   │     │     │
+│   │   │   │                                                 │   │     │     │
+│   │   │   │  ✅ Scoring (QTLE)      ✅ Ranking              │   │     │     │
+│   │   │   │  ✅ Classification      ✅ Edge Cases           │   │     │     │
+│   │   │   │  ✅ Outreach Drafting   ✅ Summarization        │   │     │     │
+│   │   │   │  ✅ Next-Best-Action    ✅ Intent Detection     │   │     │     │
+│   │   │   │                                                 │   │     │     │
+│   │   │   │  ❌ Discovery (OS service, not tool)            │   │     │     │
+│   │   │   │  ❌ Enrichment (OS service, not tool)           │   │     │     │
+│   │   │   │  ❌ Database writes (OS owns persistence)       │   │     │     │
+│   │   │   └─────────────────────────────────────────────────┘   │     │     │
+│   │   └─────────────────────────────────────────────────────────┘     │     │
+│   └───────────────────────────────────────────────────────────────────┘     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+        `}</pre>
+      </div>
+
+      {/* Key Principles */}
+      <div className="grid md:grid-cols-2 gap-6 mb-8">
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
+          <h3 className="text-emerald-400 font-bold mb-4">✅ Correct Understanding</h3>
+          <ul className="text-sm text-slate-300 space-y-2">
+            <li>• <strong>SaaS Frontend</strong> = Face (UI only, zero intelligence)</li>
+            <li>• <strong>UPR-OS</strong> = Body (infrastructure, authority)</li>
+            <li>• <strong>SIVA</strong> = Brain (lives inside OS body)</li>
+            <li>• Frontend → OS only (never direct to SIVA)</li>
+            <li>• OS brokers ALL external APIs (keys, rate limits, costs)</li>
+            <li>• Persona rules defined by OS, executed by SIVA</li>
+          </ul>
+        </div>
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
+          <h3 className="text-red-400 font-bold mb-4">❌ Common Mistakes</h3>
+          <ul className="text-sm text-slate-300 space-y-2">
+            <li>• Discovery is NOT a SIVA tool (it's OS service)</li>
+            <li>• SIVA Chat is NOT SIVA (it's just a UI surface)</li>
+            <li>• SIVA never holds API keys (OS brokers everything)</li>
+            <li>• SIVA never owns databases (OS owns persistence)</li>
+            <li>• SIVA is not standalone (needs OS context to run)</li>
+            <li>• Enrichment is NOT a SIVA tool (it's OS service)</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* SIVA Tool Criteria */}
+      <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-6 mb-8">
+        <h3 className="text-cyan-400 font-bold mb-4">🧪 SIVA Tool Gate Check</h3>
+        <p className="text-slate-400 mb-4">Before adding anything as a SIVA tool, verify ALL criteria:</p>
+        <div className="grid md:grid-cols-4 gap-4">
+          <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+            <div className="text-2xl mb-1">⚡</div>
+            <div className="text-sm font-bold text-white">Stateless?</div>
+            <div className="text-xs text-slate-400">No DB writes</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+            <div className="text-2xl mb-1">💰</div>
+            <div className="text-sm font-bold text-white">Cheap?</div>
+            <div className="text-xs text-slate-400">Low API cost</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+            <div className="text-2xl mb-1">🚀</div>
+            <div className="text-sm font-bold text-white">Fast?</div>
+            <div className="text-xs text-slate-400">&lt;500ms P95</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+            <div className="text-2xl mb-1">🧠</div>
+            <div className="text-sm font-bold text-white">Reasoning?</div>
+            <div className="text-xs text-slate-400">Classification/Logic</div>
+          </div>
+        </div>
+        <p className="text-amber-400 text-sm mt-4">
+          ⚠️ If any answer is NO, it belongs in OS, not SIVA.
+        </p>
+      </div>
+
+      {/* Ownership Table */}
+      <div className="bg-slate-800/50 rounded-xl p-6">
+        <h3 className="font-bold mb-4 text-white">📋 Service Ownership Matrix</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b border-slate-700">
+                <th className="py-2 px-4 text-slate-400">Service</th>
+                <th className="py-2 px-4 text-slate-400">Owner</th>
+                <th className="py-2 px-4 text-slate-400">Reason</th>
+              </tr>
+            </thead>
+            <tbody className="text-slate-300">
+              <tr className="border-b border-slate-800">
+                <td className="py-2 px-4">Discovery Pool</td>
+                <td className="py-2 px-4 text-blue-400">OS</td>
+                <td className="py-2 px-4">Mechanical, expensive, async</td>
+              </tr>
+              <tr className="border-b border-slate-800">
+                <td className="py-2 px-4">Discovery Crawler</td>
+                <td className="py-2 px-4 text-blue-400">OS</td>
+                <td className="py-2 px-4">Background job, tenant-level</td>
+              </tr>
+              <tr className="border-b border-slate-800">
+                <td className="py-2 px-4">Enrichment</td>
+                <td className="py-2 px-4 text-blue-400">OS</td>
+                <td className="py-2 px-4">External API calls, caching</td>
+              </tr>
+              <tr className="border-b border-slate-800">
+                <td className="py-2 px-4">Lead Assignment</td>
+                <td className="py-2 px-4 text-blue-400">OS</td>
+                <td className="py-2 px-4">State management, collision prevention</td>
+              </tr>
+              <tr className="border-b border-slate-800">
+                <td className="py-2 px-4">Scoring (QTLE)</td>
+                <td className="py-2 px-4 text-emerald-400">SIVA</td>
+                <td className="py-2 px-4">Stateless, fast, reasoning</td>
+              </tr>
+              <tr className="border-b border-slate-800">
+                <td className="py-2 px-4">Edge Cases</td>
+                <td className="py-2 px-4 text-emerald-400">SIVA</td>
+                <td className="py-2 px-4">Classification logic</td>
+              </tr>
+              <tr className="border-b border-slate-800">
+                <td className="py-2 px-4">Outreach Drafting</td>
+                <td className="py-2 px-4 text-emerald-400">SIVA</td>
+                <td className="py-2 px-4">Reasoning, personalization</td>
+              </tr>
+              <tr>
+                <td className="py-2 px-4">Next-Best-Action</td>
+                <td className="py-2 px-4 text-emerald-400">SIVA</td>
+                <td className="py-2 px-4">Decision logic</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SIVAKernelDiagram() {
   return (
     <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
-      <h2 className="text-2xl font-bold mb-6">SIVA OS Kernel Architecture</h2>
+      <h2 className="text-2xl font-bold mb-6">SIVA Intelligence Service</h2>
 
       {/* ASCII Diagram */}
       <div className="bg-slate-950 rounded-xl p-6 font-mono text-sm overflow-x-auto mb-8">
@@ -1357,7 +1549,7 @@ function SIVAKernelDiagram() {
           { name: 'Context Engine', desc: 'Provides situational awareness - who is the user, what vertical, what region, what entity target', color: 'emerald' },
           { name: 'Persona Engine', desc: 'Loads role-specific behavior - tone, vocabulary, boundaries, regulatory awareness', color: 'cyan' },
           { name: 'Evidence Engine', desc: 'Ensures every claim is backed by data - no hallucinations, only verified facts', color: 'purple' },
-          { name: 'Tools Engine', desc: '12 atomic SIVA tools for scoring, ranking, outreach, enrichment', color: 'orange' },
+          { name: 'Tools Engine', desc: 'Stateless SIVA tools for scoring, ranking, outreach, classification (NOT discovery/enrichment)', color: 'orange' },
           { name: 'Safety & Guardrail', desc: 'Prevents wrong outputs - compliance rules, banned topics, persona boundaries', color: 'red' },
           { name: 'Execution & Memory', desc: 'Renders output, logs decisions, updates learning, trains future models', color: 'blue' },
         ].map((comp) => (
