@@ -630,6 +630,10 @@ async function callOSDiscovery(): Promise<OSDiscoveryResponse> {
           region: context.regionCountry || 'UAE',
         },
 
+        // Speed optimization: Use cached mode with instant scoring for fast first results
+        // Live discovery is slow (2-3 min) due to SerpAPI + AI extraction
+        mode: 'cached', // 'cached' = fast from DB, 'live' = fresh from SERP (slow)
+
         // Legacy fields (still supported)
         region_code: context.regionCountry || 'UAE',
         vertical_id: context.vertical,
@@ -642,6 +646,7 @@ async function callOSDiscovery(): Promise<OSDiscoveryResponse> {
           minQuality: 0,
           profile,
           sub_vertical: context.subVertical,
+          speed: 'balanced', // 'instant' | 'balanced' | 'thorough' - balanced scores top 5
         },
       }),
     });

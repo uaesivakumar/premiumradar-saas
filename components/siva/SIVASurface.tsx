@@ -372,19 +372,6 @@ export function SIVASurface() {
 
       {/* SIVA Heartbeat - Always visible state indicator */}
       <SIVAHeartbeat state={state} />
-
-      {/* DEBUG OVERLAY - TEMPORARY - Remove after fix confirmed */}
-      <SIVADebugPanel
-        state={state}
-        hasContent={hasContent}
-        resultCount={outputObjects.length}
-        messageCount={messages.length}
-        isProactiveLoading={isProactiveLoading}
-        showThinking={showThinking}
-        showResults={showResults}
-        showEmpty={showEmpty}
-        renderMode={showThinking ? 'placeholder' : showResults ? 'results' : showEmpty ? 'empty' : 'unknown'}
-      />
     </div>
   );
 }
@@ -598,50 +585,6 @@ function getSmartSuggestions(
     { label: 'Find new opportunities', query: 'Find employers with strong hiring signals' },
     { label: 'Show my best prospects', query: 'Rank employers by payroll opportunity' },
   ];
-}
-
-// DEBUG PANEL - TEMPORARY - Shows live state values
-function SIVADebugPanel({
-  state,
-  hasContent,
-  resultCount,
-  messageCount,
-  isProactiveLoading,
-  showThinking,
-  showResults,
-  showEmpty,
-  renderMode,
-}: {
-  state: string;
-  hasContent: boolean;
-  resultCount: number;
-  messageCount: number;
-  isProactiveLoading: boolean;
-  showThinking: boolean;
-  showResults: boolean;
-  showEmpty: boolean;
-  renderMode: string;
-}) {
-  return (
-    <div className="fixed top-4 left-4 z-[9999] bg-black/90 border border-yellow-500 rounded-lg p-3 font-mono text-xs text-white shadow-xl">
-      <div className="text-yellow-400 font-bold mb-2">DEBUG</div>
-      <div className="space-y-1">
-        <div>State: <span className="text-cyan-400">{state.toUpperCase()}</span></div>
-        <div>HasContent: <span className={hasContent ? 'text-green-400' : 'text-red-400'}>{hasContent.toString()}</span></div>
-        <div>ResultCount: <span className="text-cyan-400">{resultCount}</span></div>
-        <div>MessageCount: <span className="text-cyan-400">{messageCount}</span></div>
-        <div>ProactiveLoading: <span className={isProactiveLoading ? 'text-yellow-400' : 'text-gray-500'}>{isProactiveLoading.toString()}</span></div>
-        <div className="border-t border-white/20 pt-1 mt-1">
-          <div>showThinking: <span className={showThinking ? 'text-yellow-400' : 'text-gray-500'}>{showThinking.toString()}</span></div>
-          <div>showResults: <span className={showResults ? 'text-green-400' : 'text-gray-500'}>{showResults.toString()}</span></div>
-          <div>showEmpty: <span className={showEmpty ? 'text-blue-400' : 'text-gray-500'}>{showEmpty.toString()}</span></div>
-        </div>
-        <div className="border-t border-white/20 pt-1 mt-1">
-          <div>RenderMode: <span className="text-pink-400 font-bold">{renderMode.toUpperCase()}</span></div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // SIVA Heartbeat - Always visible state indicator (bottom-right)
