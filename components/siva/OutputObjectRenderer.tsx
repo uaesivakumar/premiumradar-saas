@@ -180,18 +180,42 @@ export function OutputObjectRenderer({ object }: OutputObjectRendererProps) {
   );
 }
 
-// Discovery Content - AI-Native UX with Progressive Loading + S221 Feedback
+// S224-S227: Decision Mode Discovery Content
+// - S224: ONE primary recommendation with directive language
+// - S226: Aggressive shortlist (Top 5 only)
+// - S227: Score explainability (Top 3 drivers)
+// - S225: Visible learning feedback
 function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { submitQuery } = useSIVAStore();
 
-  // S221: Feedback state - SAAS_EVENT_ONLY
+  // S221/S225: Feedback state with learning acknowledgment
   const [feedbackMap, setFeedbackMap] = useState<Map<string, 'LIKE' | 'DISLIKE' | 'SAVE'>>(new Map());
+  const [learningMessage, setLearningMessage] = useState<string | null>(null);
   const osStore = useDiscoveryStore();
 
+  // S224: Primary recommendation from OS Decision Mode
+  const primaryRecommendation = data.primaryRecommendation as {
+    company: string;
+    companyId: string;
+    industry: string;
+    score: number;
+    whyNow: string[];
+    confidence: number;
+    nextAction: string;
+    scoreDrivers: Array<{
+      driver: string;
+      detail: string;
+      impact: 'high' | 'medium' | 'low';
+      personalized?: boolean;
+    }>;
+  } | null;
+
+  // S226: Shortlist (Top 5 only)
   const companies = data.companies as Array<{
     name: string;
+    companyId?: string;
     industry: string;
     score: number;
     grade?: 'hot' | 'warm' | 'cold';
@@ -201,7 +225,14 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
     size?: string;
     source?: string;
     sourceUrl?: string;
+    headcount?: number;
   }>;
+
+  // S226: Collapsed count
+  const collapsedCount = (data.collapsedCount as number) || 0;
+  const collapsedMessage = (data.collapsedMessage as string) || null;
+  const decisionMode = (data.decisionMode as boolean) || false;
+  const sessionId = (data.sessionId as string) || null;
 
   // Enhanced grade display with animations
   const getGradeDisplay = (grade?: string, score?: number): { label: string; color: string; bgColor: string; glow: string; icon: string } => {
@@ -254,9 +285,10 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
     submitQuery(`Generate outreach email for ${companyName} based on their ${signal.toLowerCase()}`);
   };
 
-  // S221: Handle feedback - SAAS_EVENT_ONLY
+  // S221/S225: Handle feedback with visible learning acknowledgment
   const handleFeedback = useCallback(async (
     companyName: string,
+    companyId: string | undefined,
     action: 'LIKE' | 'DISLIKE' | 'SAVE',
     company: { industry?: string; size?: string }
   ) => {
@@ -265,30 +297,211 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
       const next = new Map(prev);
       if (prev.get(companyName) === action) {
         next.delete(companyName); // Toggle off
+        setLearningMessage(null);
       } else {
         next.set(companyName, action);
+        // S225: Visible learning - show what SIVA learned
+        const learningMessages: Record<string, string> = {
+          LIKE: `Noted. Looking for more ${company.industry || 'similar'} companies.`,
+          DISLIKE: `Got it. Deprioritizing ${company.industry || 'similar'} patterns.`,
+          SAVE: `Saved ${companyName}. You can find it in your leads.`,
+        };
+        setLearningMessage(learningMessages[action]);
+        // Clear message after 3 seconds
+        setTimeout(() => setLearningMessage(null), 3000);
       }
       return next;
     });
 
     // SAAS_EVENT_ONLY: Submit to OS intelligence router
     try {
-      await osStore.submitFeedback(companyName, action, {
-        company_name: companyName,
-        industry: company.industry,
-        size_bucket: company.size,
-      });
+      if (sessionId && companyId) {
+        await fetch('/api/os/intelligence/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId,
+            company_id: companyId,
+            action,
+            metadata: {
+              company_name: companyName,
+              industry: company.industry,
+              size_bucket: company.size,
+            },
+          }),
+        });
+      }
     } catch (err) {
       console.error('[Feedback] OS submission failed:', err);
     }
-  }, [osStore]);
+  }, [sessionId]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* S225: Visible Learning Message */}
+      {learningMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="p-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg border border-blue-500/30"
+        >
+          <p className="text-sm text-blue-300 flex items-center gap-2">
+            <Lightbulb className="w-4 h-4" />
+            {learningMessage}
+          </p>
+        </motion.div>
+      )}
+
+      {/* S224: Primary Recommendation Card - THE ONE */}
+      {decisionMode && primaryRecommendation && (
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          className="bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-red-500/10 rounded-2xl border border-amber-500/30 overflow-hidden shadow-[0_0_30px_rgba(251,146,60,0.15)]"
+        >
+          {/* Header */}
+          <div className="px-4 py-3 bg-gradient-to-r from-amber-500/30 to-transparent border-b border-amber-500/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-amber-400" />
+                <span className="text-sm font-bold text-amber-400 uppercase tracking-wide">Top Recommendation</span>
+              </div>
+              <span className="text-xs text-amber-300/70">
+                {Math.round(primaryRecommendation.confidence * 100)}% confidence
+              </span>
+            </div>
+          </div>
+
+          {/* Company Info */}
+          <div className="p-4">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-xl">
+                  {primaryRecommendation.company.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">{primaryRecommendation.company}</h3>
+                  <p className="text-sm text-gray-400">{primaryRecommendation.industry}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-3xl font-bold text-amber-400">{primaryRecommendation.score}</span>
+                <p className="text-xs text-gray-500">Opportunity Score</p>
+              </div>
+            </div>
+
+            {/* S224: Why Now - Directive Language */}
+            <div className="mb-4 p-3 bg-white/5 rounded-xl">
+              <p className="text-xs text-amber-400 font-medium mb-2 uppercase tracking-wide">Why Now</p>
+              <ul className="space-y-1.5">
+                {primaryRecommendation.whyNow.map((reason, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-200">
+                    <TrendingUp className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* S227: Score Drivers */}
+            {primaryRecommendation.scoreDrivers && primaryRecommendation.scoreDrivers.length > 0 && (
+              <div className="mb-4 p-3 bg-white/5 rounded-xl">
+                <p className="text-xs text-purple-400 font-medium mb-2 uppercase tracking-wide">Score Drivers</p>
+                <div className="space-y-2">
+                  {primaryRecommendation.scoreDrivers.map((driver, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        driver.impact === 'high' ? 'bg-green-500/30 text-green-400' :
+                        driver.impact === 'medium' ? 'bg-yellow-500/30 text-yellow-400' :
+                        'bg-gray-500/30 text-gray-400'
+                      }`}>
+                        {driver.impact}
+                      </span>
+                      <div className="flex-1">
+                        <p className={`text-sm font-medium ${driver.personalized ? 'text-purple-300' : 'text-gray-200'}`}>
+                          {driver.personalized && <span className="text-purple-400 mr-1">*</span>}
+                          {driver.driver}
+                        </p>
+                        <p className="text-xs text-gray-500">{driver.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {primaryRecommendation.scoreDrivers.some(d => d.personalized) && (
+                  <p className="text-[10px] text-purple-400 mt-2">* Based on your preferences</p>
+                )}
+              </div>
+            )}
+
+            {/* S224: Next Action - Directive */}
+            <button
+              onClick={() => handleFindContacts(primaryRecommendation.company)}
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold hover:from-amber-400 hover:to-orange-400 transition-all flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Users className="w-5 h-5" />
+              {primaryRecommendation.nextAction}
+            </button>
+
+            {/* Feedback for recommendation */}
+            <div className="flex items-center justify-center gap-3 mt-3 pt-3 border-t border-white/10">
+              <span className="text-xs text-gray-500">Was this helpful?</span>
+              <button
+                onClick={() => handleFeedback(primaryRecommendation.company, primaryRecommendation.companyId, 'LIKE', { industry: primaryRecommendation.industry })}
+                className={`p-2 rounded-lg transition-all ${
+                  feedbackMap.get(primaryRecommendation.company) === 'LIKE'
+                    ? 'bg-green-500/30 text-green-400'
+                    : 'hover:bg-white/10 text-gray-400 hover:text-green-400'
+                }`}
+              >
+                <ThumbsUp className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleFeedback(primaryRecommendation.company, primaryRecommendation.companyId, 'DISLIKE', { industry: primaryRecommendation.industry })}
+                className={`p-2 rounded-lg transition-all ${
+                  feedbackMap.get(primaryRecommendation.company) === 'DISLIKE'
+                    ? 'bg-red-500/30 text-red-400'
+                    : 'hover:bg-white/10 text-gray-400 hover:text-red-400'
+                }`}
+              >
+                <ThumbsDown className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleFeedback(primaryRecommendation.company, primaryRecommendation.companyId, 'SAVE', { industry: primaryRecommendation.industry })}
+                className={`p-2 rounded-lg transition-all ${
+                  feedbackMap.get(primaryRecommendation.company) === 'SAVE'
+                    ? 'bg-yellow-500/30 text-yellow-400'
+                    : 'hover:bg-white/10 text-gray-400 hover:text-yellow-400'
+                }`}
+              >
+                {feedbackMap.get(primaryRecommendation.company) === 'SAVE' ? (
+                  <BookmarkCheck className="w-4 h-4" />
+                ) : (
+                  <Bookmark className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* S226: Shortlist Header (only in decision mode) */}
+      {decisionMode && companies && companies.length > 0 && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-sm font-medium text-gray-300">Also Worth Considering</p>
+          <p className="text-xs text-gray-500">{companies.length} of {(data.totalResults as number) || companies.length}</p>
+        </div>
+      )}
+
+      {/* S226: Shortlist Companies (compact cards) */}
       {companies?.map((company, i) => {
+        // Skip the primary recommendation if it's in the list
+        if (decisionMode && primaryRecommendation && company.name === primaryRecommendation.company) {
+          return null;
+        }
+
         const gradeDisplay = getGradeDisplay(company.grade, company.score);
         const isExpanded = expandedCompany === company.name;
-
         const currentFeedback = feedbackMap.get(company.name);
 
         return (
@@ -297,7 +510,7 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{
-              delay: i * 0.15, // Progressive stagger
+              delay: decisionMode ? 0.3 + i * 0.1 : i * 0.15,
               duration: 0.4,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
@@ -323,10 +536,10 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
                 </div>
               </div>
               <div className="text-right flex items-center gap-3">
-                {/* S221: Feedback Actions - SAAS_EVENT_ONLY */}
+                {/* Feedback Actions */}
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                   <button
-                    onClick={() => handleFeedback(company.name, 'LIKE', company)}
+                    onClick={() => handleFeedback(company.name, company.companyId, 'LIKE', company)}
                     className={`p-1.5 rounded-lg transition-all ${
                       currentFeedback === 'LIKE'
                         ? 'bg-green-500/30 text-green-400'
@@ -337,7 +550,7 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
                     <ThumbsUp className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleFeedback(company.name, 'DISLIKE', company)}
+                    onClick={() => handleFeedback(company.name, company.companyId, 'DISLIKE', company)}
                     className={`p-1.5 rounded-lg transition-all ${
                       currentFeedback === 'DISLIKE'
                         ? 'bg-red-500/30 text-red-400'
@@ -348,7 +561,7 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
                     <ThumbsDown className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleFeedback(company.name, 'SAVE', company)}
+                    onClick={() => handleFeedback(company.name, company.companyId, 'SAVE', company)}
                     className={`p-1.5 rounded-lg transition-all ${
                       currentFeedback === 'SAVE'
                         ? 'bg-yellow-500/30 text-yellow-400'
@@ -442,6 +655,12 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
                       {company.size.toUpperCase()}
                     </span>
                   )}
+                  {company.headcount && (
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      {company.headcount} employees
+                    </span>
+                  )}
                   {company.website && (
                     <a
                       href={company.website}
@@ -460,14 +679,35 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
         );
       })}
 
+      {/* S226: Collapsed Message */}
+      {decisionMode && collapsedCount > 0 && collapsedMessage && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="p-3 bg-white/5 rounded-xl border border-white/10 text-center"
+        >
+          <p className="text-sm text-gray-400">{collapsedMessage}</p>
+          <button
+            onClick={() => submitQuery('Show me more companies')}
+            className="mt-2 text-xs text-blue-400 hover:text-blue-300 hover:underline"
+          >
+            Show more
+          </button>
+        </motion.div>
+      )}
+
       {/* Summary + Live Refresh */}
       <div className="flex items-center justify-between pt-3 border-t border-white/5">
         <p className="text-xs text-gray-500">
-          {data.totalResults as number || companies?.length || 0} companies discovered
+          {decisionMode
+            ? `Showing top ${(companies?.length || 0) + (primaryRecommendation ? 1 : 0)} of ${data.totalResults as number || 0}`
+            : `${data.totalResults as number || companies?.length || 0} companies discovered`
+          }
         </p>
         <div className="flex items-center gap-3">
           <p className="text-xs text-gray-500">
-            Click to expand • AI-powered actions
+            {decisionMode ? 'Decision Mode active' : 'Click to expand'}
           </p>
           <motion.button
             onClick={handleLiveRefresh}

@@ -498,6 +498,48 @@ interface OSDiscoveryResponse {
   profile?: string;
 }
 
+/**
+ * S224-S227: Intelligence Session Response
+ * Decision Mode - ONE recommendation, aggressive shortlisting
+ */
+interface OSIntelligenceResponse {
+  success: boolean;
+  session_id?: string;
+  primary_recommendation?: {
+    company: string;
+    company_id: string;
+    industry?: string;
+    score: number;
+    why_now: string[];
+    confidence: number;
+    next_action: string;
+    score_drivers: Array<{
+      driver: string;
+      detail: string;
+      impact: 'high' | 'medium' | 'low';
+      personalized?: boolean;
+    }>;
+  };
+  shortlist?: Array<{
+    company_id: string;
+    name: string;
+    industry?: string;
+    score: number;
+    signals?: Array<{ type: string; title: string; source?: string }>;
+    headcount?: number;
+    city?: string;
+    domain?: string;
+  }>;
+  total_available?: number;
+  collapsed_count?: number;
+  collapsed_message?: string;
+  config?: {
+    decision_mode: boolean;
+    shortlist_size: number;
+  };
+  error?: string;
+}
+
 interface OSScoreResponse {
   success: boolean;
   data?: {
@@ -591,6 +633,49 @@ function getCanonicalPersonaId(): string {
   }
   // Default to Sales-Rep (2) for SaaS UI users
   return '2';
+}
+
+/**
+ * S224-S227: Call OS Intelligence Session
+ * Decision Mode - ONE recommendation, aggressive shortlisting
+ *
+ * PRD v1.2 COMPLIANT:
+ * - Sends tenant_id, persona_id, request_id (Law 1)
+ * - Returns primary_recommendation + shortlist (not 46-dump)
+ */
+async function callOSIntelligenceSession(leads?: Array<Record<string, unknown>>): Promise<OSIntelligenceResponse> {
+  const context = getSalesContext();
+  const tenantId = getTenantIdFromSession();
+  const personaId = getCanonicalPersonaId();
+
+  console.log('[SIVA→OS] Intelligence Session call:', { vertical: context.vertical, sub_vertical: context.subVertical });
+
+  try {
+    const response = await fetch('/api/os/intelligence/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        persona_id: personaId,
+        vertical: context.vertical || 'banking',
+        sub_vertical: context.subVertical?.replace('-', '_') || 'employee_banking',
+        region_code: context.regionCountry || 'UAE',
+        leads: leads || [],
+      }),
+    });
+
+    const data = await response.json();
+    console.log('[SIVA←OS] Intelligence response:', {
+      success: data.success,
+      hasRecommendation: !!data.primary_recommendation,
+      shortlistCount: data.shortlist?.length || 0,
+      collapsedCount: data.collapsed_count || 0,
+    });
+    return data;
+  } catch (error) {
+    console.error('[SIVA→OS] Intelligence session error:', error);
+    return { success: false, error: 'Intelligence session request failed' };
+  }
 }
 
 /**
@@ -784,18 +869,11 @@ async function generateDiscoveryOutput(query: string, agent: AgentType): Promise
   const context = getSalesContext();
   const regionDisplay = formatRegions(context.regions);
 
-  // Call UPR OS Discovery
-  console.log('[SIVA:Discovery] Calling OS...');
+  // S224-S227: Call OS Discovery first to get companies
+  console.log('[SIVA:Discovery] Step 1: Calling OS Discovery...');
   const osResponse = await callOSDiscovery();
-  console.log('[SIVA:Discovery] OS response received:', {
-    success: osResponse.success,
-    hasData: !!osResponse.data,
-    companies: osResponse.data?.companies?.length || 0,
-    signals: osResponse.data?.signals?.length || 0,
-  });
 
   // STAGING = PRODUCTION: No fallbacks, no fake data
-  // If discovery fails, show the error
   if (!osResponse.success || !osResponse.data) {
     console.log('[SIVA:Discovery] FAIL - no success or no data');
     return {
@@ -805,96 +883,166 @@ async function generateDiscoveryOutput(query: string, agent: AgentType): Promise
   }
 
   const companies = osResponse.data.companies || [];
-  const signals = osResponse.data.signals || [];
+  console.log('[SIVA:Discovery] Step 1 complete:', companies.length, 'companies');
 
-  console.log('[SIVA:Discovery] Extracted:', { companies: companies.length, signals: signals.length });
-
-  // STAGING = PRODUCTION: If OS returns empty, show empty state
-  if (companies.length === 0 && signals.length === 0) {
-    console.log('[SIVA:Discovery] EMPTY - no companies or signals');
+  if (companies.length === 0) {
     return {
       message: `No employers found matching your criteria in ${regionDisplay}. Try adjusting your filters.`,
       objects: [],
     };
   }
 
-  console.log('[SIVA:Discovery] Processing', companies.length, 'real companies from OS');
+  // S224-S227: Call Intelligence Session for Decision Mode
+  console.log('[SIVA:Discovery] Step 2: Calling Intelligence Session for Decision Mode...');
+  const intelligenceResponse = await callOSIntelligenceSession(companies);
 
-  // Sprint 76: Use real SIVA scores from OS response
-  // Companies now come with sivaScores from the backend
-  const scoredCompanies = companies.slice(0, 50).map((company) => {
-    // Use real SIVA scores if available, otherwise fallback to signal-based estimate
-    const sivaScores = company.sivaScores;
-    const hasRealScores = sivaScores && sivaScores.overall !== undefined;
+  // If intelligence session fails, fallback to showing companies without decision mode
+  if (!intelligenceResponse.success) {
+    console.log('[SIVA:Discovery] Intelligence session failed, falling back to basic display');
+    // Fallback to old behavior
+    return generateFallbackDiscoveryOutput(companies, query, agent, context, regionDisplay);
+  }
 
-    return {
-      ...company,
-      // Use real SIVA overall score or fallback
-      score: hasRealScores ? sivaScores.overall : Math.min(100, 40 + (company.signalCount || 1) * 15),
-      // Use real SIVA tier or fallback
-      grade: hasRealScores
-        ? sivaScores.tier?.toLowerCase() || 'warm'
-        : (company.signalCount || 1) >= 3 ? 'hot' : (company.signalCount || 1) >= 2 ? 'warm' : 'cool',
-      // Real SIVA scores for EB display
-      ebScores: hasRealScores ? {
-        'EB Fit': sivaScores.quality || 0,
-        'Hiring Intensity': sivaScores.timing || 0,
-        'Product Fit': sivaScores.productFit || 0,
-        'Overall': sivaScores.overall || 0,
-      } : {},
-      // Additional SIVA intelligence
-      sivaIntelligence: hasRealScores ? {
-        tier: sivaScores.tier,
-        qualityTier: sivaScores.qualityTier,
-        urgency: sivaScores.urgency,
-        recommendedProducts: sivaScores.recommendedProducts || [],
-        reasoning: sivaScores.reasoning || [],
-      } : null,
-    };
+  console.log('[SIVA:Discovery] Decision Mode active:', {
+    recommendation: intelligenceResponse.primary_recommendation?.company,
+    shortlistSize: intelligenceResponse.shortlist?.length || 0,
+    collapsed: intelligenceResponse.collapsed_count || 0,
   });
 
-  console.log('[SIVA] Companies mapped with real scores:', scoredCompanies.filter(c => c.sivaIntelligence).length, 'of', scoredCompanies.length);
+  const recommendation = intelligenceResponse.primary_recommendation;
+  const shortlist = intelligenceResponse.shortlist || [];
+  const collapsedCount = intelligenceResponse.collapsed_count || 0;
 
-  // Sort by score
-  scoredCompanies.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-
-  const topCompany = scoredCompanies[0];
-
-  // Hand-picked language - make it feel curated, not searched
-  const countText = scoredCompanies.length === 1 ? 'One employer stands out'
-    : scoredCompanies.length === 2 ? 'Two employers stand out'
-    : scoredCompanies.length === 3 ? 'Three employers stand out'
-    : `${scoredCompanies.length} employers stand out`;
-
-  const gradeText = topCompany?.grade === 'hot' ? 'a strong hiring surge'
-    : topCompany?.grade === 'warm' ? 'promising hiring activity'
-    : 'growth signals';
+  // S224: Directive message - ONE recommendation, not "X employers stand out"
+  let message: string;
+  if (recommendation) {
+    const whyNow = recommendation.why_now?.[0] || 'strong opportunity signals';
+    message = `Focus on ${recommendation.company}. ${whyNow}. ${recommendation.next_action}.`;
+  } else if (shortlist.length > 0) {
+    message = `${shortlist.length} employers match your criteria. ${shortlist[0].name} leads.`;
+  } else {
+    message = `No high-confidence matches found in ${regionDisplay}.`;
+  }
 
   return {
-    message: `${countText} today for employee banking in ${regionDisplay}. ${topCompany?.name} leads with ${gradeText}.`,
+    message,
     objects: [
       {
         type: 'discovery',
         title: 'Discovery Results',
         data: {
-          companies: scoredCompanies.map(c => ({
+          // S224: Primary recommendation (THE ONE)
+          primaryRecommendation: recommendation ? {
+            company: recommendation.company,
+            companyId: recommendation.company_id,
+            industry: recommendation.industry || 'Technology',
+            score: recommendation.score,
+            whyNow: recommendation.why_now,
+            confidence: recommendation.confidence,
+            nextAction: recommendation.next_action,
+            scoreDrivers: recommendation.score_drivers,
+          } : null,
+
+          // S226: Shortlist (Top 5 only)
+          companies: shortlist.map(c => ({
             name: c.name,
+            companyId: c.company_id,
             industry: c.industry || 'Unknown',
-            score: c.score,
-            grade: c.grade,
+            score: c.score || 0,
+            grade: (c.score || 0) >= 70 ? 'hot' : (c.score || 0) >= 45 ? 'warm' : 'cold',
             signal: c.signals?.[0]?.title || 'Hiring Signal',
             signalType: c.signals?.[0]?.type || 'hiring-expansion',
             source: c.signals?.[0]?.source || '',
             website: c.domain ? `https://${c.domain}` : '',
-            size: c.size || '',
+            size: '',
             city: c.city || 'UAE',
             headcount: c.headcount,
-            ebScores: c.ebScores,
+          })),
+
+          // S226: Collapsed count message
+          collapsedCount,
+          collapsedMessage: collapsedCount > 0
+            ? `${collapsedCount} more available. Ask to see more if needed.`
+            : null,
+
+          // Metadata
+          query,
+          totalResults: intelligenceResponse.total_available || shortlist.length,
+          context: context.subVertical,
+          sessionId: intelligenceResponse.session_id,
+          decisionMode: true, // Flag for UI to know this is decision mode
+          osSource: true,
+        },
+        pinned: false,
+        expanded: true,
+        agent,
+      },
+    ],
+  };
+}
+
+/**
+ * Fallback discovery output when Intelligence Session fails
+ * Uses old behavior of showing all companies
+ */
+function generateFallbackDiscoveryOutput(
+  companies: Array<Record<string, unknown>>,
+  query: string,
+  agent: AgentType,
+  context: ReturnType<typeof getSalesContext>,
+  regionDisplay: string
+): { message: string; objects: PartialOutputObject[] } {
+  const scoredCompanies = companies.slice(0, 50).map((company: Record<string, unknown>) => {
+    const sivaScores = company.sivaScores as Record<string, unknown> | undefined;
+    const hasRealScores = sivaScores && sivaScores.overall !== undefined;
+    const signalCount = (company.signalCount as number) || 1;
+
+    return {
+      ...company,
+      score: hasRealScores ? (sivaScores.overall as number) : Math.min(100, 40 + signalCount * 15),
+      grade: hasRealScores
+        ? ((sivaScores.tier as string)?.toLowerCase() || 'warm')
+        : signalCount >= 3 ? 'hot' : signalCount >= 2 ? 'warm' : 'cool',
+    };
+  });
+
+  scoredCompanies.sort((a, b) => ((b.score as number) ?? 0) - ((a.score as number) ?? 0));
+  const topCompany = scoredCompanies[0] as Record<string, unknown>;
+  const topCompanyName = (topCompany?.name as string) || 'Top company';
+
+  const countText = scoredCompanies.length === 1 ? 'One employer stands out'
+    : scoredCompanies.length <= 3 ? `${scoredCompanies.length} employers stand out`
+    : `${scoredCompanies.length} employers found`;
+
+  const topGrade = topCompany?.grade as string;
+  const gradeText = topGrade === 'hot' ? 'a strong hiring surge'
+    : topGrade === 'warm' ? 'promising hiring activity'
+    : 'growth signals';
+
+  return {
+    message: `${countText} today for employee banking in ${regionDisplay}. ${topCompanyName} leads with ${gradeText}.`,
+    objects: [
+      {
+        type: 'discovery',
+        title: 'Discovery Results',
+        data: {
+          companies: scoredCompanies.map((c: Record<string, unknown>) => ({
+            name: c.name as string,
+            industry: (c.industry as string) || 'Unknown',
+            score: c.score as number,
+            grade: c.grade as string,
+            signal: ((c.signals as Array<{ title: string }>)?.[0]?.title) || 'Hiring Signal',
+            signalType: ((c.signals as Array<{ type: string }>)?.[0]?.type) || 'hiring-expansion',
+            source: ((c.signals as Array<{ source: string }>)?.[0]?.source) || '',
+            website: c.domain ? `https://${c.domain as string}` : '',
+            size: (c.size as string) || '',
+            city: (c.city as string) || 'UAE',
+            headcount: c.headcount as number,
           })),
           query,
           totalResults: scoredCompanies.length,
           context: context.subVertical,
-          profile: osResponse.profile || 'banking_employee',
+          decisionMode: false, // Fallback mode
           osSource: true,
         },
         pinned: false,

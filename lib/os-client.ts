@@ -150,6 +150,31 @@ interface PipelineRequest {
   config?: Record<string, unknown>;
 }
 
+/**
+ * S224-S227: Intelligence Session Request
+ * Decision Mode - ONE recommendation, aggressive shortlisting
+ */
+interface IntelligenceSessionRequest {
+  tenant_id: string;
+  user_id?: string;
+  vertical: string;
+  sub_vertical: string;
+  region_code?: string;
+  filters?: Record<string, unknown>;
+  leads?: Array<Record<string, unknown>>;
+}
+
+/**
+ * S221/S225: Intelligence Feedback Request
+ * Visible learning - immediate acknowledgment
+ */
+interface IntelligenceFeedbackRequest {
+  session_id: string;
+  company_id: string;
+  action: 'LIKE' | 'DISLIKE' | 'SAVE' | 'DISMISS';
+  metadata?: Record<string, unknown>;
+}
+
 interface OSResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -634,6 +659,79 @@ class OSClient {
       timestamp: new Date().toISOString(),
     };
   }
+
+  /**
+   * S224-S227: Intelligence Session - Decision Mode
+   * Returns ONE primary recommendation + Top 5 shortlist
+   *
+   * Response contract:
+   * {
+   *   primary_recommendation: { company, why_now[], confidence, next_action, score_drivers[] },
+   *   shortlist: Company[5],
+   *   collapsed_count: number,
+   *   collapsed_message: string
+   * }
+   */
+  async intelligenceSession(request: IntelligenceSessionRequest): Promise<OSResponse> {
+    return this.circuitBreakers.discovery.execute(
+      async () => {
+        return retryWithBackoff(
+          async () => {
+            const response = await this.client.post('/intelligence/session', request, {
+              headers: this.getContextHeaders(),
+            });
+            return response.data;
+          },
+          { maxRetries: 2, shouldRetry: isRetryableError }
+        );
+      },
+      () => this.getFallbackIntelligenceResponse(request)
+    );
+  }
+
+  /**
+   * S221/S225: Intelligence Feedback - Visible Learning
+   * Records feedback and returns what was learned
+   */
+  async intelligenceFeedback(request: IntelligenceFeedbackRequest): Promise<OSResponse> {
+    return this.circuitBreakers.general.execute(
+      async () => {
+        return retryWithBackoff(
+          async () => {
+            const response = await this.client.post('/intelligence/feedback', request, {
+              headers: this.getContextHeaders(),
+            });
+            return response.data;
+          },
+          { maxRetries: 1, shouldRetry: isRetryableError }
+        );
+      },
+      () => ({
+        success: true,
+        data: { feedback_recorded: true, fallback: true },
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+
+  /**
+   * VS6: Fallback intelligence response
+   */
+  private getFallbackIntelligenceResponse(request: IntelligenceSessionRequest): OSResponse {
+    console.warn('[OS Client] Using fallback intelligence response - OS unavailable');
+    return {
+      success: true,
+      data: {
+        primary_recommendation: null,
+        shortlist: [],
+        total_available: 0,
+        collapsed_count: 0,
+        fallback: true,
+        message: 'Intelligence temporarily unavailable - please try again later',
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
 
 // Singleton instance
@@ -652,5 +750,7 @@ export type {
   RankRequest,
   OutreachRequest,
   PipelineRequest,
+  IntelligenceSessionRequest,
+  IntelligenceFeedbackRequest,
   OSResponse,
 };
