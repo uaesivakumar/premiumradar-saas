@@ -376,7 +376,19 @@ export function SIVASurface() {
   );
 }
 
-// Simple Loading State - Clean and reliable
+// Engaging tips for loading state
+const LOADING_TIPS = [
+  { emoji: '💡', tip: 'Companies with recent funding rounds are 3x more likely to expand payroll' },
+  { emoji: '📊', tip: 'DIFC-based companies typically have 40% larger average employee counts' },
+  { emoji: '🎯', tip: 'HR Directors respond 2x better to personalized outreach vs templates' },
+  { emoji: '⚡', tip: 'Follow up within 48 hours of a hiring signal for best conversion' },
+  { emoji: '🏢', tip: 'New office openings = immediate need for local banking setup' },
+  { emoji: '📈', tip: 'Companies in growth mode often consolidate payroll to one provider' },
+  { emoji: '🤝', tip: 'Reference the specific hiring signal in your outreach for credibility' },
+  { emoji: '🔥', tip: 'Series B+ funded companies expand payroll 60% faster than bootstrapped' },
+];
+
+// Simple Loading State with Engaging Tips
 function SIVAThinkingState({
   regions,
   primaryColor,
@@ -385,6 +397,26 @@ function SIVAThinkingState({
   primaryColor: string;
 }) {
   const regionText = regions.length > 0 ? regions.join(', ') : 'UAE';
+  const [tipIndex, setTipIndex] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Rotate tips every 4 seconds
+  useEffect(() => {
+    const tipInterval = setInterval(() => {
+      setTipIndex((prev) => (prev + 1) % LOADING_TIPS.length);
+    }, 4000);
+
+    const timerInterval = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+
+    return () => {
+      clearInterval(tipInterval);
+      clearInterval(timerInterval);
+    };
+  }, []);
+
+  const currentTip = LOADING_TIPS[tipIndex];
 
   return (
     <motion.div
@@ -426,34 +458,56 @@ function SIVAThinkingState({
         in {regionText}
       </p>
 
-      {/* Simple loading dots */}
-      <div className="flex gap-1">
-        {[0, 1, 2].map((i) => (
-          <motion.div
+      {/* Progress indicator */}
+      <div className="flex items-center gap-2 mb-6">
+        <div className="flex gap-1">
+          {[0, 1, 2].map((i) => (
+            <motion.div
+              key={i}
+              className="w-2 h-2 rounded-full bg-white/40"
+              animate={{
+                scale: [1, 1.5, 1],
+                opacity: [0.4, 1, 0.4],
+              }}
+              transition={{
+                duration: 1,
+                repeat: Infinity,
+                delay: i * 0.2,
+              }}
+            />
+          ))}
+        </div>
+        <span className="text-xs text-gray-500 font-mono">{elapsedSeconds}s</span>
+      </div>
+
+      {/* Rotating Tips - Value during wait */}
+      <motion.div
+        key={tipIndex}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        className="max-w-md mx-auto p-4 bg-white/5 rounded-xl border border-white/10"
+      >
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">{currentTip.emoji}</span>
+          <div className="text-left">
+            <p className="text-xs text-gray-500 mb-1">Did you know?</p>
+            <p className="text-sm text-gray-300">{currentTip.tip}</p>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Tip counter */}
+      <div className="flex gap-1 mt-4">
+        {LOADING_TIPS.map((_, i) => (
+          <div
             key={i}
-            className="w-2 h-2 rounded-full bg-white/40"
-            animate={{
-              scale: [1, 1.5, 1],
-              opacity: [0.4, 1, 0.4],
-            }}
-            transition={{
-              duration: 1,
-              repeat: Infinity,
-              delay: i * 0.2,
-            }}
+            className={`w-1.5 h-1.5 rounded-full transition-all ${
+              i === tipIndex ? 'bg-white/60 w-3' : 'bg-white/20'
+            }`}
           />
         ))}
       </div>
-
-      {/* Anticipation */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 2 }}
-        className="mt-8 text-gray-400 text-sm italic"
-      >
-        Surfacing employers worth your time...
-      </motion.p>
     </motion.div>
   );
 }

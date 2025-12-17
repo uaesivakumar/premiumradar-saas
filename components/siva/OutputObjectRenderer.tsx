@@ -175,9 +175,10 @@ export function OutputObjectRenderer({ object }: OutputObjectRendererProps) {
   );
 }
 
-// Discovery Content - AI-Native UX
+// Discovery Content - AI-Native UX with Progressive Loading
 function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { submitQuery } = useSIVAStore();
 
   const companies = data.companies as Array<{
@@ -193,12 +194,46 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
     sourceUrl?: string;
   }>;
 
-  // Get label and colors from backend-provided grade
-  const getGradeDisplay = (grade?: string): { label: string; color: string; bgColor: string } => {
-    switch (grade) {
-      case 'hot': return { label: 'Hot Lead', color: 'text-red-400', bgColor: 'bg-red-500/20' };
-      case 'warm': return { label: 'Warm Lead', color: 'text-orange-400', bgColor: 'bg-orange-500/20' };
-      default: return { label: 'New Lead', color: 'text-blue-400', bgColor: 'bg-blue-500/20' };
+  // Enhanced grade display with animations
+  const getGradeDisplay = (grade?: string, score?: number): { label: string; color: string; bgColor: string; glow: string; icon: string } => {
+    // Use score to determine tier if grade not provided
+    const tier = grade || (score && score >= 70 ? 'hot' : score && score >= 45 ? 'warm' : 'cold');
+
+    switch (tier) {
+      case 'hot':
+        return {
+          label: 'Hot Lead',
+          color: 'text-red-400',
+          bgColor: 'bg-gradient-to-r from-red-500/30 to-orange-500/20',
+          glow: 'shadow-[0_0_15px_rgba(239,68,68,0.3)]',
+          icon: '🔥'
+        };
+      case 'warm':
+        return {
+          label: 'Warm Lead',
+          color: 'text-orange-400',
+          bgColor: 'bg-gradient-to-r from-orange-500/25 to-yellow-500/15',
+          glow: 'shadow-[0_0_10px_rgba(251,146,60,0.2)]',
+          icon: '⚡'
+        };
+      default:
+        return {
+          label: 'New Lead',
+          color: 'text-blue-400',
+          bgColor: 'bg-blue-500/20',
+          glow: '',
+          icon: '💡'
+        };
+    }
+  };
+
+  // Handle live refresh
+  const handleLiveRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await submitQuery('Find employers with strong hiring signals in UAE using live data');
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 2000);
     }
   };
 
@@ -213,16 +248,20 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
   return (
     <div className="space-y-3">
       {companies?.map((company, i) => {
-        const gradeDisplay = getGradeDisplay(company.grade);
+        const gradeDisplay = getGradeDisplay(company.grade, company.score);
         const isExpanded = expandedCompany === company.name;
 
         return (
           <motion.div
             key={company.name}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="bg-white/5 rounded-xl overflow-hidden hover:bg-white/[0.07] transition-all"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{
+              delay: i * 0.15, // Progressive stagger
+              duration: 0.4,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }}
+            className={`bg-white/5 rounded-xl overflow-hidden hover:bg-white/[0.07] transition-all ${gradeDisplay.glow}`}
           >
             {/* Company Header - Always Visible */}
             <div
@@ -230,9 +269,14 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
               onClick={() => setExpandedCompany(isExpanded ? null : company.name)}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: i * 0.15 + 0.2, type: 'spring', stiffness: 200 }}
+                  className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold"
+                >
                   {company.name.charAt(0)}
-                </div>
+                </motion.div>
                 <div>
                   <p className="font-medium text-white">{company.name}</p>
                   <p className="text-xs text-gray-500">{company.industry}</p>
@@ -243,12 +287,18 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
                   <TrendingUp className="w-3 h-3 text-green-400" />
                   <span className="text-sm text-gray-400">{company.signal}</span>
                 </div>
-                <div className="flex flex-col items-end">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${gradeDisplay.bgColor} ${gradeDisplay.color} font-medium`}>
+                <motion.div
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.15 + 0.3 }}
+                  className="flex flex-col items-end"
+                >
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${gradeDisplay.bgColor} ${gradeDisplay.color} font-medium flex items-center gap-1`}>
+                    <span>{gradeDisplay.icon}</span>
                     {gradeDisplay.label}
                   </span>
                   <span className="text-xs text-gray-500 mt-0.5">Score: {company.score}</span>
-                </div>
+                </motion.div>
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
               </div>
             </div>
@@ -330,14 +380,43 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
         );
       })}
 
-      {/* Summary */}
-      <div className="flex items-center justify-between pt-2 border-t border-white/5">
+      {/* Summary + Live Refresh */}
+      <div className="flex items-center justify-between pt-3 border-t border-white/5">
         <p className="text-xs text-gray-500">
           {data.totalResults as number || companies?.length || 0} companies discovered
         </p>
-        <p className="text-xs text-gray-500">
-          Click to expand • AI-powered actions
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-gray-500">
+            Click to expand • AI-powered actions
+          </p>
+          <motion.button
+            onClick={handleLiveRefresh}
+            disabled={isRefreshing}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              isRefreshing
+                ? 'bg-blue-500/20 text-blue-400 cursor-wait'
+                : 'bg-gradient-to-r from-purple-500/20 to-blue-500/20 text-purple-400 hover:from-purple-500/30 hover:to-blue-500/30'
+            }`}
+          >
+            {isRefreshing ? (
+              <>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full"
+                />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <Search className="w-3 h-3" />
+                Live Refresh
+              </>
+            )}
+          </motion.button>
+        </div>
       </div>
     </div>
   );
