@@ -555,20 +555,82 @@ interface OSOutreachResponse {
 }
 
 /**
+ * Generate a unique request ID for OS API calls
+ * PRD v1.2 §2: Required for envelope creation
+ */
+function generateClientRequestId(): string {
+  return `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Get tenant ID from local storage or session
+ * PRD v1.2 §2: Required for envelope creation
+ */
+function getTenantIdFromSession(): string {
+  // Try localStorage first (set during login)
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('tenant_id');
+    if (stored) return stored;
+  }
+  // Fallback to default (will be replaced by session in production)
+  return '00000000-0000-0000-0000-000000000001';
+}
+
+/**
+ * Get canonical persona ID for current user
+ * PRD v1.2 §3.2: Canonical Personas (1-7)
+ * SaaS UI users default to persona 2 (Sales-Rep)
+ */
+function getCanonicalPersonaId(): string {
+  // Try localStorage first (set during login based on role)
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('persona_id');
+    if (stored && ['1', '2', '3', '4', '5', '6', '7'].includes(stored)) {
+      return stored;
+    }
+  }
+  // Default to Sales-Rep (2) for SaaS UI users
+  return '2';
+}
+
+/**
  * Call UPR OS Discovery
  * REPLACES: /api/enrichment/search
+ *
+ * PRD v1.2 COMPLIANT:
+ * - Sends tenant_id, persona_id, request_id (Law 1)
+ * - Uses sales_context for envelope creation
+ * - Receives interaction_id for replay (Law 5)
  */
 async function callOSDiscovery(): Promise<OSDiscoveryResponse> {
   const context = getSalesContext();
   const profile = getOSProfile();
 
-  console.log('[SIVA→OS] Discovery call with profile:', profile);
+  // PRD v1.2 §2: Required fields for sealed context envelope
+  const tenantId = getTenantIdFromSession();
+  const personaId = getCanonicalPersonaId();
+  const requestId = generateClientRequestId();
+
+  console.log('[SIVA→OS] Discovery call:', { profile, personaId, requestId: requestId.slice(0, 20) });
 
   try {
     const response = await fetch('/api/os/discovery', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        // PRD v1.2 §2: Required for envelope creation
+        tenant_id: tenantId,
+        persona_id: personaId,
+        request_id: requestId,
+
+        // PRD v1.2 §2: Structured sales context for envelope
+        sales_context: {
+          vertical: context.vertical || 'banking',
+          sub_vertical: context.subVertical || 'employee_banking',
+          region: context.regionCountry || 'UAE',
+        },
+
+        // Legacy fields (still supported)
         region_code: context.regionCountry || 'UAE',
         vertical_id: context.vertical,
         industry: 'banking',
@@ -588,9 +650,10 @@ async function callOSDiscovery(): Promise<OSDiscoveryResponse> {
     console.log('[SIVA←OS] Discovery response:', {
       success: data.success,
       error: data.error,
-      signalCount: data.data?.signals?.length || 0,
       companyCount: data.data?.companies?.length || 0,
-      hasData: !!data.data
+      // PRD v1.2 §7: Replay info
+      interactionId: data.data?.replay?.interaction_id,
+      hasReplayInfo: !!data.data?.replay,
     });
     return data;
   } catch (error) {
