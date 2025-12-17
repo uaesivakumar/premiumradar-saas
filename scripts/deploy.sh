@@ -27,7 +27,46 @@ echo "=========================================="
 echo "Deploying PremiumRadar SaaS ($ENV)"
 echo "=========================================="
 
-# Step 1: Build the image
+# ============================================
+# PRE-DEPLOYMENT CHECKS
+# ============================================
+echo ""
+echo "Running pre-deployment checks..."
+
+# Check we're in the right directory
+if [ ! -f "package.json" ] || [ ! -d "app" ]; then
+  echo "ERROR: Must run from premiumradar-saas root directory"
+  echo "Current directory: $(pwd)"
+  exit 1
+fi
+
+# Check required secrets exist
+REQUIRED_SECRETS="PR_OS_TOKEN DATABASE_URL SUPER_ADMIN_EMAILS SUPER_ADMIN_SECRET SUPER_ADMIN_SESSION_KEY"
+echo "Verifying secrets in Secret Manager..."
+for secret in $REQUIRED_SECRETS; do
+  if ! gcloud secrets describe $secret --project=$PROJECT &>/dev/null; then
+    echo "ERROR: Secret not found: $secret"
+    exit 1
+  fi
+done
+echo "All secrets verified."
+
+echo ""
+echo "Pre-deployment checks PASSED"
+echo ""
+
+# ============================================
+# SAVE CURRENT STATE FOR ROLLBACK
+# ============================================
+echo "Saving current revision for rollback..."
+PREVIOUS_REVISION=$(gcloud run services describe $SERVICE --region=$REGION --format="value(status.traffic[0].revisionName)" 2>/dev/null || echo "")
+if [ -n "$PREVIOUS_REVISION" ]; then
+  echo "Previous revision: $PREVIOUS_REVISION"
+fi
+
+# ============================================
+# BUILD
+# ============================================
 echo ""
 echo "Building Docker image..."
 gcloud builds submit --region=$REGION --tag=$IMAGE:latest .
