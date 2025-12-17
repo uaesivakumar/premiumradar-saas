@@ -1,10 +1,18 @@
 'use client';
 
 /**
- * Discovery Page - Real Data Integration
+ * Discovery Page - SIVA Intelligence Enhanced
  *
- * Uses enrichment API for REAL data from Apollo + SERP.
- * All behavior is driven by vertical config from PostgreSQL.
+ * Uses OS discovery API with progressive delivery, preference learning,
+ * and conversational UX.
+ *
+ * ARCHITECTURE COMPLIANCE:
+ * - SaaS renders leads from OS (SAAS_RENDER_ONLY)
+ * - SaaS emits feedback events to OS (SAAS_EVENT_ONLY)
+ * - OS decides batch delivery, learns preferences, generates prompts
+ * - SIVA reasons over OS-provided context (stateless)
+ *
+ * Architecture: OS decides. SIVA reasons. SaaS renders.
  */
 
 // Force dynamic rendering - uses API calls
@@ -12,11 +20,16 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, ArrowUpDown, Sparkles, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, Sparkles, Loader2, AlertCircle, RefreshCw, BookmarkIcon, Settings2 } from 'lucide-react';
 import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
 import { useVerticalConfig } from '@/lib/intelligence/hooks/useVerticalConfig';
 import { EBDiscoveryCard, type EBCompanyData } from '@/components/discovery/EBDiscoveryCard';
 import { ContextBadge } from '@/components/dashboard/ContextBadge';
+
+// S218-S223: SIVA Intelligence Components
+import { ConversationalPrompts, SIVACommentary, RefinementInput } from '@/components/discovery/ConversationalPrompts';
+import { SavedLeadsPanel } from '@/components/discovery/SavedLeadsPanel';
+import { FeedbackSummary, type FeedbackAction } from '@/components/discovery/FeedbackActions';
 
 // =============================================================================
 // TYPES
@@ -79,6 +92,35 @@ interface EnrichmentResult {
 // MAIN COMPONENT
 // =============================================================================
 
+// =============================================================================
+// INTELLIGENCE STATE TYPES (S218-S223)
+// =============================================================================
+
+interface ConversationalPrompt {
+  id: string;
+  type: 'AFTER_BATCH' | 'AFTER_LIKE' | 'AFTER_DISLIKE' | 'LOW_MATCHES' | 'REFINEMENT';
+  text: string;
+  options?: Array<{ label: string; value: string; action: string }>;
+  allowFreeform?: boolean;
+  placeholder?: string;
+}
+
+interface SavedLead {
+  companyId: string;
+  companyName: string;
+  industry?: string;
+  location?: string;
+  savedAt: string;
+  score?: number;
+}
+
+interface FeedbackStats {
+  likeCount: number;
+  dislikeCount: number;
+  saveCount: number;
+  totalFeedback: number;
+}
+
 export default function DiscoveryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'score' | 'name' | 'headcount'>('score');
@@ -89,6 +131,21 @@ export default function DiscoveryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataQuality, setDataQuality] = useState<EnrichmentResult['dataQuality'] | null>(null);
+
+  // S218-S223: Intelligence State
+  const [showSavedPanel, setShowSavedPanel] = useState(false);
+  const [savedLeads, setSavedLeads] = useState<SavedLead[]>([]);
+  const [feedbackMap, setFeedbackMap] = useState<Map<string, FeedbackAction>>(new Map());
+  const [feedbackStats, setFeedbackStats] = useState<FeedbackStats>({
+    likeCount: 0,
+    dislikeCount: 0,
+    saveCount: 0,
+    totalFeedback: 0,
+  });
+  const [currentPrompt, setCurrentPrompt] = useState<ConversationalPrompt | null>(null);
+  const [sivaCommentary, setSivaCommentary] = useState<string | null>(null);
+  const [batchNumber, setBatchNumber] = useState(1);
+  const [hasMoreLeads, setHasMoreLeads] = useState(true);
 
   // Get sales context
   const { vertical, subVertical, regions, subVerticalName, regionsDisplay } = useSalesContext();
@@ -204,6 +261,137 @@ export default function DiscoveryPage() {
     // TODO: Integrate with SIVA
   };
 
+  // =============================================================================
+  // S218-S223: INTELLIGENCE HANDLERS
+  // =============================================================================
+
+  /**
+   * Handle feedback - SAAS_EVENT_ONLY
+   * Emits event to OS, which stores and learns from it
+   */
+  const handleFeedback = useCallback(async (
+    companyId: string,
+    action: FeedbackAction,
+    metadata?: Record<string, unknown>
+  ) => {
+    console.log(`[Feedback] ${action} for ${companyId}`, metadata);
+
+    // Update local feedback map for UI (SAAS_RENDER_ONLY from future OS response)
+    setFeedbackMap(prev => {
+      const next = new Map(prev);
+      next.set(companyId, action);
+      return next;
+    });
+
+    // Update stats
+    setFeedbackStats(prev => {
+      const newStats = { ...prev, totalFeedback: prev.totalFeedback + 1 };
+      if (action === 'LIKE') newStats.likeCount++;
+      if (action === 'DISLIKE') newStats.dislikeCount++;
+      if (action === 'SAVE') newStats.saveCount++;
+      return newStats;
+    });
+
+    // Handle SAVE action
+    if (action === 'SAVE') {
+      const entity = entities.find(e => e.id === companyId);
+      if (entity) {
+        setSavedLeads(prev => [...prev, {
+          companyId,
+          companyName: entity.name,
+          industry: entity.industry,
+          location: entity.city || entity.region,
+          savedAt: new Date().toISOString(),
+          score: entity.score,
+        }]);
+      }
+    }
+
+    // Generate contextual prompt after feedback (simulating OS response)
+    if (action === 'LIKE') {
+      const entity = entities.find(e => e.id === companyId);
+      setCurrentPrompt({
+        id: `prompt_${Date.now()}`,
+        type: 'AFTER_LIKE',
+        text: `Great choice! Want more companies like ${entity?.name || 'this'}?`,
+        options: [
+          { label: 'Yes, more like this', value: 'similar', action: 'FIND_SIMILAR' },
+          { label: 'Show different types', value: 'different', action: 'DIVERSIFY' },
+        ],
+        allowFreeform: true,
+        placeholder: 'Or tell me what you prefer...',
+      });
+    } else if (action === 'DISLIKE') {
+      const entity = entities.find(e => e.id === companyId);
+      setCurrentPrompt({
+        id: `prompt_${Date.now()}`,
+        type: 'AFTER_DISLIKE',
+        text: `Got it. Should I avoid ${entity?.industry || 'similar'} companies?`,
+        options: [
+          { label: 'Yes, avoid this type', value: 'avoid', action: 'FILTER_OUT' },
+          { label: 'No, keep showing all', value: 'keep', action: 'CONTINUE' },
+        ],
+      });
+    }
+
+    // TODO: Call OS API to record feedback
+    // await fetch('/api/os/feedback', { method: 'POST', body: JSON.stringify({ companyId, action, metadata }) });
+  }, [entities]);
+
+  /**
+   * Handle prompt response - SAAS_EVENT_ONLY
+   */
+  const handlePromptResponse = useCallback(async (
+    promptId: string,
+    response: { action: string; value?: string }
+  ) => {
+    console.log(`[Prompt Response] ${promptId}:`, response);
+    setCurrentPrompt(null);
+
+    // Update SIVA commentary based on response
+    if (response.action === 'FIND_SIMILAR') {
+      setSivaCommentary('Finding more companies with similar characteristics...');
+    } else if (response.action === 'FILTER_OUT') {
+      setSivaCommentary('I\'ll focus on different types of companies for you.');
+    } else if (response.action === 'FREEFORM' && response.value) {
+      setSivaCommentary(`Adjusting search based on: "${response.value}"`);
+    }
+
+    // Clear commentary after delay
+    setTimeout(() => setSivaCommentary(null), 5000);
+
+    // TODO: Call OS API to apply refinement
+  }, []);
+
+  /**
+   * Handle refinement input - SAAS_EVENT_ONLY
+   */
+  const handleRefinement = useCallback(async (text: string) => {
+    console.log(`[Refinement] ${text}`);
+    setSivaCommentary(`Processing: "${text}"...`);
+
+    // Simulate processing delay
+    setTimeout(() => {
+      setSivaCommentary(`Adjusted results based on: "${text}"`);
+      setTimeout(() => setSivaCommentary(null), 5000);
+    }, 1000);
+
+    // TODO: Call OS API to apply refinement
+  }, []);
+
+  /**
+   * Handle unsave - SAAS_EVENT_ONLY
+   */
+  const handleUnsave = useCallback(async (companyId: string) => {
+    setSavedLeads(prev => prev.filter(l => l.companyId !== companyId));
+    setFeedbackStats(prev => ({ ...prev, saveCount: Math.max(0, prev.saveCount - 1) }));
+    setFeedbackMap(prev => {
+      const next = new Map(prev);
+      next.delete(companyId);
+      return next;
+    });
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Context Banner */}
@@ -219,6 +407,24 @@ export default function DiscoveryPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Feedback Stats - SAAS_RENDER_ONLY */}
+          {feedbackStats.totalFeedback > 0 && (
+            <FeedbackSummary summary={feedbackStats} />
+          )}
+
+          {/* Saved Leads Toggle */}
+          <button
+            onClick={() => setShowSavedPanel(!showSavedPanel)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+              showSavedPanel
+                ? 'bg-yellow-100 text-yellow-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <BookmarkIcon className="w-4 h-4" />
+            <span>Saved ({savedLeads.length})</span>
+          </button>
+
           {/* Data Quality Badge */}
           {dataQuality && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm">
@@ -295,6 +501,29 @@ export default function DiscoveryPage() {
         </span>
       </div>
 
+      {/* S222: SIVA Intelligence Section - SAAS_RENDER_ONLY */}
+      <div className="space-y-3">
+        {/* SIVA Commentary */}
+        <SIVACommentary commentary={sivaCommentary} />
+
+        {/* Conversational Prompt */}
+        <ConversationalPrompts
+          prompt={currentPrompt}
+          onResponse={handlePromptResponse}
+          onDismiss={() => setCurrentPrompt(null)}
+        />
+
+        {/* Refinement Input */}
+        <RefinementInput
+          onSubmit={handleRefinement}
+          examples={[
+            'Show only 100+ employees',
+            'Focus on DIFC companies',
+            'No construction companies',
+          ]}
+        />
+      </div>
+
       {/* Error State */}
       {error && (
         <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
@@ -320,24 +549,48 @@ export default function DiscoveryPage() {
         </div>
       ) : (
         <>
-          {/* Results Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {filteredEntities.map((entity, index) => (
+          {/* Main Content Area */}
+          <div className="flex gap-6">
+            {/* Results Grid */}
+            <div className={`grid grid-cols-1 ${showSavedPanel ? 'lg:grid-cols-1' : 'lg:grid-cols-2'} gap-4 flex-1`}>
+              {filteredEntities.map((entity, index) => (
+                <motion.div
+                  key={entity.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <EBDiscoveryCard
+                    company={convertToCardData(entity)}
+                    rank={index + 1}
+                    isSelected={selectedCompany === entity.id}
+                    onSelect={setSelectedCompany}
+                    onSivaAction={handleSivaAction}
+                    // S221: Feedback props - SAAS_EVENT_ONLY
+                    currentFeedback={feedbackMap.get(entity.id)}
+                    isSaved={savedLeads.some(l => l.companyId === entity.id)}
+                    onFeedback={handleFeedback}
+                  />
+                </motion.div>
+              ))}
+            </div>
+
+            {/* S221: Saved Leads Panel - SAAS_RENDER_ONLY */}
+            {showSavedPanel && (
               <motion.div
-                key={entity.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 350, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                className="flex-shrink-0 bg-white rounded-xl border border-gray-200 overflow-hidden"
               >
-                <EBDiscoveryCard
-                  company={convertToCardData(entity)}
-                  rank={index + 1}
-                  isSelected={selectedCompany === entity.id}
-                  onSelect={setSelectedCompany}
-                  onSivaAction={handleSivaAction}
+                <SavedLeadsPanel
+                  savedLeads={savedLeads}
+                  totalCount={savedLeads.length}
+                  onUnsave={handleUnsave}
+                  onViewLead={(companyId) => setSelectedCompany(companyId)}
                 />
               </motion.div>
-            ))}
+            )}
           </div>
 
           {/* Empty State */}

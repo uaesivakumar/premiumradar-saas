@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
 import { useVerticalConfig, type SignalConfig } from '@/lib/intelligence/hooks/useVerticalConfig';
+import { FeedbackActions, type FeedbackAction } from './FeedbackActions';
 
 // =============================================================================
 // TYPES
@@ -70,6 +71,12 @@ interface EBDiscoveryCardProps {
   isSelected?: boolean;
   onSelect?: (companyId: string) => void;
   onSivaAction?: (action: string, company: EBCompanyData) => void;
+  /** Feedback props - SAAS_EVENT_ONLY */
+  currentFeedback?: FeedbackAction | null;
+  isSaved?: boolean;
+  onFeedback?: (companyId: string, action: FeedbackAction, metadata?: Record<string, unknown>) => void;
+  /** Hide feedback actions (e.g., in detail view) */
+  hideFeedback?: boolean;
   className?: string;
 }
 
@@ -126,6 +133,10 @@ export function EBDiscoveryCard({
   isSelected = false,
   onSelect,
   onSivaAction,
+  currentFeedback,
+  isSaved = false,
+  onFeedback,
+  hideFeedback = false,
   className = '',
 }: EBDiscoveryCardProps) {
   const { subVertical } = useSalesContext();
@@ -289,6 +300,27 @@ export function EBDiscoveryCard({
           )}
         </div>
       </div>
+
+      {/* Feedback Actions - SAAS_EVENT_ONLY */}
+      {!hideFeedback && onFeedback && (
+        <div className="px-4 pb-3" onClick={(e) => e.stopPropagation()}>
+          <FeedbackActions
+            companyId={company.id}
+            companyName={company.name}
+            currentFeedback={currentFeedback}
+            isSaved={isSaved}
+            onFeedback={(companyId, action, metadata) =>
+              onFeedback(companyId, action, {
+                ...metadata,
+                industry: company.industry,
+                size_bucket: company.size,
+                location: company.city || company.region,
+              })
+            }
+            compact
+          />
+        </div>
+      )}
 
       {/* Expand/Collapse Button */}
       <button
