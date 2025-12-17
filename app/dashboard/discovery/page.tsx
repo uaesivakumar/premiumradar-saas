@@ -30,6 +30,8 @@ import { ContextBadge } from '@/components/dashboard/ContextBadge';
 import { ConversationalPrompts, SIVACommentary, RefinementInput } from '@/components/discovery/ConversationalPrompts';
 import { SavedLeadsPanel } from '@/components/discovery/SavedLeadsPanel';
 import { FeedbackSummary, type FeedbackAction } from '@/components/discovery/FeedbackActions';
+// S218-S223: OS Discovery Store (wired to OS intelligence API)
+import { useDiscoveryStore, type ConversationalPrompt as OSPrompt, type SavedLead as OSSavedLead } from '@/lib/os/discovery-api';
 
 // =============================================================================
 // TYPES
@@ -265,18 +267,19 @@ export default function DiscoveryPage() {
   // S218-S223: INTELLIGENCE HANDLERS
   // =============================================================================
 
+  // S218-S223: Get OS discovery store actions
+  const osStore = useDiscoveryStore();
+
   /**
    * Handle feedback - SAAS_EVENT_ONLY
-   * Emits event to OS, which stores and learns from it
+   * Emits event to OS intelligence router, which stores in Interaction Ledger and learns
    */
   const handleFeedback = useCallback(async (
     companyId: string,
     action: FeedbackAction,
     metadata?: Record<string, unknown>
   ) => {
-    console.log(`[Feedback] ${action} for ${companyId}`, metadata);
-
-    // Update local feedback map for UI (SAAS_RENDER_ONLY from future OS response)
+    // Update local feedback map for immediate UI feedback
     setFeedbackMap(prev => {
       const next = new Map(prev);
       next.set(companyId, action);
@@ -292,7 +295,7 @@ export default function DiscoveryPage() {
       return newStats;
     });
 
-    // Handle SAVE action
+    // Handle SAVE action locally
     if (action === 'SAVE') {
       const entity = entities.find(e => e.id === companyId);
       if (entity) {
@@ -307,82 +310,108 @@ export default function DiscoveryPage() {
       }
     }
 
-    // Generate contextual prompt after feedback (simulating OS response)
-    if (action === 'LIKE') {
-      const entity = entities.find(e => e.id === companyId);
-      setCurrentPrompt({
-        id: `prompt_${Date.now()}`,
-        type: 'AFTER_LIKE',
-        text: `Great choice! Want more companies like ${entity?.name || 'this'}?`,
-        options: [
-          { label: 'Yes, more like this', value: 'similar', action: 'FIND_SIMILAR' },
-          { label: 'Show different types', value: 'different', action: 'DIVERSIFY' },
-        ],
-        allowFreeform: true,
-        placeholder: 'Or tell me what you prefer...',
+    // SAAS_EVENT_ONLY: Submit feedback to OS intelligence router
+    // OS will record to Interaction Ledger and return contextual prompt
+    try {
+      await osStore.submitFeedback(companyId, action, {
+        ...metadata,
+        company_name: entities.find(e => e.id === companyId)?.name,
       });
-    } else if (action === 'DISLIKE') {
-      const entity = entities.find(e => e.id === companyId);
-      setCurrentPrompt({
-        id: `prompt_${Date.now()}`,
-        type: 'AFTER_DISLIKE',
-        text: `Got it. Should I avoid ${entity?.industry || 'similar'} companies?`,
-        options: [
-          { label: 'Yes, avoid this type', value: 'avoid', action: 'FILTER_OUT' },
-          { label: 'No, keep showing all', value: 'keep', action: 'CONTINUE' },
-        ],
-      });
-    }
 
-    // TODO: Call OS API to record feedback
-    // await fetch('/api/os/feedback', { method: 'POST', body: JSON.stringify({ companyId, action, metadata }) });
-  }, [entities]);
+      // Update prompt from OS response (stored in osStore.currentPrompt)
+      if (osStore.currentPrompt) {
+        setCurrentPrompt({
+          id: osStore.currentPrompt.id,
+          type: osStore.currentPrompt.type,
+          text: osStore.currentPrompt.text,
+          options: osStore.currentPrompt.options,
+          allowFreeform: osStore.currentPrompt.allowFreeform,
+          placeholder: osStore.currentPrompt.placeholder,
+        });
+      }
+    } catch (err) {
+      console.error('[Feedback] OS submission failed:', err);
+      // Local state already updated, continue with degraded experience
+    }
+  }, [entities, osStore]);
 
   /**
    * Handle prompt response - SAAS_EVENT_ONLY
+   * Sends response to OS intelligence router for processing
    */
   const handlePromptResponse = useCallback(async (
     promptId: string,
     response: { action: string; value?: string }
   ) => {
-    console.log(`[Prompt Response] ${promptId}:`, response);
     setCurrentPrompt(null);
 
-    // Update SIVA commentary based on response
-    if (response.action === 'FIND_SIMILAR') {
-      setSivaCommentary('Finding more companies with similar characteristics...');
-    } else if (response.action === 'FILTER_OUT') {
-      setSivaCommentary('I\'ll focus on different types of companies for you.');
-    } else if (response.action === 'FREEFORM' && response.value) {
-      setSivaCommentary(`Adjusting search based on: "${response.value}"`);
+    // SAAS_EVENT_ONLY: Send response to OS
+    try {
+      await osStore.respondToPrompt(promptId, response);
+
+      // Update commentary from OS response
+      if (osStore.commentary) {
+        setSivaCommentary(osStore.commentary);
+        setTimeout(() => setSivaCommentary(null), 5000);
+      } else {
+        // Fallback local commentary
+        if (response.action === 'FIND_SIMILAR') {
+          setSivaCommentary('Finding more companies with similar characteristics...');
+        } else if (response.action === 'FILTER_OUT') {
+          setSivaCommentary('I\'ll focus on different types of companies for you.');
+        } else if (response.action === 'FREEFORM' && response.value) {
+          setSivaCommentary(`Adjusting search based on: "${response.value}"`);
+        }
+        setTimeout(() => setSivaCommentary(null), 5000);
+      }
+
+      // Update prompt if OS sent a follow-up
+      if (osStore.currentPrompt) {
+        setCurrentPrompt({
+          id: osStore.currentPrompt.id,
+          type: osStore.currentPrompt.type,
+          text: osStore.currentPrompt.text,
+          options: osStore.currentPrompt.options,
+          allowFreeform: osStore.currentPrompt.allowFreeform,
+          placeholder: osStore.currentPrompt.placeholder,
+        });
+      }
+    } catch (err) {
+      console.error('[Prompt Response] OS submission failed:', err);
     }
-
-    // Clear commentary after delay
-    setTimeout(() => setSivaCommentary(null), 5000);
-
-    // TODO: Call OS API to apply refinement
-  }, []);
+  }, [osStore]);
 
   /**
    * Handle refinement input - SAAS_EVENT_ONLY
+   * Sends raw NL text to OS, which orchestrates SIVA for parsing
    */
   const handleRefinement = useCallback(async (text: string) => {
-    console.log(`[Refinement] ${text}`);
     setSivaCommentary(`Processing: "${text}"...`);
 
-    // Simulate processing delay
-    setTimeout(() => {
-      setSivaCommentary(`Adjusted results based on: "${text}"`);
-      setTimeout(() => setSivaCommentary(null), 5000);
-    }, 1000);
+    // SAAS_EVENT_ONLY: Send to OS intelligence router
+    try {
+      await osStore.submitRefinement(text);
 
-    // TODO: Call OS API to apply refinement
-  }, []);
+      // Update commentary from OS response
+      if (osStore.commentary) {
+        setSivaCommentary(osStore.commentary);
+      } else {
+        setSivaCommentary(`Adjusted results based on: "${text}"`);
+      }
+      setTimeout(() => setSivaCommentary(null), 5000);
+    } catch (err) {
+      console.error('[Refinement] OS submission failed:', err);
+      setSivaCommentary('Failed to process refinement. Please try again.');
+      setTimeout(() => setSivaCommentary(null), 3000);
+    }
+  }, [osStore]);
 
   /**
    * Handle unsave - SAAS_EVENT_ONLY
+   * Emits unsave event to OS intelligence router
    */
   const handleUnsave = useCallback(async (companyId: string) => {
+    // Update local state immediately for responsiveness
     setSavedLeads(prev => prev.filter(l => l.companyId !== companyId));
     setFeedbackStats(prev => ({ ...prev, saveCount: Math.max(0, prev.saveCount - 1) }));
     setFeedbackMap(prev => {
@@ -390,7 +419,14 @@ export default function DiscoveryPage() {
       next.delete(companyId);
       return next;
     });
-  }, []);
+
+    // SAAS_EVENT_ONLY: Emit unsave to OS
+    try {
+      await osStore.unsaveLead(companyId);
+    } catch (err) {
+      console.error('[Unsave] OS submission failed:', err);
+    }
+  }, [osStore]);
 
   return (
     <div className="space-y-6">

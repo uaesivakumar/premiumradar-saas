@@ -2,11 +2,13 @@
  * OS Discovery API Client
  *
  * API hooks for connecting SaaS to OS discovery endpoints.
+ * S218-S223: SIVA Intelligence Enhancement
  *
- * ARCHITECTURE COMPLIANCE:
+ * ARCHITECTURE COMPLIANCE (PRD v1.2):
  * - SaaS calls OS APIs, never makes decisions locally
  * - All state lives in OS, SaaS only renders responses
- * - Feedback events emitted to OS, not stored locally
+ * - Feedback events emitted to OS (Interaction Ledger), not stored locally
+ * - OS MAY invoke permitted SIVA tools based on persona, phase, and policy gates
  *
  * Architecture: OS decides. SIVA reasons. SaaS renders.
  */
@@ -112,7 +114,9 @@ interface DiscoveryStore extends DiscoverySession {
   submitRefinement: (text: string) => Promise<void>;
 }
 
-const OS_BASE_URL = process.env.NEXT_PUBLIC_UPR_OS_URL || 'https://upr-os-service.run.app';
+// OS API base URL - uses intelligence router for S218-S223
+const OS_BASE_URL = process.env.NEXT_PUBLIC_UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
+const OS_INTELLIGENCE_URL = `${OS_BASE_URL}/api/os/intelligence`;
 
 export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
   sessionId: '',
@@ -127,9 +131,13 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const response = await fetch(`${OS_BASE_URL}/api/os/discovery`, {
+      // Call OS intelligence session endpoint - OS_AUTHORITY
+      const response = await fetch(`${OS_INTELLIGENCE_URL}/session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-pr-os-token': process.env.NEXT_PUBLIC_OS_TOKEN || '',
+        },
         body: JSON.stringify({
           tenant_id: 'current', // From auth context
           ...params,
@@ -180,10 +188,13 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      // SAAS_EVENT_ONLY: Request next batch from OS
-      const response = await fetch(`${OS_BASE_URL}/api/os/discovery/batch`, {
+      // SAAS_EVENT_ONLY: Request next batch from OS intelligence router
+      const response = await fetch(`${OS_INTELLIGENCE_URL}/batch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-pr-os-token': process.env.NEXT_PUBLIC_OS_TOKEN || '',
+        },
         body: JSON.stringify({
           session_id: sessionId,
           action: 'SHOW_MORE',
@@ -233,10 +244,13 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
     if (!sessionId) return;
 
     try {
-      // SAAS_EVENT_ONLY: Emit feedback to OS
-      const response = await fetch(`${OS_BASE_URL}/api/os/feedback`, {
+      // SAAS_EVENT_ONLY: Emit feedback to OS (records to Interaction Ledger)
+      const response = await fetch(`${OS_INTELLIGENCE_URL}/feedback`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-pr-os-token': process.env.NEXT_PUBLIC_OS_TOKEN || '',
+        },
         body: JSON.stringify({
           session_id: sessionId,
           company_id: companyId,
@@ -289,10 +303,13 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
 
   fetchSavedLeads: async () => {
     try {
-      // SAAS_RENDER_ONLY: Fetch saved leads from OS
-      const response = await fetch(`${OS_BASE_URL}/api/os/saved-leads`, {
+      // SAAS_RENDER_ONLY: Fetch saved leads from OS intelligence router
+      const response = await fetch(`${OS_INTELLIGENCE_URL}/saved`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-pr-os-token': process.env.NEXT_PUBLIC_OS_TOKEN || '',
+        },
       });
 
       if (!response.ok) {
@@ -309,10 +326,13 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
 
   unsaveLead: async (companyId) => {
     try {
-      // SAAS_EVENT_ONLY: Emit unsave to OS
-      await fetch(`${OS_BASE_URL}/api/os/saved-leads/${companyId}`, {
+      // SAAS_EVENT_ONLY: Emit unsave to OS intelligence router
+      await fetch(`${OS_INTELLIGENCE_URL}/saved/${companyId}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-pr-os-token': process.env.NEXT_PUBLIC_OS_TOKEN || '',
+        },
       });
 
       // SAAS_RENDER_ONLY: Update from OS response
@@ -329,10 +349,13 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
     if (!sessionId) return;
 
     try {
-      // SAAS_EVENT_ONLY: Send response to OS
-      const apiResponse = await fetch(`${OS_BASE_URL}/api/os/prompt/respond`, {
+      // SAAS_EVENT_ONLY: Send response to OS intelligence router
+      const apiResponse = await fetch(`${OS_INTELLIGENCE_URL}/prompt/respond`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-pr-os-token': process.env.NEXT_PUBLIC_OS_TOKEN || '',
+        },
         body: JSON.stringify({
           session_id: sessionId,
           prompt_id: promptId,
@@ -367,10 +390,13 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      // SAAS_EVENT_ONLY: Send raw text, OS/SIVA parses
-      const response = await fetch(`${OS_BASE_URL}/api/os/refine`, {
+      // SAAS_EVENT_ONLY: Send raw text, OS orchestrates, SIVA parses
+      const response = await fetch(`${OS_INTELLIGENCE_URL}/refine`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-pr-os-token': process.env.NEXT_PUBLIC_OS_TOKEN || '',
+        },
         body: JSON.stringify({
           session_id: sessionId,
           refinement_text: text,
@@ -460,10 +486,13 @@ export async function fetchPackConfig(
 ): Promise<PackConfig | null> {
   try {
     const response = await fetch(
-      `${OS_BASE_URL}/api/os/pack-config?vertical=${vertical}&sub_vertical=${subVertical}`,
+      `${OS_BASE_URL}/api/os/verticals/${vertical}/packs/${subVertical}`,
       {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-pr-os-token': process.env.NEXT_PUBLIC_OS_TOKEN || '',
+        },
       }
     );
 
