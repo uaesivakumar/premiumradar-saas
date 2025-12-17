@@ -10,7 +10,7 @@
  * - Actionable: Find Contacts, Generate Outreach buttons
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Pin,
@@ -32,9 +32,14 @@ import {
   Linkedin,
   Phone,
   Briefcase,
+  ThumbsUp,
+  ThumbsDown,
+  Bookmark,
+  BookmarkCheck,
 } from 'lucide-react';
 import { OutputObject, useSIVAStore } from '@/lib/stores/siva-store';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
+import { useDiscoveryStore } from '@/lib/os/discovery-api';
 
 interface OutputObjectRendererProps {
   object: OutputObject;
@@ -175,11 +180,15 @@ export function OutputObjectRenderer({ object }: OutputObjectRendererProps) {
   );
 }
 
-// Discovery Content - AI-Native UX with Progressive Loading
+// Discovery Content - AI-Native UX with Progressive Loading + S221 Feedback
 function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { submitQuery } = useSIVAStore();
+
+  // S221: Feedback state - SAAS_EVENT_ONLY
+  const [feedbackMap, setFeedbackMap] = useState<Map<string, 'LIKE' | 'DISLIKE' | 'SAVE'>>(new Map());
+  const osStore = useDiscoveryStore();
 
   const companies = data.companies as Array<{
     name: string;
@@ -245,11 +254,42 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
     submitQuery(`Generate outreach email for ${companyName} based on their ${signal.toLowerCase()}`);
   };
 
+  // S221: Handle feedback - SAAS_EVENT_ONLY
+  const handleFeedback = useCallback(async (
+    companyName: string,
+    action: 'LIKE' | 'DISLIKE' | 'SAVE',
+    company: { industry?: string; size?: string }
+  ) => {
+    // Update local state for immediate UI feedback
+    setFeedbackMap(prev => {
+      const next = new Map(prev);
+      if (prev.get(companyName) === action) {
+        next.delete(companyName); // Toggle off
+      } else {
+        next.set(companyName, action);
+      }
+      return next;
+    });
+
+    // SAAS_EVENT_ONLY: Submit to OS intelligence router
+    try {
+      await osStore.submitFeedback(companyName, action, {
+        company_name: companyName,
+        industry: company.industry,
+        size_bucket: company.size,
+      });
+    } catch (err) {
+      console.error('[Feedback] OS submission failed:', err);
+    }
+  }, [osStore]);
+
   return (
     <div className="space-y-3">
       {companies?.map((company, i) => {
         const gradeDisplay = getGradeDisplay(company.grade, company.score);
         const isExpanded = expandedCompany === company.name;
+
+        const currentFeedback = feedbackMap.get(company.name);
 
         return (
           <motion.div
@@ -283,6 +323,46 @@ function DiscoveryContent({ data }: { data: Record<string, unknown> }) {
                 </div>
               </div>
               <div className="text-right flex items-center gap-3">
+                {/* S221: Feedback Actions - SAAS_EVENT_ONLY */}
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => handleFeedback(company.name, 'LIKE', company)}
+                    className={`p-1.5 rounded-lg transition-all ${
+                      currentFeedback === 'LIKE'
+                        ? 'bg-green-500/30 text-green-400'
+                        : 'hover:bg-white/10 text-gray-500 hover:text-green-400'
+                    }`}
+                    title="Like - More like this"
+                  >
+                    <ThumbsUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleFeedback(company.name, 'DISLIKE', company)}
+                    className={`p-1.5 rounded-lg transition-all ${
+                      currentFeedback === 'DISLIKE'
+                        ? 'bg-red-500/30 text-red-400'
+                        : 'hover:bg-white/10 text-gray-500 hover:text-red-400'
+                    }`}
+                    title="Dislike - Less like this"
+                  >
+                    <ThumbsDown className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleFeedback(company.name, 'SAVE', company)}
+                    className={`p-1.5 rounded-lg transition-all ${
+                      currentFeedback === 'SAVE'
+                        ? 'bg-yellow-500/30 text-yellow-400'
+                        : 'hover:bg-white/10 text-gray-500 hover:text-yellow-400'
+                    }`}
+                    title="Save to leads"
+                  >
+                    {currentFeedback === 'SAVE' ? (
+                      <BookmarkCheck className="w-4 h-4" />
+                    ) : (
+                      <Bookmark className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-3 h-3 text-green-400" />
                   <span className="text-sm text-gray-400">{company.signal}</span>
