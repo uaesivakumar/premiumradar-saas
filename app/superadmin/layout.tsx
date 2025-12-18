@@ -35,6 +35,7 @@ import {
   Sparkles,
   DollarSign,
   Box,
+  Shield,
 } from 'lucide-react';
 import AICommandBar from '@/components/superadmin/AICommandBar';
 
@@ -49,6 +50,7 @@ const navItems = [
   { label: 'Intelligence', href: '/superadmin/siva', icon: Cpu },
   { label: 'Financials', href: '/superadmin/financials', icon: DollarSign },
   { type: 'divider' },
+  { label: 'Control Plane', href: '/superadmin/controlplane', icon: Shield },
   { label: 'Verticals', href: '/superadmin/verticals', icon: Layers },
   { label: 'OS Config', href: '/superadmin/os', icon: Server },
   { label: 'Settings', href: '/superadmin/settings', icon: Settings },
