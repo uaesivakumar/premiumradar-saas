@@ -62,7 +62,8 @@ export type AgentType =
   | 'ranking'
   | 'outreach'
   | 'enrichment'
-  | 'demo';
+  | 'demo'
+  | 'deal-evaluation'; // S SaaS Sales vertical
 
 export type OutputObjectType =
   | 'discovery'
@@ -71,7 +72,8 @@ export type OutputObjectType =
   | 'outreach'
   | 'insight'
   | 'contacts'
-  | 'message';
+  | 'message'
+  | 'deal-verdict'; // SaaS Sales deal evaluation result
 
 export interface OutputObject {
   id: string;
@@ -214,9 +216,15 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
     console.log('[SIVA] === ORCHESTRATION START ===');
     console.log('[SIVA] Query:', query);
 
-    // Detect agent early to set appropriate timeout
-    const agent = detectAgent(query);
-    const autoFailTimeout = agent === 'discovery' ? DISCOVERY_TIMEOUT_MS + 5000 : DEFAULT_TIMEOUT_MS + 5000;
+    // Fetch vertical config for config-driven agent detection
+    const verticalConfig = await getVerticalConfig();
+    const configDefaultAgent = verticalConfig?.default_agent;
+
+    // Detect agent based on config or keywords
+    const agent = detectAgent(query, configDefaultAgent);
+    const autoFailTimeout = agent === 'discovery' || agent === 'deal-evaluation'
+      ? DISCOVERY_TIMEOUT_MS + 5000
+      : DEFAULT_TIMEOUT_MS + 5000;
 
     // Auto-fail timer - SIVA can NEVER hang
     const autoFailTimer = setTimeout(() => {
@@ -317,8 +325,60 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
 // INTENT DETECTION
 // =============================================================================
 
-function detectAgent(query: string): AgentType {
+// Cache for vertical config (to avoid repeated API calls)
+let cachedVerticalConfig: { config?: { default_agent?: string } } | null = null;
+let cachedConfigKey: string | null = null;
+
+/**
+ * Fetch sub-vertical config to get default_agent setting
+ * Caches result to avoid repeated API calls within same session
+ */
+async function getVerticalConfig(): Promise<{ default_agent?: string } | null> {
+  const context = getSalesContext();
+  const cacheKey = `${context.vertical}:${context.subVertical}:${context.regionCountry}`;
+
+  // Return cached config if same context
+  if (cachedConfigKey === cacheKey && cachedVerticalConfig) {
+    return cachedVerticalConfig.config || null;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/admin/vertical-config?vertical=${context.vertical}&subVertical=${context.subVertical}&region=${context.regionCountry}`
+    );
+    const data = await response.json();
+
+    if (data.success && data.data) {
+      cachedVerticalConfig = data.data;
+      cachedConfigKey = cacheKey;
+      return data.data.config || null;
+    }
+  } catch (error) {
+    console.log('[SIVA] Config fetch failed, using keyword detection:', error);
+  }
+
+  return null;
+}
+
+/**
+ * Detect agent type based on:
+ * 1. Sub-vertical config.default_agent (if set in Super Admin)
+ * 2. Keyword-based detection (fallback)
+ */
+function detectAgent(query: string, configDefaultAgent?: string): AgentType {
+  // If config specifies a default agent, use it
+  if (configDefaultAgent) {
+    console.log('[SIVA] Using config-defined default_agent:', configDefaultAgent);
+    return configDefaultAgent as AgentType;
+  }
+
   const q = query.toLowerCase();
+
+  // DEAL EVALUATION: For SaaS vertical or deal-related queries
+  const context = getSalesContext();
+  if (context.vertical === 'saas-sales' || q.includes('deal') || q.includes('verdict') || q.includes('evaluate this deal')) {
+    return 'deal-evaluation';
+  }
 
   // ENRICHMENT: Contact-finding intent
   if (
@@ -436,6 +496,12 @@ function getReasoningSteps(agent: AgentType): ReasoningStep[] {
     demo: [
       'Preparing EB demonstration',
       'Loading sample data from OS',
+    ],
+    'deal-evaluation': [
+      'Applying Skeptical CFO lens',
+      'Analyzing deal signals for risk',
+      'Calculating GO/NO-GO verdict',
+      'Identifying hidden risks',
     ],
   };
 
@@ -1315,6 +1381,92 @@ async function generateEnrichmentOutput(query: string, agent: AgentType): Promis
   };
 }
 
+/**
+ * Generate Deal Evaluation Output
+ * SaaS Sales vertical - Skeptical CFO lens
+ *
+ * Returns: GO / HIGH_RISK / NO_GO verdict with risk factors
+ */
+async function generateDealEvaluationOutput(query: string, agent: AgentType): Promise<{
+  message: string;
+  objects: PartialOutputObject[];
+}> {
+  const context = getSalesContext();
+
+  console.log('[SIVA:DealEval] Evaluating deal:', query);
+
+  try {
+    // Call OS deal evaluation endpoint
+    const response = await fetch('/api/os/intelligence/deal-evaluation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenant_id: getTenantIdFromSession(),
+        persona_id: getCanonicalPersonaId(),
+        vertical: context.vertical || 'saas-sales',
+        sub_vertical: context.subVertical || 'deal-evaluation',
+        deal_context: query,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      return {
+        message: `Deal evaluation failed: ${data.error || 'Unable to evaluate deal'}`,
+        objects: [],
+      };
+    }
+
+    const verdict = data.verdict || 'HIGH_RISK';
+    const confidence = data.confidence || 0.7;
+    const riskFactors = data.risk_factors || [];
+    const decisiveAction = data.decisive_action || 'Request additional validation';
+    const reasoning = data.reasoning || 'Evaluation complete';
+
+    // Verdict-specific message
+    const verdictMessages: Record<string, string> = {
+      GO: `This deal looks solid. ${decisiveAction}.`,
+      HIGH_RISK: `Proceed with caution. ${riskFactors[0]?.factor || 'Key risks identified'}. ${decisiveAction}.`,
+      NO_GO: `Walk away from this one. ${riskFactors[0]?.factor || 'Critical blockers found'}. ${decisiveAction}.`,
+    };
+
+    return {
+      message: verdictMessages[verdict] || reasoning,
+      objects: [
+        {
+          type: 'deal-verdict',
+          title: 'Deal Verdict',
+          data: {
+            verdict: verdict as 'GO' | 'HIGH_RISK' | 'NO_GO',
+            confidence,
+            reasoning,
+            riskFactors: riskFactors.map((r: { factor: string; severity: string; detail?: string }) => ({
+              factor: r.factor,
+              severity: r.severity as 'high' | 'medium' | 'low',
+              detail: r.detail,
+            })),
+            decisiveAction,
+            dealContext: query,
+            sessionId: data.session_id,
+            persona: 'Skeptical CFO',
+            osSource: true,
+          },
+          pinned: false,
+          expanded: true,
+          agent,
+        },
+      ],
+    };
+  } catch (error) {
+    console.error('[SIVA:DealEval] Error:', error);
+    return {
+      message: `Deal evaluation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      objects: [],
+    };
+  }
+}
+
 // =============================================================================
 // DRIFT GUARD (EB Context Protection)
 // =============================================================================
@@ -1389,6 +1541,8 @@ async function generateOutput(agent: AgentType, query: string): Promise<{
       return generateOutreachOutput(processedQuery, agent);
     case 'enrichment':
       return generateEnrichmentOutput(processedQuery, agent);
+    case 'deal-evaluation':
+      return generateDealEvaluationOutput(processedQuery, agent);
     default:
       return generateDiscoveryOutput(processedQuery, agent);
   }

@@ -18,6 +18,21 @@ import type {
   PlanTier,
 } from './types';
 
+// Database functions are imported dynamically to avoid bundling pg in client code
+type TenantPlan = 'free' | 'starter' | 'professional' | 'enterprise' | 'saas';
+type TenantSubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete';
+
+async function getDbFunctions() {
+  // Dynamic import to keep pg out of client bundles
+  const db = await import('@/lib/db/users');
+  return {
+    updateTenantSubscription: db.updateTenantSubscription,
+    updateTenantSubscriptionStatus: db.updateTenantSubscriptionStatus,
+    cancelTenantSubscription: db.cancelTenantSubscription,
+    updateTenantStripeCustomer: db.updateTenantStripeCustomer,
+  };
+}
+
 // ============================================================
 // WEBHOOK SIGNATURE VERIFICATION
 // ============================================================
@@ -71,8 +86,21 @@ export async function handleCheckoutCompleted(
 
   console.log(`[Webhook] Checkout completed for workspace ${workspaceId}, tier: ${tier}`);
 
-  // In production: Create/update subscription record in database
-  // await db.subscriptions.upsert({ ... })
+  // Update tenant subscription in database
+  try {
+    const db = await getDbFunctions();
+    const tenantPlan = tier as TenantPlan;
+    await db.updateTenantSubscription(workspaceId, {
+      plan: tenantPlan,
+      subscription_status: 'active',
+      stripe_subscription_id: session.subscription as string,
+      stripe_customer_id: session.customer as string,
+    });
+    console.log(`[Webhook] Tenant ${workspaceId} subscription updated to ${tier}`);
+  } catch (dbError) {
+    console.error('[Webhook] Failed to update tenant subscription:', dbError);
+    // Don't fail the webhook - Stripe will retry
+  }
 
   return {
     success: true,
@@ -133,11 +161,15 @@ export async function handleSubscriptionUpdated(
 
   console.log(`[Webhook] Subscription ${subscription.id} updated: status=${status}, cancelAtPeriodEnd=${cancelAtPeriodEnd}`);
 
-  // In production: Update subscription record
-  // await db.subscriptions.update({
-  //   where: { stripeSubscriptionId: subscription.id },
-  //   data: { status, cancelAtPeriodEnd, currentPeriodEnd }
-  // })
+  // Update tenant subscription status in database
+  try {
+    const db = await getDbFunctions();
+    const tenantStatus = status as TenantSubscriptionStatus;
+    await db.updateTenantSubscriptionStatus(subscription.id, tenantStatus);
+    console.log(`[Webhook] Tenant subscription status updated to ${status}`);
+  } catch (dbError) {
+    console.error('[Webhook] Failed to update tenant subscription status:', dbError);
+  }
 
   return {
     success: true,
@@ -162,11 +194,14 @@ export async function handleSubscriptionDeleted(
 
   console.log(`[Webhook] Subscription ${subscription.id} deleted for workspace ${workspaceId}`);
 
-  // In production: Update subscription status to canceled
-  // await db.subscriptions.update({
-  //   where: { stripeSubscriptionId: subscription.id },
-  //   data: { status: 'canceled', canceledAt: new Date() }
-  // })
+  // Cancel tenant subscription - downgrade to free
+  try {
+    const db = await getDbFunctions();
+    await db.cancelTenantSubscription(subscription.id);
+    console.log(`[Webhook] Tenant subscription canceled, downgraded to free`);
+  } catch (dbError) {
+    console.error('[Webhook] Failed to cancel tenant subscription:', dbError);
+  }
 
   return {
     success: true,
@@ -186,11 +221,16 @@ export async function handleCustomerCreated(
 
   console.log(`[Webhook] Customer ${customer.id} created for workspace ${workspaceId}`);
 
-  // In production: Link Stripe customer to workspace
-  // await db.workspaces.update({
-  //   where: { id: workspaceId },
-  //   data: { stripeCustomerId: customer.id }
-  // })
+  // Link Stripe customer to tenant
+  if (workspaceId) {
+    try {
+      const db = await getDbFunctions();
+      await db.updateTenantStripeCustomer(workspaceId, customer.id);
+      console.log(`[Webhook] Tenant ${workspaceId} linked to Stripe customer ${customer.id}`);
+    } catch (dbError) {
+      console.error('[Webhook] Failed to link Stripe customer to tenant:', dbError);
+    }
+  }
 
   return {
     success: true,

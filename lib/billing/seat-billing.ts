@@ -18,6 +18,7 @@ export const SEAT_PRICES: Record<PlanTier, number> = {
   starter: 10, // $10/seat/month
   professional: 15, // $15/seat/month
   enterprise: 20, // $20/seat/month (volume discounts available)
+  saas: 25, // $25/seat/month (US SaaS Edition)
 };
 
 // Base seats included in each tier
@@ -26,6 +27,7 @@ export const BASE_SEATS: Record<PlanTier, number> = {
   starter: 5,
   professional: 10,
   enterprise: 25,
+  saas: 3, // US SaaS Edition
 };
 
 // ============================================================

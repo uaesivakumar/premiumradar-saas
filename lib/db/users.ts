@@ -20,7 +20,7 @@ export interface Tenant {
   name: string;
   slug: string;
   domain: string | null;
-  plan: 'free' | 'starter' | 'professional' | 'enterprise';
+  plan: 'free' | 'starter' | 'professional' | 'enterprise' | 'saas';
   subscription_status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete';
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
@@ -581,6 +581,103 @@ export async function resetPasswordWithToken(
   );
 
   return user;
+}
+
+// ============================================================
+// TENANT SUBSCRIPTION MANAGEMENT (S142 / Stripe Integration)
+// ============================================================
+
+export type TenantPlan = Tenant['plan'];
+export type TenantSubscriptionStatus = Tenant['subscription_status'];
+
+/**
+ * Update tenant's Stripe customer ID
+ */
+export async function updateTenantStripeCustomer(
+  tenantId: string,
+  stripeCustomerId: string
+): Promise<Tenant | null> {
+  return queryOne<Tenant>(
+    `UPDATE tenants SET stripe_customer_id = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [tenantId, stripeCustomerId]
+  );
+}
+
+/**
+ * Update tenant subscription after successful checkout
+ */
+export async function updateTenantSubscription(
+  tenantId: string,
+  update: {
+    plan: TenantPlan;
+    subscription_status: TenantSubscriptionStatus;
+    stripe_subscription_id?: string;
+    stripe_customer_id?: string;
+  }
+): Promise<Tenant | null> {
+  const fields: string[] = ['plan = $2', 'subscription_status = $3', 'updated_at = NOW()'];
+  const values: unknown[] = [tenantId, update.plan, update.subscription_status];
+  let paramIndex = 4;
+
+  if (update.stripe_subscription_id !== undefined) {
+    fields.push(`stripe_subscription_id = $${paramIndex++}`);
+    values.push(update.stripe_subscription_id);
+  }
+
+  if (update.stripe_customer_id !== undefined) {
+    fields.push(`stripe_customer_id = $${paramIndex++}`);
+    values.push(update.stripe_customer_id);
+  }
+
+  return queryOne<Tenant>(
+    `UPDATE tenants SET ${fields.join(', ')} WHERE id = $1 RETURNING *`,
+    values
+  );
+}
+
+/**
+ * Update tenant subscription status (for webhooks)
+ */
+export async function updateTenantSubscriptionStatus(
+  stripeSubscriptionId: string,
+  status: TenantSubscriptionStatus
+): Promise<Tenant | null> {
+  return queryOne<Tenant>(
+    `UPDATE tenants SET subscription_status = $2, updated_at = NOW()
+     WHERE stripe_subscription_id = $1 RETURNING *`,
+    [stripeSubscriptionId, status]
+  );
+}
+
+/**
+ * Cancel tenant subscription (downgrade to free)
+ */
+export async function cancelTenantSubscription(
+  stripeSubscriptionId: string
+): Promise<Tenant | null> {
+  return queryOne<Tenant>(
+    `UPDATE tenants SET
+       plan = 'free',
+       subscription_status = 'canceled',
+       stripe_subscription_id = NULL,
+       updated_at = NOW()
+     WHERE stripe_subscription_id = $1 RETURNING *`,
+    [stripeSubscriptionId]
+  );
+}
+
+/**
+ * Get tenant by Stripe customer ID
+ */
+export async function getTenantByStripeCustomerId(stripeCustomerId: string): Promise<Tenant | null> {
+  return queryOne<Tenant>('SELECT * FROM tenants WHERE stripe_customer_id = $1', [stripeCustomerId]);
+}
+
+/**
+ * Get tenant by Stripe subscription ID
+ */
+export async function getTenantByStripeSubscriptionId(stripeSubscriptionId: string): Promise<Tenant | null> {
+  return queryOne<Tenant>('SELECT * FROM tenants WHERE stripe_subscription_id = $1', [stripeSubscriptionId]);
 }
 
 // ============================================================

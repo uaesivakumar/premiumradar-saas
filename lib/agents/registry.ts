@@ -83,6 +83,21 @@ export const AGENT_CONFIGS: Record<AgentType, AgentConfig> = {
     keywords: ['demo', 'show me', 'example', 'demonstrate', 'how does', 'walkthrough', 'tutorial'],
     priority: 5,
   },
+  'deal-evaluation': {
+    id: 'deal-evaluation',
+    name: 'Deal Evaluator',
+    description: 'Evaluates deals through Skeptical CFO lens for GO/NO-GO decisions',
+    icon: 'Gavel',
+    color: '#DC2626',
+    gradient: 'from-red-500 to-amber-500',
+    capabilities: [
+      { id: 'risk-analysis', name: 'Risk Analysis', description: 'Identify deal risks' },
+      { id: 'verdict', name: 'GO/NO-GO Verdict', description: 'Clear decision output' },
+      { id: 'action', name: 'Decisive Action', description: 'Next step recommendation' },
+    ],
+    keywords: ['deal', 'evaluate', 'verdict', 'risk', 'go', 'no-go', 'should i', 'worth it'],
+    priority: 9,
+  },
 };
 
 // Agent implementations
@@ -336,6 +351,40 @@ class DemoAgent implements Agent {
   }
 }
 
+class DealEvaluationAgent implements Agent {
+  config = AGENT_CONFIGS['deal-evaluation'];
+
+  canHandle(query: string): boolean {
+    return this.getConfidence(query) > 0.3;
+  }
+
+  getConfidence(query: string): number {
+    const q = query.toLowerCase();
+    const matches = this.config.keywords.filter((kw) => q.includes(kw));
+    return Math.min(matches.length * 0.3, 1);
+  }
+
+  async execute(context: AgentContext): Promise<AgentResponse> {
+    // Note: Actual evaluation happens in siva-store via OS endpoint
+    // This is just the registry entry for completeness
+    return {
+      message: `Evaluating deal through Skeptical CFO lens...`,
+      objects: [],
+      reasoningSteps: [
+        { step: 1, title: 'Applying CFO lens', description: 'Loading decision framework', status: 'complete' },
+        { step: 2, title: 'Analyzing signals', description: 'Identifying risk factors', status: 'complete' },
+        { step: 3, title: 'Computing verdict', description: 'GO/HIGH_RISK/NO_GO', status: 'complete' },
+        { step: 4, title: 'Determining action', description: 'Next step recommendation', status: 'complete' },
+      ],
+      followUpSuggestions: [
+        'What are the specific risks?',
+        'How can I de-risk this deal?',
+        'Show me similar deals that worked',
+      ],
+    };
+  }
+}
+
 // Agent registry
 const agents: Agent[] = [
   new DiscoveryAgent(),
@@ -343,6 +392,7 @@ const agents: Agent[] = [
   new OutreachAgent(),
   new EnrichmentAgent(),
   new DemoAgent(),
+  new DealEvaluationAgent(),
 ];
 
 // Route query to best agent

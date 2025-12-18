@@ -77,18 +77,9 @@ export {
   createMockInvoice,
 } from './subscription-store';
 
-// Webhooks
-export {
-  verifyWebhookSignature,
-  processWebhookEvent,
-  handleCheckoutCompleted,
-  handleSubscriptionCreated,
-  handleSubscriptionUpdated,
-  handleSubscriptionDeleted,
-  handleInvoicePaid,
-  handleInvoicePaymentFailed,
-  handleInvoiceUpcoming,
-} from './webhooks';
+// Webhooks - Server only (import directly from './webhooks' in API routes)
+// Not re-exported to prevent pg from being bundled in client components
+// API routes should: import { verifyWebhookSignature, processWebhookEvent } from '@/lib/billing/webhooks';
 
 // Metered Usage
 export {

@@ -8,7 +8,7 @@
 // PLAN & TIER TYPES
 // ============================================================
 
-export type PlanTier = 'free' | 'starter' | 'professional' | 'enterprise';
+export type PlanTier = 'free' | 'starter' | 'professional' | 'enterprise' | 'saas';
 
 export interface PricingPlan {
   id: string;

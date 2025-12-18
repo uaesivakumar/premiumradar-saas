@@ -56,7 +56,7 @@ export interface PersonaConfig {
   persona_role?: string;
   persona_organization?: string;
   mission_statement?: string;
-  entity_type: 'company' | 'individual';
+  entity_type: 'company' | 'individual' | 'deal';
 
   // Targeting
   contact_priority_rules?: ContactPriorityRules;
@@ -185,7 +185,7 @@ export interface FailurePattern {
 // VALID VALUES
 // =============================================================================
 
-const VALID_ENTITY_TYPES = new Set(['company', 'individual']);
+const VALID_ENTITY_TYPES = new Set(['company', 'individual', 'deal']);
 const VALID_TONES = new Set(['professional', 'friendly', 'casual', 'formal', 'authoritative']);
 const VALID_FORMALITIES = new Set(['formal', 'casual', 'semi-formal']);
 const VALID_CHANNELS = new Set(['email', 'linkedin', 'phone', 'whatsapp', 'sms', 'in-person']);
@@ -255,7 +255,7 @@ export function validatePersonaConfig(persona: PersonaConfig): PersonaValidation
     errors.push({
       code: 'INVALID_ENTITY_TYPE',
       field: 'entity_type',
-      message: `Invalid entity type: "${persona.entity_type}". Must be "company" or "individual"`,
+      message: `Invalid entity type: "${persona.entity_type}". Must be "company", "individual", or "deal"`,
       severity: 'critical',
     });
   }

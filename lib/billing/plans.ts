@@ -43,6 +43,15 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     outreach: 50000,
     storageMb: 100000,
   },
+  // US SaaS Edition - Deal Evaluation
+  saas: {
+    users: 3,
+    apiCalls: 50000,
+    exports: 100,
+    searches: 1000,
+    outreach: 100,
+    storageMb: 1000,
+  },
 };
 
 // ============================================================
@@ -133,6 +142,29 @@ export const PRICING_PLANS: PricingPlan[] = [
       { name: 'Export Data', included: true, limit: 'Unlimited' },
       { name: 'AI Outreach', included: true, limit: '50,000 msgs/mo' },
       { name: 'Custom Branding + SSO', included: true },
+    ],
+  },
+  // US SaaS Edition - Private Beta ($199/month)
+  {
+    id: 'plan_saas',
+    tier: 'saas',
+    name: 'SaaS Edition',
+    description: 'AI-powered deal evaluation for SaaS founders, CFOs, and VP Sales',
+    monthlyPrice: 199,
+    yearlyPrice: 1990, // ~17% discount
+    // Set via env: STRIPE_PRICE_ID_SAAS_MONTHLY and STRIPE_PRICE_ID_SAAS_YEARLY
+    stripePriceIdMonthly: process.env.STRIPE_PRICE_ID_SAAS_MONTHLY || 'price_saas_monthly',
+    stripePriceIdYearly: process.env.STRIPE_PRICE_ID_SAAS_YEARLY || 'price_saas_yearly',
+    limits: PLAN_LIMITS.saas,
+    features: [
+      { name: 'Deal Evaluation', included: true, limit: 'Unlimited' },
+      { name: 'Skeptical CFO Lens', included: true },
+      { name: 'GO / HIGH_RISK / NO_GO Verdicts', included: true },
+      { name: 'Risk Factor Analysis', included: true },
+      { name: 'Decisive Action Recommendations', included: true },
+      { name: 'Team Members', included: true, limit: '3 users' },
+      { name: 'Priority Support', included: true },
+      { name: 'API Access', included: true, limit: '50K calls/mo' },
     ],
   },
 ];

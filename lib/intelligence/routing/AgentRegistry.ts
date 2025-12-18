@@ -124,6 +124,27 @@ export const AGENT_CAPABILITIES: Record<AgentType, AgentCapability> = {
     averageLatency: 500,
     successRate: 0.98,
   },
+
+  'deal-evaluation': {
+    agent: 'deal-evaluation',
+    name: 'Deal Evaluator',
+    description: 'Evaluates deals through Skeptical CFO lens for GO/HIGH_RISK/NO_GO verdicts',
+    primaryIntents: [
+      'evaluate_deal',
+      'risk_assessment',
+      'deal_verdict',
+      'go_no_go',
+    ],
+    secondaryIntents: [
+      'identify_risks',
+      'deal_advice',
+    ],
+    entityTypes: ['deal', 'risk', 'verdict'],
+    outputTypes: ['deal_verdict', 'risk_factors', 'action_recommendation'],
+    maxConcurrency: 2,
+    averageLatency: 3000,
+    successRate: 0.91,
+  },
 };
 
 // =============================================================================
@@ -218,6 +239,7 @@ export function getCompatibleAgents(primaryAgent: AgentType): AgentType[] {
     outreach: ['ranking', 'enrichment'],
     enrichment: ['discovery', 'ranking'],
     demo: [],
+    'deal-evaluation': ['enrichment', 'discovery'],
   };
 
   return compatibility[primaryAgent] || [];

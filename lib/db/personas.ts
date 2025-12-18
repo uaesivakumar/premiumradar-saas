@@ -29,7 +29,7 @@ export interface PersonaRecord {
   persona_role: string | null;
   persona_organization: string | null;
   mission_statement: string | null;
-  entity_type: 'company' | 'individual';
+  entity_type: 'company' | 'individual' | 'deal';
   contact_priority_rules: Record<string, unknown> | null;
   edge_cases: Record<string, unknown> | null;
   timing_rules: Record<string, unknown> | null;
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS personas (
   persona_role VARCHAR(255),
   persona_organization VARCHAR(255),
   mission_statement TEXT,
-  entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('company', 'individual')),
+  entity_type VARCHAR(50) NOT NULL CHECK (entity_type IN ('company', 'individual', 'deal')),
 
   -- Targeting
   contact_priority_rules JSONB,

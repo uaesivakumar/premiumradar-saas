@@ -36,6 +36,7 @@ const TYPE_CONFIG = {
   insight: { label: 'Insight', gradient: 'from-indigo-500 to-purple-500' },
   contacts: { label: 'Contacts', gradient: 'from-indigo-500 to-purple-500' },
   message: { label: 'Message', gradient: 'from-teal-500 to-cyan-500' },
+  'deal-verdict': { label: 'Deal Verdict', gradient: 'from-red-500 to-amber-500' },
 };
 
 export function ObjectContainer({ object, children, onDragEnd }: ObjectContainerProps) {

@@ -31,11 +31,12 @@ import {
 } from 'lucide-react';
 
 interface Persona {
+  slug?: string;
   persona_name: string;
   persona_role?: string;
   persona_organization?: string;
   mission_statement?: string;
-  entity_type: 'company' | 'individual';
+  entity_type: 'company' | 'individual' | 'deal';
   contact_priority_rules?: {
     tiers: Array<{
       size_min?: number;
@@ -126,6 +127,10 @@ interface SubVertical {
   description: string;
   persona: Persona;
   isActive: boolean;
+  config?: {
+    default_agent?: string;
+    [key: string]: unknown;
+  };
 }
 
 interface Vertical {
@@ -138,107 +143,103 @@ interface Vertical {
   isActive: boolean;
 }
 
-// Sample data - replace with API calls
-const sampleVerticals: Vertical[] = [
-  {
-    id: '1',
-    slug: 'banking',
-    name: 'Banking',
-    description: 'Banking and financial services',
-    icon: '🏦',
-    isActive: true,
-    subVerticals: [
-      {
-        id: '1-1',
-        slug: 'employee-banking',
-        name: 'Employee Banking',
-        description: 'Payroll, salary accounts, employee benefits',
-        isActive: true,
-        persona: {
-          persona_name: 'EB Sales Officer',
-          persona_role: 'Senior Retail Banking Officer',
-          persona_organization: 'Emirates NBD',
-          mission_statement: 'Help companies streamline employee onboarding with banking solutions',
-          entity_type: 'company',
-          contact_priority_rules: {
-            tiers: [
-              { size_min: 0, size_max: 50, titles: ['Founder', 'COO'], priority: 1 },
-              { size_min: 50, size_max: 500, titles: ['HR Director', 'HR Manager'], priority: 1 },
-              { size_min: 500, size_max: null, titles: ['Payroll Manager', 'Benefits Coordinator'], priority: 1 },
-            ]
-          },
-          edge_cases: {
-            blockers: [
-              { type: 'company_name', values: ['Etihad', 'Emirates', 'ADNOC'], multiplier: 0.1, reason: 'Enterprise accounts handled separately' },
-              { type: 'sector', values: ['government'], multiplier: 0.05, reason: 'Government has separate processes' },
-            ],
-            boosters: [
-              { type: 'license_type', values: ['Free Zone'], multiplier: 1.3, reason: 'Free zone companies need local banking' },
-            ]
-          },
-          outreach_doctrine: {
-            always: ['Reference specific company signal', 'Position as Point of Contact'],
-            never: ['Mention pricing', 'Use pressure language'],
-            tone: 'professional',
-            formality: 'formal',
-            channels: ['email', 'linkedin'],
-          },
-          scoring_config: {
-            weights: { q_score: 0.25, t_score: 0.35, l_score: 0.20, e_score: 0.20 },
-            thresholds: { hot: 80, warm: 60, cold: 40 },
-          },
-        }
-      },
-      {
-        id: '1-2',
-        slug: 'corporate-banking',
-        name: 'Corporate Banking',
-        description: 'Treasury, trade finance, corporate loans',
-        isActive: false,
-        persona: {
-          persona_name: 'Corporate Banking Officer',
-          entity_type: 'company',
-        }
-      },
-    ]
-  },
-  {
-    id: '2',
-    slug: 'insurance',
-    name: 'Insurance',
-    description: 'Life and general insurance',
-    icon: '🛡️',
-    isActive: false,
-    subVerticals: [
-      {
-        id: '2-1',
-        slug: 'individual-insurance',
-        name: 'Individual Insurance',
-        description: 'Life, health, and personal insurance',
-        isActive: false,
-        persona: {
-          persona_name: 'Insurance Advisor',
-          entity_type: 'individual',
-        }
-      },
-    ]
-  },
-];
+// Default empty state - data loaded from API
+const emptyVerticals: Vertical[] = [];
+
+// Helper to get icon for vertical
+function getVerticalIcon(slug: string): string {
+  const icons: Record<string, string> = {
+    'banking': '🏦',
+    'insurance': '🛡️',
+    'real-estate': '🏠',
+    'recruitment': '👥',
+    'saas-sales': '💼',
+  };
+  return icons[slug] || '📊';
+}
 
 export default function VerticalsPage() {
-  const [verticals, setVerticals] = useState<Vertical[]>(sampleVerticals);
-  const [expandedVertical, setExpandedVertical] = useState<string | null>('1');
+  const [verticals, setVerticals] = useState<Vertical[]>(emptyVerticals);
+  const [expandedVertical, setExpandedVertical] = useState<string | null>(null);
   const [selectedSubVertical, setSelectedSubVertical] = useState<SubVertical | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'identity' | 'targeting' | 'timing' | 'outreach' | 'scoring' | 'advanced'>('identity');
 
   // Load verticals from API
   useEffect(() => {
-    // TODO: Fetch from /api/admin/vertical-config
+    async function loadVerticals() {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Fetch all verticals
+        const verticalsRes = await fetch('/api/admin/vertical-config?all=true');
+        const verticalsData = await verticalsRes.json();
+
+        if (!verticalsData.success) {
+          throw new Error(verticalsData.error || 'Failed to load verticals');
+        }
+
+        // Transform flat config data into UI structure
+        const configsArray = verticalsData.data || [];
+        const verticalMap = new Map<string, Vertical>();
+
+        for (const config of configsArray) {
+          const verticalSlug = config.vertical;
+
+          if (!verticalMap.has(verticalSlug)) {
+            verticalMap.set(verticalSlug, {
+              id: verticalSlug,
+              slug: verticalSlug,
+              name: verticalSlug.charAt(0).toUpperCase() + verticalSlug.slice(1).replace(/-/g, ' '),
+              description: '',
+              icon: getVerticalIcon(verticalSlug),
+              isActive: config.isActive ?? true,
+              subVerticals: [],
+            });
+          }
+
+          const vertical = verticalMap.get(verticalSlug)!;
+
+          // Build sub-vertical with persona from config
+          const subVertical: SubVertical = {
+            id: config.id,
+            slug: config.subVertical,
+            name: config.subVertical.charAt(0).toUpperCase() + config.subVertical.slice(1).replace(/-/g, ' '),
+            description: config.persona?.mission_statement || '',
+            isActive: config.isActive ?? true,
+            config: config.config,
+            persona: config.persona || {
+              persona_name: '',
+              entity_type: 'company',
+            },
+          };
+
+          vertical.subVerticals.push(subVertical);
+        }
+
+        const verticalsArray = Array.from(verticalMap.values());
+        setVerticals(verticalsArray);
+
+        // Expand first vertical if exists
+        if (verticalsArray.length > 0) {
+          setExpandedVertical(verticalsArray[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load verticals:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load verticals');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadVerticals();
   }, []);
 
-  function handleSave() {
+  async function handleSave() {
     if (!selectedSubVertical) return;
 
     // Validate persona
@@ -253,11 +254,67 @@ export default function VerticalsPage() {
     }
 
     setIsSaving(true);
-    // TODO: Save to API
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      // Update vertical config with new persona
+      const response = await fetch(`/api/admin/vertical-config?id=${selectedSubVertical.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          persona: selectedSubVertical.persona,
+          config: selectedSubVertical.config,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save');
+      }
+
+      // Update local state
+      setVerticals(prevVerticals =>
+        prevVerticals.map(v => ({
+          ...v,
+          subVerticals: v.subVerticals.map(sv =>
+            sv.id === selectedSubVertical.id ? selectedSubVertical : sv
+          ),
+        }))
+      );
+
       setIsEditing(false);
-    }, 1000);
+    } catch (err) {
+      console.error('Save failed:', err);
+      alert(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+        <span className="ml-3 text-gray-400">Loading verticals...</span>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+        <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-red-400 mb-2">Failed to Load Verticals</h3>
+        <p className="text-gray-400 mb-4">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg"
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -417,11 +474,18 @@ export default function VerticalsPage() {
                 {activeTab === 'identity' && (
                   <IdentityTab
                     persona={selectedSubVertical.persona}
+                    config={selectedSubVertical.config}
                     isEditing={isEditing}
                     onChange={(updates) => {
                       setSelectedSubVertical({
                         ...selectedSubVertical,
                         persona: { ...selectedSubVertical.persona, ...updates }
+                      });
+                    }}
+                    onConfigChange={(updates) => {
+                      setSelectedSubVertical({
+                        ...selectedSubVertical,
+                        config: { ...selectedSubVertical.config, ...updates }
                       });
                     }}
                   />
@@ -493,7 +557,19 @@ export default function VerticalsPage() {
 }
 
 // Identity Tab Component
-function IdentityTab({ persona, isEditing, onChange }: { persona: Persona; isEditing: boolean; onChange: (updates: Partial<Persona>) => void }) {
+function IdentityTab({
+  persona,
+  config,
+  isEditing,
+  onChange,
+  onConfigChange,
+}: {
+  persona: Persona;
+  config?: { default_agent?: string; [key: string]: unknown };
+  isEditing: boolean;
+  onChange: (updates: Partial<Persona>) => void;
+  onConfigChange?: (updates: { default_agent?: string }) => void;
+}) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-6">
@@ -517,15 +593,36 @@ function IdentityTab({ persona, isEditing, onChange }: { persona: Persona; isEdi
           {isEditing ? (
             <select
               value={persona.entity_type || 'company'}
-              onChange={(e) => onChange({ entity_type: e.target.value as 'company' | 'individual' })}
+              onChange={(e) => onChange({ entity_type: e.target.value as 'company' | 'individual' | 'deal' })}
               className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="company">Company</option>
               <option value="individual">Individual</option>
+              <option value="deal">Deal</option>
             </select>
           ) : (
             <p className="text-white capitalize">{persona.entity_type || '-'}</p>
           )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-400 mb-2">Default Agent Type</label>
+          {isEditing ? (
+            <select
+              value={config?.default_agent || 'discovery'}
+              onChange={(e) => onConfigChange?.({ default_agent: e.target.value })}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="discovery">Discovery (Company Leads)</option>
+              <option value="deal-evaluation">Deal Evaluation (SaaS Sales)</option>
+              <option value="ranking">Ranking</option>
+              <option value="outreach">Outreach</option>
+              <option value="scoring">Scoring</option>
+            </select>
+          ) : (
+            <p className="text-white">{config?.default_agent || 'discovery'}</p>
+          )}
+          <p className="text-xs text-gray-500 mt-1">Determines which SIVA agent mode is used for this sub-vertical</p>
         </div>
 
         <div>

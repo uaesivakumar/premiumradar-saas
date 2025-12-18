@@ -241,6 +241,7 @@ export function addAgentParticipant(
     outreach: 'Outreach Agent',
     enrichment: 'Enrichment Agent',
     demo: 'Demo Agent',
+    'deal-evaluation': 'Deal Evaluator',
   };
 
   return addParticipant(thread, {

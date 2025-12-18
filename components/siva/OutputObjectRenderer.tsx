@@ -36,6 +36,11 @@ import {
   ThumbsDown,
   Bookmark,
   BookmarkCheck,
+  Gavel,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Shield,
 } from 'lucide-react';
 import { OutputObject, useSIVAStore } from '@/lib/stores/siva-store';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
@@ -62,6 +67,8 @@ export function OutputObjectRenderer({ object }: OutputObjectRendererProps) {
         return <Lightbulb className="w-5 h-5" />;
       case 'contacts':
         return <UserPlus className="w-5 h-5" />;
+      case 'deal-verdict':
+        return <Gavel className="w-5 h-5" />;
       default:
         return <Database className="w-5 h-5" />;
     }
@@ -79,6 +86,8 @@ export function OutputObjectRenderer({ object }: OutputObjectRendererProps) {
         return 'from-purple-500 to-pink-500';
       case 'contacts':
         return 'from-indigo-500 to-purple-500';
+      case 'deal-verdict':
+        return 'from-red-500 to-amber-500';
       default:
         return 'from-gray-500 to-gray-600';
     }
@@ -96,6 +105,8 @@ export function OutputObjectRenderer({ object }: OutputObjectRendererProps) {
         return <InsightContent data={object.data} />;
       case 'contacts':
         return <ContactsContent data={object.data} />;
+      case 'deal-verdict':
+        return <DealVerdictContent data={object.data} />;
       default:
         return <GenericContent data={object.data} />;
     }
@@ -1231,6 +1242,204 @@ function InsightContent({ data }: { data: Record<string, unknown> }) {
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Deal Verdict Content - SaaS Sales Edition
+// Renders GO / HIGH_RISK / NO_GO verdicts with risk factors and decisive action
+function DealVerdictContent({ data }: { data: Record<string, unknown> }) {
+  const verdict = data.verdict as 'GO' | 'HIGH_RISK' | 'NO_GO';
+  const confidence = data.confidence as number;
+  const reasoning = data.reasoning as string;
+  const riskFactors = data.risk_factors as Array<{
+    factor: string;
+    severity: 'high' | 'medium' | 'low';
+    description?: string;
+  }>;
+  const decisiveAction = data.decisive_action as string;
+  const dealContext = data.deal_context as {
+    company_name: string;
+    deal_size?: string;
+    stage?: string;
+  };
+
+  // Verdict display configuration
+  const verdictConfig = {
+    GO: {
+      label: 'GO',
+      sublabel: 'Proceed with Confidence',
+      icon: CheckCircle2,
+      bgGradient: 'from-green-500/30 to-emerald-500/20',
+      borderColor: 'border-green-500/40',
+      textColor: 'text-green-400',
+      badgeBg: 'bg-green-500',
+      glow: 'shadow-[0_0_30px_rgba(34,197,94,0.3)]',
+    },
+    HIGH_RISK: {
+      label: 'HIGH RISK',
+      sublabel: 'Proceed with Caution',
+      icon: AlertTriangle,
+      bgGradient: 'from-amber-500/30 to-orange-500/20',
+      borderColor: 'border-amber-500/40',
+      textColor: 'text-amber-400',
+      badgeBg: 'bg-amber-500',
+      glow: 'shadow-[0_0_30px_rgba(251,146,60,0.3)]',
+    },
+    NO_GO: {
+      label: 'NO GO',
+      sublabel: 'Walk Away',
+      icon: XCircle,
+      bgGradient: 'from-red-500/30 to-rose-500/20',
+      borderColor: 'border-red-500/40',
+      textColor: 'text-red-400',
+      badgeBg: 'bg-red-500',
+      glow: 'shadow-[0_0_30px_rgba(239,68,68,0.3)]',
+    },
+  };
+
+  const config = verdictConfig[verdict] || verdictConfig.HIGH_RISK;
+  const VerdictIcon = config.icon;
+
+  // Severity color mapping
+  const severityColors = {
+    high: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+    medium: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
+    low: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Deal Context Header */}
+      {dealContext && (
+        <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+          <Building2 className="w-5 h-5 text-gray-400" />
+          <div>
+            <p className="font-medium text-white">{dealContext.company_name}</p>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              {dealContext.deal_size && <span>{dealContext.deal_size}</span>}
+              {dealContext.stage && (
+                <>
+                  <span>•</span>
+                  <span>{dealContext.stage}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Verdict Card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${config.bgGradient} border ${config.borderColor} ${config.glow}`}
+      >
+        {/* Verdict Header */}
+        <div className="p-6 text-center">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+            className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${config.badgeBg} mb-4`}
+          >
+            <VerdictIcon className="w-8 h-8 text-white" />
+          </motion.div>
+
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className={`text-4xl font-black ${config.textColor} mb-1`}
+          >
+            {config.label}
+          </motion.h2>
+          <p className="text-sm text-gray-400">{config.sublabel}</p>
+
+          {/* Confidence Meter */}
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <span className="text-xs text-gray-500">Confidence</span>
+            <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${(confidence || 0.5) * 100}%` }}
+                transition={{ duration: 0.8, delay: 0.3 }}
+                className={`h-full ${config.badgeBg}`}
+              />
+            </div>
+            <span className={`text-sm font-bold ${config.textColor}`}>
+              {Math.round((confidence || 0.5) * 100)}%
+            </span>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Reasoning */}
+      {reasoning && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="p-4 bg-white/5 rounded-xl"
+        >
+          <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-medium">CFO Analysis</p>
+          <p className="text-sm text-gray-300 leading-relaxed">{reasoning}</p>
+        </motion.div>
+      )}
+
+      {/* Risk Factors */}
+      {riskFactors && riskFactors.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="space-y-2"
+        >
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-gray-400" />
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Risk Factors</p>
+          </div>
+          <div className="space-y-2">
+            {riskFactors.map((risk, i) => {
+              const severityStyle = severityColors[risk.severity] || severityColors.medium;
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 + i * 0.1 }}
+                  className={`p-3 rounded-lg ${severityStyle.bg} border ${severityStyle.border}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className={`text-xs font-bold uppercase px-1.5 py-0.5 rounded ${severityStyle.bg} ${severityStyle.text}`}>
+                      {risk.severity}
+                    </span>
+                    <div className="flex-1">
+                      <p className={`text-sm font-medium ${severityStyle.text}`}>{risk.factor}</p>
+                      {risk.description && (
+                        <p className="text-xs text-gray-400 mt-1">{risk.description}</p>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Decisive Action - THE ONE THING TO DO */}
+      {decisiveAction && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="p-4 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-xl border border-purple-500/30"
+        >
+          <p className="text-xs text-purple-400 mb-2 uppercase tracking-wide font-bold">Next Step</p>
+          <p className="text-lg font-semibold text-white">{decisiveAction}</p>
+        </motion.div>
       )}
     </div>
   );

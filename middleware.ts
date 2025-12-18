@@ -31,6 +31,7 @@ type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'unp
 interface SessionPayload {
   user_id: string;
   tenant_id: string;
+  email?: string;
   role: UserRole;
   mfa_enabled: boolean;
   mfa_verified: boolean;
@@ -65,6 +66,31 @@ const PREMIUM_ROUTES: { path: string; allowedPlans: PlanType[] }[] = [
   { path: '/dashboard/siva', allowedPlans: ['starter', 'professional', 'enterprise'] },
   { path: '/dashboard/enrichment', allowedPlans: ['professional', 'enterprise'] },
 ];
+
+// Beta-gated routes (email allowlist)
+// Set BETA_ALLOWLIST env var with comma-separated emails
+// Set BETA_GATING_ENABLED=false to disable
+const BETA_GATED_ROUTES = [
+  '/dashboard/deal-evaluation',
+  '/dashboard/saas-sales',
+];
+
+// Get beta allowlist from env
+function getBetaAllowlist(): string[] {
+  const envAllowlist = process.env.BETA_ALLOWLIST;
+  if (envAllowlist) {
+    return envAllowlist.split(',').map((email) => email.trim().toLowerCase());
+  }
+  // Default allowlist during development
+  return [
+    'demo.saas.user@premiumradar.ai',
+    'sivakumarc.india@gmail.com',
+  ];
+}
+
+function isBetaGatingEnabled(): boolean {
+  return process.env.BETA_GATING_ENABLED !== 'false';
+}
 
 // Admin routes requiring TENANT_ADMIN+
 const ADMIN_ROUTES = ['/dashboard/settings/team', '/dashboard/settings/billing'];
@@ -220,6 +246,25 @@ export async function middleware(request: NextRequest) {
       redirectUrl.searchParams.set('upgrade', 'required');
       redirectUrl.searchParams.set('feature', pathname);
       return NextResponse.redirect(redirectUrl);
+    }
+  }
+
+  // ==========================================================================
+  // BETA ACCESS GATING (SaaS Sales Edition)
+  // ==========================================================================
+
+  if (session && isBetaGatingEnabled()) {
+    const isBetaRoute = BETA_GATED_ROUTES.some((route) => pathname.startsWith(route));
+    if (isBetaRoute) {
+      const allowlist = getBetaAllowlist();
+      const userEmail = session.email?.toLowerCase() || '';
+
+      if (!allowlist.includes(userEmail)) {
+        // Redirect to beta waitlist page
+        const redirectUrl = new URL('/beta', request.url);
+        redirectUrl.searchParams.set('feature', pathname);
+        return NextResponse.redirect(redirectUrl);
+      }
     }
   }
 

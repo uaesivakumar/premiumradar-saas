@@ -5,7 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyWebhookSignature, processWebhookEvent } from '@/lib/billing';
+// Import directly from webhooks module (server-only, not exported from barrel)
+import { verifyWebhookSignature, processWebhookEvent } from '@/lib/billing/webhooks';
 
 export async function POST(request: NextRequest) {
   try {

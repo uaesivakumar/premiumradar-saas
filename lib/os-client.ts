@@ -175,6 +175,25 @@ interface IntelligenceFeedbackRequest {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Deal Evaluation Request - SaaS Sales Edition
+ * Skeptical CFO lens for GO/HIGH_RISK/NO_GO verdicts
+ */
+interface DealEvaluationRequest {
+  tenant_id: string;
+  user_id?: string;
+  deal_context: {
+    company_name: string;
+    deal_size?: string;
+    stage?: string;
+    concerns?: string;
+    additional_context?: string;
+  };
+  persona_id?: string;
+  vertical?: string;
+  sub_vertical?: string;
+}
+
 interface OSResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -732,6 +751,50 @@ class OSClient {
       timestamp: new Date().toISOString(),
     };
   }
+
+  /**
+   * Deal Evaluation - SaaS Sales Edition
+   * Evaluates deals through Skeptical CFO lens
+   * Returns: verdict (GO/HIGH_RISK/NO_GO), risk_factors, decisive_action
+   */
+  async dealEvaluation(request: DealEvaluationRequest): Promise<OSResponse> {
+    return this.circuitBreakers.general.execute(
+      async () => {
+        return retryWithBackoff(
+          async () => {
+            const response = await this.client.post('/intelligence/deal-evaluation', request, {
+              headers: this.getContextHeaders(),
+            });
+            return response.data;
+          },
+          { maxRetries: 2, shouldRetry: isRetryableError }
+        );
+      },
+      () => this.getFallbackDealEvaluationResponse(request)
+    );
+  }
+
+  /**
+   * VS6: Fallback deal evaluation response
+   */
+  private getFallbackDealEvaluationResponse(request: DealEvaluationRequest): OSResponse {
+    console.warn('[OS Client] Using fallback deal evaluation response - OS unavailable');
+    return {
+      success: true,
+      data: {
+        verdict: 'HIGH_RISK',
+        confidence: 0.5,
+        reasoning: 'Deal evaluation service temporarily unavailable. Please try again later.',
+        risk_factors: [
+          { factor: 'Service Unavailable', severity: 'medium', description: 'Could not connect to evaluation service' },
+        ],
+        decisive_action: 'Retry evaluation when service is restored',
+        deal_context: request.deal_context,
+        fallback: true,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
 
 // Singleton instance
@@ -752,5 +815,6 @@ export type {
   PipelineRequest,
   IntelligenceSessionRequest,
   IntelligenceFeedbackRequest,
+  DealEvaluationRequest,
   OSResponse,
 };

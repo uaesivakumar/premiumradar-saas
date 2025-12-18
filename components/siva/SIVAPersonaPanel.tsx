@@ -17,6 +17,7 @@ import {
   Database,
   Play,
   Eye,
+  Gavel,
 } from 'lucide-react';
 import { useSIVAStore, SIVAState, AgentType } from '@/lib/stores/siva-store';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
@@ -36,6 +37,7 @@ const AGENT_CONFIG: Record<AgentType, { label: string; icon: typeof Search; desc
   outreach: { label: 'Outreach Agent', icon: Send, description: 'Crafting messages' },
   enrichment: { label: 'Enrichment Agent', icon: Database, description: 'Gathering data' },
   demo: { label: 'Demo Agent', icon: Play, description: 'Demonstrating' },
+  'deal-evaluation': { label: 'Deal Evaluator', icon: Gavel, description: 'Evaluating deal' },
 };
 
 export function SIVAPersonaPanel() {
