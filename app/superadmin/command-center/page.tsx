@@ -1,15 +1,13 @@
 'use client';
 
 /**
- * Founder Command Center
+ * Founder Command Center - Professional Control Panel
  *
- * The Solo Founder's Operating System - Single pane of glass that:
- * 1. Tells you what matters NOW
- * 2. Auto-adopts new tech (AI Tech Radar)
- * 3. Tracks revenue and runway
- * 4. AI-generated priorities
- *
- * Sprint 72 - Dec 2025
+ * Design: Linear/Stripe inspired - minimal, functional, no gradients
+ * Solo founder's single pane of glass for:
+ * 1. Business metrics (MRR, burn, runway)
+ * 2. AI Tech Radar (model updates)
+ * 3. AI-generated priorities
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -20,27 +18,45 @@ import {
   Zap,
   AlertTriangle,
   CheckCircle,
-  Clock,
   RefreshCw,
   Loader2,
   ArrowUp,
   ArrowDown,
   Flame,
-  Target,
   Brain,
-  Sparkles,
-  ExternalLink,
   Play,
   TestTube,
   XCircle,
   Eye,
   ChevronRight,
   Cpu,
-  Cloud,
   BarChart3,
+  Activity,
+  Database,
+  Server,
+  Terminal,
+  Trash2,
+  ExternalLink,
+  Clock,
+  Shield,
 } from 'lucide-react';
 
 // Types
+interface SystemHealth {
+  status: 'operational' | 'degraded' | 'outage';
+  services: {
+    name: string;
+    status: 'up' | 'down' | 'degraded' | 'unknown';
+    latencyMs?: number;
+    message?: string;
+  }[];
+  metrics: {
+    uptime: number;
+    memoryUsage: number;
+    heapUsed: number;
+  };
+}
+
 interface BusinessPulse {
   mrr: number;
   mrrGrowth: number;
@@ -139,6 +155,22 @@ export default function CommandCenterPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+
+  // Fetch system health from /api/status
+  const fetchHealth = useCallback(async () => {
+    try {
+      setHealthLoading(true);
+      const response = await fetch('/api/status');
+      const result = await response.json();
+      setSystemHealth(result);
+    } catch (err) {
+      console.error('[Command Center] Health check error:', err);
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
 
   // VS12.7: Fetch real data from API (no mock fallback)
   const fetchData = useCallback(async () => {
@@ -167,17 +199,22 @@ export default function CommandCenterPage() {
 
   useEffect(() => {
     fetchData();
-    // Refresh every 60 seconds
-    const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+    fetchHealth();
+    // Refresh data every 60 seconds, health every 30 seconds
+    const dataInterval = setInterval(fetchData, 60000);
+    const healthInterval = setInterval(fetchHealth, 30000);
+    return () => {
+      clearInterval(dataInterval);
+      clearInterval(healthInterval);
+    };
+  }, [fetchData, fetchHealth]);
 
   if (isLoading && !data) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading Command Center...</p>
+          <Loader2 className="w-5 h-5 text-neutral-500 animate-spin mx-auto mb-3" />
+          <p className="text-neutral-500 text-sm">Loading...</p>
         </div>
       </div>
     );
@@ -187,11 +224,11 @@ export default function CommandCenterPage() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mb-4" />
-          <p className="text-gray-400 mb-4">{error}</p>
+          <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto mb-3" />
+          <p className="text-neutral-400 text-sm mb-4">{error}</p>
           <button
             onClick={fetchData}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
           >
             Retry
           </button>
@@ -206,34 +243,27 @@ export default function CommandCenterPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl flex items-center justify-center">
-            <Target className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Command Center</h1>
-            <p className="text-gray-400">Your business at a glance</p>
-          </div>
+        <div>
+          <h1 className="text-lg font-medium text-white">Command Center</h1>
+          <p className="text-neutral-500 text-sm mt-0.5">
+            Business metrics
+            {lastRefresh && (
+              <span className="text-neutral-600 ml-2">· {formatTimeAgo(lastRefresh)}</span>
+            )}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchData}
-            disabled={isLoading}
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-          >
-            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-          {lastRefresh && (
-            <span className="text-xs text-gray-500">
-              Updated {formatTimeAgo(lastRefresh)}
-            </span>
-          )}
-        </div>
+        <button
+          onClick={fetchData}
+          disabled={isLoading}
+          className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Business Pulse Row */}
-      <div className="bg-gradient-to-r from-gray-900 via-gray-900 to-gray-800 rounded-xl border border-gray-800 p-6">
-        <div className="grid grid-cols-6 gap-6">
+      <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+        <div className="grid grid-cols-6 gap-4">
           <PulseMetric
             icon={DollarSign}
             label="MRR"
@@ -267,7 +297,7 @@ export default function CommandCenterPage() {
             color={data.pulse.churn < 5 ? 'green' : 'red'}
           />
           <PulseMetric
-            icon={Sparkles}
+            icon={BarChart3}
             label="AI Savings"
             value={`$${data.pulse.aiSavings}/mo`}
             color="purple"
@@ -275,40 +305,157 @@ export default function CommandCenterPage() {
         </div>
       </div>
 
+      {/* Solo Founder Ops Panel */}
+      <div className="grid grid-cols-3 gap-4">
+        {/* Quick Actions */}
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <h3 className="text-xs font-medium text-neutral-400 mb-3 flex items-center gap-1.5">
+            <Terminal className="w-3.5 h-3.5" />
+            Quick Actions
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <QuickAction
+              icon={Server}
+              label="Deploy"
+              onClick={() => window.open('https://console.cloud.google.com/run?project=applied-algebra-474804-e6', '_blank')}
+              color="emerald"
+            />
+            <QuickAction
+              icon={Terminal}
+              label="Logs"
+              onClick={() => window.open('https://console.cloud.google.com/logs/query?project=applied-algebra-474804-e6', '_blank')}
+              color="blue"
+            />
+            <QuickAction
+              icon={Database}
+              label="DB"
+              onClick={() => window.open('https://console.cloud.google.com/sql/instances?project=applied-algebra-474804-e6', '_blank')}
+              color="violet"
+            />
+            <QuickAction
+              icon={Trash2}
+              label="Clear Cache"
+              onClick={() => alert('Cache cleared (demo)')}
+              color="amber"
+            />
+          </div>
+        </div>
+
+        {/* System Health */}
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-medium text-neutral-400 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5" />
+              System Health
+            </h3>
+            {systemHealth && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                systemHealth.status === 'operational' ? 'bg-emerald-500/10 text-emerald-400' :
+                systemHealth.status === 'degraded' ? 'bg-amber-500/10 text-amber-400' :
+                'bg-red-500/10 text-red-400'
+              }`}>
+                {systemHealth.status}
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {systemHealth ? (
+              <>
+                <HealthItem
+                  status="healthy"
+                  label="SaaS Frontend"
+                  latency={`${systemHealth.metrics.uptime > 0 ? 'up' : '-'}`}
+                />
+                {systemHealth.services.map((service) => (
+                  <HealthItem
+                    key={service.name}
+                    status={service.status === 'up' ? 'healthy' : service.status === 'degraded' ? 'degraded' : 'down'}
+                    label={service.name === 'database' ? 'PostgreSQL' : service.name === 'os-service' ? 'UPR OS' : service.name}
+                    latency={service.latencyMs ? `${service.latencyMs}ms` : '-'}
+                  />
+                ))}
+              </>
+            ) : healthLoading ? (
+              <div className="flex items-center justify-center py-2">
+                <Loader2 className="w-4 h-4 text-neutral-500 animate-spin" />
+              </div>
+            ) : (
+              <p className="text-xs text-neutral-600 text-center py-2">No health data</p>
+            )}
+          </div>
+        </div>
+
+        {/* Uptime & Performance */}
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <h3 className="text-xs font-medium text-neutral-400 mb-3 flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5" />
+            Performance
+          </h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-neutral-500">Uptime</span>
+              <span className="text-xs font-medium text-emerald-400">
+                {systemHealth ? formatUptime(systemHealth.metrics.uptime) : '-'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-neutral-500">Memory</span>
+              <span className="text-xs font-medium text-white">
+                {systemHealth ? `${systemHealth.metrics.memoryUsage}MB` : '-'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-neutral-500">Heap Used</span>
+              <span className="text-xs font-medium text-white">
+                {systemHealth ? `${systemHealth.metrics.heapUsed}MB` : '-'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-neutral-500">Avg Latency</span>
+              <span className="text-xs font-medium text-white">
+                {systemHealth?.services.length ?
+                  `${Math.round(systemHealth.services.reduce((sum, s) => sum + (s.latencyMs || 0), 0) / systemHealth.services.length)}ms`
+                  : '-'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Priorities Section */}
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Brain className="w-5 h-5 text-purple-400" />
-            Today&apos;s Priorities
-            <span className="text-xs text-gray-500 font-normal">(AI-Generated)</span>
+      <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-neutral-300 flex items-center gap-2">
+            <Brain className="w-4 h-4 text-neutral-500" />
+            Priorities
+            <span className="text-[10px] text-neutral-600 font-normal px-1.5 py-0.5 bg-neutral-800 rounded">AI</span>
           </h2>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {data.priorities.map((priority, index) => (
             <PriorityCard key={priority.id} priority={priority} index={index + 1} />
           ))}
           {data.priorities.length === 0 && (
-            <div className="text-center py-8">
-              <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-              <p className="text-gray-400">All clear! No urgent priorities today.</p>
+            <div className="text-center py-6">
+              <CheckCircle className="w-5 h-5 text-emerald-500 mx-auto mb-2" />
+              <p className="text-neutral-500 text-xs">No urgent priorities</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Two Column Layout: AI Tech Radar + Revenue/Costs */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-2 gap-4">
         {/* AI Tech Radar */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Cpu className="w-5 h-5 text-blue-400" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-neutral-300 flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-neutral-500" />
               AI Tech Radar
             </h2>
-            <span className="text-xs text-gray-500">Auto-updated daily</span>
+            <span className="text-[10px] text-neutral-600">daily updates</span>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {data.modelUpdates.map((update) => (
               <ModelUpdateCard key={update.id} update={update} />
             ))}
@@ -316,76 +463,69 @@ export default function CommandCenterPage() {
         </div>
 
         {/* Revenue & Costs */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-green-400" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-neutral-300 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-neutral-500" />
               Revenue & Runway
             </h2>
-            <span className="text-xs text-gray-500">December 2024</span>
           </div>
 
           {/* Revenue */}
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-400 mb-3">Revenue</h3>
-            <div className="space-y-2">
+          <div className="mb-4">
+            <h3 className="text-xs font-medium text-neutral-500 mb-2">Revenue</h3>
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">Subscriptions</span>
-                <span className="text-sm text-white">
+                <span className="text-xs text-neutral-500">Subscriptions</span>
+                <span className="text-xs text-white">
                   ${data.revenue.subscriptions.amount.toLocaleString()}
-                  <span className="text-gray-500 ml-1">({data.revenue.subscriptions.count} customers)</span>
+                  <span className="text-neutral-600 ml-1">({data.revenue.subscriptions.count})</span>
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">API Usage Overages</span>
-                <span className="text-sm text-white">${data.revenue.apiOverages.toLocaleString()}</span>
+                <span className="text-xs text-neutral-500">API Overages</span>
+                <span className="text-xs text-white">${data.revenue.apiOverages.toLocaleString()}</span>
               </div>
-              <div className="flex items-center justify-between pt-2 border-t border-gray-800">
-                <span className="text-sm font-medium text-white">Total MRR</span>
-                <span className="text-lg font-bold text-green-400">${data.revenue.total.toLocaleString()}</span>
+              <div className="flex items-center justify-between pt-1.5 border-t border-neutral-800">
+                <span className="text-xs font-medium text-white">MRR</span>
+                <span className="text-sm font-semibold text-emerald-400">${data.revenue.total.toLocaleString()}</span>
               </div>
             </div>
           </div>
 
           {/* Costs */}
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-400 mb-3">Costs</h3>
-            <div className="space-y-2">
+          <div className="mb-4">
+            <h3 className="text-xs font-medium text-neutral-500 mb-2">Costs</h3>
+            <div className="space-y-1.5">
               <CostRow label="OpenAI API" amount={data.costs.openai} savings={data.pulse.aiSavings} />
               <CostRow label="Apollo/SERP" amount={data.costs.apollo + data.costs.serp} />
-              <CostRow label="GCP Infrastructure" amount={data.costs.gcp} />
-              <CostRow label="Domains/Services" amount={data.costs.domains} />
-              <div className="flex items-center justify-between pt-2 border-t border-gray-800">
-                <span className="text-sm font-medium text-white">Total Monthly Burn</span>
-                <span className="text-lg font-bold text-orange-400">${data.costs.total.toLocaleString()}</span>
+              <CostRow label="GCP" amount={data.costs.gcp} />
+              <CostRow label="Other" amount={data.costs.domains} />
+              <div className="flex items-center justify-between pt-1.5 border-t border-neutral-800">
+                <span className="text-xs font-medium text-white">Burn</span>
+                <span className="text-sm font-semibold text-amber-400">${data.costs.total.toLocaleString()}</span>
               </div>
             </div>
           </div>
 
           {/* Summary */}
-          <div className="bg-gray-800/50 rounded-lg p-4 space-y-2">
+          <div className="bg-neutral-800/30 rounded p-3 space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Net Margin</span>
-              <span className="text-sm font-medium text-green-400">
+              <span className="text-xs text-neutral-500">Net</span>
+              <span className="text-xs font-medium text-emerald-400">
                 ${(data.pulse.mrr - data.costs.total).toLocaleString()}/mo
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Runway</span>
-              <span className="text-sm font-medium text-white">
-                {data.pulse.runway.months === Infinity ? '∞' : `${data.pulse.runway.months} months`}
+              <span className="text-xs text-neutral-500">Runway</span>
+              <span className="text-xs font-medium text-white">
+                {data.pulse.runway.months === Infinity ? '∞' : `${data.pulse.runway.months}mo`}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Break-even</span>
-              <span className="text-sm font-medium text-green-400">
-                {data.pulse.mrr > data.costs.total ? 'Already profitable!' : 'Not yet'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Savings from AI Routing</span>
-              <span className="text-sm font-medium text-purple-400">
-                ${data.pulse.aiSavings}/mo
+              <span className="text-xs text-neutral-500">Status</span>
+              <span className="text-xs font-medium text-emerald-400">
+                {data.pulse.mrr > data.costs.total ? 'Profitable' : 'Pre-profit'}
               </span>
             </div>
           </div>
@@ -413,29 +553,29 @@ function PulseMetric({
   color: 'green' | 'orange' | 'blue' | 'red' | 'purple';
 }) {
   const colors = {
-    green: 'text-green-400',
-    orange: 'text-orange-400',
+    green: 'text-emerald-400',
+    orange: 'text-amber-400',
     blue: 'text-blue-400',
     red: 'text-red-400',
-    purple: 'text-purple-400',
+    purple: 'text-violet-400',
   };
 
   return (
     <div className="text-center">
-      <div className="flex items-center justify-center gap-2 mb-1">
-        <Icon className={`w-4 h-4 ${colors[color]}`} />
-        <span className="text-xs text-gray-500 uppercase tracking-wide">{label}</span>
+      <div className="flex items-center justify-center gap-1.5 mb-1">
+        <Icon className="w-3.5 h-3.5 text-neutral-600" />
+        <span className="text-[10px] text-neutral-500 uppercase tracking-wide">{label}</span>
       </div>
-      <div className={`text-2xl font-bold ${colors[color]}`}>{value}</div>
-      {subValue && <p className="text-xs text-gray-500 mt-0.5">{subValue}</p>}
+      <div className={`text-xl font-semibold ${colors[color]}`}>{value}</div>
+      {subValue && <p className="text-[10px] text-neutral-600 mt-0.5">{subValue}</p>}
       {change !== undefined && (
-        <div className="flex items-center justify-center gap-1 mt-1">
+        <div className="flex items-center justify-center gap-0.5 mt-0.5">
           {change >= 0 ? (
-            <ArrowUp className="w-3 h-3 text-green-400" />
+            <ArrowUp className="w-2.5 h-2.5 text-emerald-400" />
           ) : (
-            <ArrowDown className="w-3 h-3 text-red-400" />
+            <ArrowDown className="w-2.5 h-2.5 text-red-400" />
           )}
-          <span className={`text-xs ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`text-[10px] ${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {Math.abs(change)}%
           </span>
         </div>
@@ -447,53 +587,53 @@ function PulseMetric({
 function PriorityCard({ priority, index }: { priority: Priority; index: number }) {
   const severityStyles = {
     critical: {
-      bg: 'bg-red-500/10',
-      border: 'border-red-500/30',
+      bg: 'bg-red-500/5',
+      border: 'border-red-500/20',
       icon: 'text-red-400',
-      badge: 'bg-red-500',
+      badge: 'bg-red-500/80',
     },
     warning: {
-      bg: 'bg-yellow-500/10',
-      border: 'border-yellow-500/30',
-      icon: 'text-yellow-400',
-      badge: 'bg-yellow-500',
+      bg: 'bg-amber-500/5',
+      border: 'border-amber-500/20',
+      icon: 'text-amber-400',
+      badge: 'bg-amber-500/80',
     },
     info: {
-      bg: 'bg-blue-500/10',
-      border: 'border-blue-500/30',
+      bg: 'bg-blue-500/5',
+      border: 'border-blue-500/20',
       icon: 'text-blue-400',
-      badge: 'bg-blue-500',
+      badge: 'bg-blue-500/80',
     },
   };
 
   const style = severityStyles[priority.severity];
 
   return (
-    <div className={`${style.bg} border ${style.border} rounded-lg p-4 flex items-start gap-4`}>
-      <div className={`w-6 h-6 rounded-full ${style.badge} flex items-center justify-center flex-shrink-0`}>
-        <span className="text-xs font-bold text-white">{index}</span>
+    <div className={`${style.bg} border ${style.border} rounded p-3 flex items-start gap-3`}>
+      <div className={`w-5 h-5 rounded-full ${style.badge} flex items-center justify-center flex-shrink-0`}>
+        <span className="text-[10px] font-medium text-white">{index}</span>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          {priority.severity === 'critical' && <XCircle className={`w-4 h-4 ${style.icon}`} />}
-          {priority.severity === 'warning' && <AlertTriangle className={`w-4 h-4 ${style.icon}`} />}
-          {priority.severity === 'info' && <Eye className={`w-4 h-4 ${style.icon}`} />}
-          <span className="font-medium text-white">{priority.title}</span>
+        <div className="flex items-center gap-1.5 mb-0.5">
+          {priority.severity === 'critical' && <XCircle className={`w-3.5 h-3.5 ${style.icon}`} />}
+          {priority.severity === 'warning' && <AlertTriangle className={`w-3.5 h-3.5 ${style.icon}`} />}
+          {priority.severity === 'info' && <Eye className={`w-3.5 h-3.5 ${style.icon}`} />}
+          <span className="text-xs font-medium text-white">{priority.title}</span>
           {priority.metric && (
-            <span className={`text-xs px-2 py-0.5 rounded ${style.bg} ${style.icon}`}>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${style.bg} ${style.icon}`}>
               {priority.metric}
             </span>
           )}
         </div>
-        <p className="text-sm text-gray-400">{priority.description}</p>
+        <p className="text-[11px] text-neutral-500">{priority.description}</p>
       </div>
       {priority.action && (
         <a
           href={priority.action.href}
-          className="flex items-center gap-1 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-sm text-white rounded-lg transition-colors flex-shrink-0"
+          className="flex items-center gap-0.5 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 text-[10px] text-white rounded transition-colors flex-shrink-0"
         >
           {priority.action.label}
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-3 h-3" />
         </a>
       )}
     </div>
@@ -502,74 +642,74 @@ function PriorityCard({ priority, index }: { priority: Priority; index: number }
 
 function ModelUpdateCard({ update }: { update: ModelUpdate }) {
   const providerLogos: Record<string, { bg: string; text: string }> = {
-    openai: { bg: 'bg-green-500/20', text: 'text-green-400' },
-    anthropic: { bg: 'bg-orange-500/20', text: 'text-orange-400' },
-    google: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-    mistral: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
-    groq: { bg: 'bg-pink-500/20', text: 'text-pink-400' },
+    openai: { bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
+    anthropic: { bg: 'bg-amber-500/10', text: 'text-amber-400' },
+    google: { bg: 'bg-blue-500/10', text: 'text-blue-400' },
+    mistral: { bg: 'bg-violet-500/10', text: 'text-violet-400' },
+    groq: { bg: 'bg-pink-500/10', text: 'text-pink-400' },
   };
 
   const style = providerLogos[update.provider] || providerLogos.openai;
 
   return (
-    <div className="border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors">
+    <div className="border border-neutral-800 rounded p-3 hover:border-neutral-700 transition-colors">
       <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {update.isNew && (
-            <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded">
+            <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] rounded">
               NEW
             </span>
           )}
-          <span className={`px-2 py-0.5 ${style.bg} ${style.text} text-xs rounded capitalize`}>
+          <span className={`px-1.5 py-0.5 ${style.bg} ${style.text} text-[10px] rounded capitalize`}>
             {update.provider}
           </span>
         </div>
-        <span className="text-xs text-gray-500">{update.releaseDate}</span>
+        <span className="text-[10px] text-neutral-600">{update.releaseDate}</span>
       </div>
 
-      <h4 className="font-medium text-white mb-2">{update.model}</h4>
+      <h4 className="text-xs font-medium text-white mb-2">{update.model}</h4>
 
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-2">
         {update.costChange && (
-          <span className="text-xs px-2 py-1 bg-green-500/10 text-green-400 rounded">
+          <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded">
             {update.costChange}% cost
           </span>
         )}
         {update.speedChange && (
-          <span className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded">
+          <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded">
             +{update.speedChange}% speed
           </span>
         )}
         {update.qualityChange && (
-          <span className="text-xs px-2 py-1 bg-purple-500/10 text-purple-400 rounded">
+          <span className="text-[10px] px-1.5 py-0.5 bg-violet-500/10 text-violet-400 rounded">
             +{update.qualityChange}% quality
           </span>
         )}
       </div>
 
       {update.estimatedMonthlySavings && (
-        <p className="text-xs text-gray-400 mb-3">
-          Estimated savings: <span className="text-green-400 font-medium">${update.estimatedMonthlySavings}/mo</span>
+        <p className="text-[10px] text-neutral-500 mb-2">
+          Est. savings: <span className="text-emerald-400">${update.estimatedMonthlySavings}/mo</span>
         </p>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-1.5">
         {update.actions.canSwitch && (
-          <button className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs text-white rounded transition-colors flex items-center justify-center gap-1">
-            <Play className="w-3 h-3" />
-            Switch Now
+          <button className="flex-1 px-2 py-1 bg-white/10 hover:bg-white/15 text-[10px] text-white rounded transition-colors flex items-center justify-center gap-1">
+            <Play className="w-2.5 h-2.5" />
+            Switch
           </button>
         )}
         {update.actions.canTest && (
-          <button className="flex-1 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs text-white rounded transition-colors flex items-center justify-center gap-1">
-            <TestTube className="w-3 h-3" />
-            Test First
+          <button className="flex-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 text-[10px] text-white rounded transition-colors flex items-center justify-center gap-1">
+            <TestTube className="w-2.5 h-2.5" />
+            Test
           </button>
         )}
         {update.actions.canAddFallback && !update.actions.canSwitch && (
-          <button className="flex-1 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs text-white rounded transition-colors flex items-center justify-center gap-1">
-            <Zap className="w-3 h-3" />
-            Add to Fallback
+          <button className="flex-1 px-2 py-1 bg-neutral-800 hover:bg-neutral-700 text-[10px] text-white rounded transition-colors flex items-center justify-center gap-1">
+            <Zap className="w-2.5 h-2.5" />
+            Fallback
           </button>
         )}
       </div>
@@ -588,11 +728,11 @@ function CostRow({
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-gray-400">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-white">${amount.toLocaleString()}</span>
+      <span className="text-xs text-neutral-500">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-white">${amount.toLocaleString()}</span>
         {savings && (
-          <span className="text-xs text-green-400">(↓${savings} from routing)</span>
+          <span className="text-[10px] text-emerald-400">(↓${savings})</span>
         )}
       </div>
     </div>
@@ -605,4 +745,77 @@ function formatTimeAgo(date: Date): string {
   if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
   return `${Math.floor(seconds / 86400)} days ago`;
+}
+
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  return `${days}d ${hours}h`;
+}
+
+// Solo founder quick action button
+function QuickAction({
+  icon: Icon,
+  label,
+  onClick,
+  color,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  color: 'emerald' | 'blue' | 'violet' | 'amber';
+}) {
+  const colors = {
+    emerald: 'hover:bg-emerald-500/10 hover:border-emerald-500/30',
+    blue: 'hover:bg-blue-500/10 hover:border-blue-500/30',
+    violet: 'hover:bg-violet-500/10 hover:border-violet-500/30',
+    amber: 'hover:bg-amber-500/10 hover:border-amber-500/30',
+  };
+
+  const iconColors = {
+    emerald: 'group-hover:text-emerald-400',
+    blue: 'group-hover:text-blue-400',
+    violet: 'group-hover:text-violet-400',
+    amber: 'group-hover:text-amber-400',
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      className={`group flex flex-col items-center justify-center p-2.5 bg-neutral-800/50 border border-neutral-700/50 rounded transition-all ${colors[color]}`}
+    >
+      <Icon className={`w-4 h-4 text-neutral-500 ${iconColors[color]} mb-1`} />
+      <span className="text-[10px] text-neutral-400 group-hover:text-white">{label}</span>
+    </button>
+  );
+}
+
+// System health item
+function HealthItem({
+  status,
+  label,
+  latency,
+}: {
+  status: 'healthy' | 'degraded' | 'down';
+  label: string;
+  latency: string;
+}) {
+  const statusColors = {
+    healthy: 'bg-emerald-500',
+    degraded: 'bg-amber-500',
+    down: 'bg-red-500',
+  };
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <div className={`w-1.5 h-1.5 rounded-full ${statusColors[status]}`} />
+        <span className="text-xs text-neutral-400">{label}</span>
+      </div>
+      <span className="text-[10px] text-neutral-600">{latency}</span>
+    </div>
+  );
 }

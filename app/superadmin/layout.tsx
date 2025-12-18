@@ -1,104 +1,61 @@
 'use client';
 
 /**
- * Super Admin Layout
+ * Super Admin Layout - Professional Control Panel
  *
- * World-class admin panel with:
- * - Left sidebar navigation (always visible)
- * - Session info header
- * - All admin modules accessible
+ * Design principles:
+ * - Clean, minimal (Linear/Stripe inspired)
+ * - Functional, not decorative
+ * - Subtle colors, no gradients
+ * - Professional credibility
  */
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
-  LayoutDashboard,
+  LayoutGrid,
   Users,
   Building2,
   Settings,
   Database,
   Activity,
-  Shield,
   FileText,
   Bell,
   Plug,
-  TestTube,
   LogOut,
   ChevronRight,
-  Clock,
   AlertCircle,
   Loader2,
-  UserCog,
   Layers,
-  Zap,
-  BarChart3,
+  BarChart2,
   Globe,
-  Brain,
+  Cpu,
   Server,
+  Sparkles,
+  DollarSign,
+  Box,
 } from 'lucide-react';
+import AICommandBar from '@/components/superadmin/AICommandBar';
 
 interface SessionInfo {
   email: string;
   remainingMinutes: number;
 }
 
-const navSections = [
-  {
-    title: 'Overview',
-    items: [
-      { label: 'Command Center', href: '/superadmin/command-center', icon: Zap },
-      { label: 'Dashboard', href: '/superadmin', icon: LayoutDashboard },
-      { label: 'SIVA Intelligence', href: '/superadmin/siva', icon: Brain },
-      { label: 'Financials', href: '/superadmin/financials', icon: BarChart3 },
-      { label: 'Activity Feed', href: '/superadmin/activity', icon: Activity },
-    ]
-  },
-  {
-    title: 'Users & Access',
-    items: [
-      { label: 'All Users', href: '/superadmin/users', icon: Users },
-      { label: 'Demo Users', href: '/superadmin/users/demo', icon: TestTube },
-      { label: 'Roles & Permissions', href: '/superadmin/roles', icon: UserCog },
-      { label: 'Access Logs', href: '/superadmin/logs', icon: FileText },
-    ]
-  },
-  {
-    title: 'Tenants & Workspaces',
-    items: [
-      { label: 'All Tenants', href: '/superadmin/tenants', icon: Building2 },
-      { label: 'Workspaces', href: '/superadmin/workspaces', icon: Layers },
-      { label: 'Subscriptions', href: '/superadmin/billing', icon: BarChart3 },
-    ]
-  },
-  {
-    title: 'UPR OS Config',
-    items: [
-      { label: 'OS Dashboard', href: '/superadmin/os', icon: Server },
-      { label: 'LLM Engine', href: '/superadmin/os/llm', icon: Brain },
-      { label: 'API Providers', href: '/superadmin/os/providers', icon: Plug },
-      { label: 'Verticals', href: '/superadmin/os/verticals', icon: Building2 },
-      { label: 'Territories', href: '/superadmin/os/territories', icon: Globe },
-      { label: 'OS Config', href: '/superadmin/os/config', icon: Settings },
-    ]
-  },
-  {
-    title: 'Configuration',
-    items: [
-      { label: 'Verticals & Personas', href: '/superadmin/verticals', icon: Globe },
-      { label: 'API Integrations', href: '/superadmin/integrations', icon: Plug },
-      { label: 'Feature Flags', href: '/superadmin/flags', icon: Shield },
-      { label: 'System Settings', href: '/superadmin/settings', icon: Settings },
-    ]
-  },
-  {
-    title: 'Data & Reports',
-    items: [
-      { label: 'Database', href: '/superadmin/database', icon: Database },
-      { label: 'Reports', href: '/superadmin/reports', icon: FileText },
-      { label: 'Notifications', href: '/superadmin/notifications', icon: Bell },
-    ]
-  },
+const navItems = [
+  { label: 'Overview', href: '/superadmin', icon: LayoutGrid },
+  { label: 'Command Center', href: '/superadmin/command-center', icon: Sparkles },
+  { label: 'Intelligence', href: '/superadmin/siva', icon: Cpu },
+  { label: 'Financials', href: '/superadmin/financials', icon: DollarSign },
+  { type: 'divider' },
+  { label: 'Verticals', href: '/superadmin/verticals', icon: Layers },
+  { label: 'OS Config', href: '/superadmin/os', icon: Server },
+  { label: 'Settings', href: '/superadmin/settings', icon: Settings },
+  { type: 'divider' },
+  { label: 'Users', href: '/superadmin/users', icon: Users },
+  { label: 'Tenants', href: '/superadmin/tenants', icon: Building2 },
+  { label: 'Activity', href: '/superadmin/activity', icon: Activity },
 ];
 
 export default function SuperAdminLayout({
@@ -112,12 +69,9 @@ export default function SuperAdminLayout({
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Check if this is the login page
   const isLoginPage = pathname === '/superadmin/login';
 
-  // Verify session on mount (skip for login page)
   useEffect(() => {
-    // Skip session verification for login page
     if (isLoginPage) {
       setIsLoading(false);
       return;
@@ -134,10 +88,9 @@ export default function SuperAdminLayout({
             remainingMinutes: data.session.remainingMinutes
           });
         } else {
-          // Invalid session - redirect to login
           router.push('/superadmin/login');
         }
-      } catch (error) {
+      } catch {
         router.push('/superadmin/login');
       } finally {
         setIsLoading(false);
@@ -145,8 +98,6 @@ export default function SuperAdminLayout({
     }
 
     verifySession();
-
-    // Refresh session info every minute
     const interval = setInterval(verifySession, 60000);
     return () => clearInterval(interval);
   }, [router, isLoginPage]);
@@ -161,138 +112,94 @@ export default function SuperAdminLayout({
     }
   }
 
-  // For login page, render children directly without admin layout
   if (isLoginPage) {
     return <>{children}</>;
   }
 
-  // Show loading state while verifying session
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 text-gray-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Verifying session...</p>
-        </div>
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <Loader2 className="w-5 h-5 text-neutral-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col fixed h-full">
-        {/* Logo */}
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-[#0a0a0a] text-neutral-200">
+      {/* Top Navigation Bar */}
+      <header className="h-12 border-b border-neutral-800 flex items-center justify-between px-4 fixed top-0 left-0 right-0 bg-[#0a0a0a]/95 backdrop-blur-sm z-50">
+        <div className="flex items-center gap-6">
+          {/* Logo */}
+          <Link href="/superadmin" className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-white rounded flex items-center justify-center">
+              <Box className="w-3.5 h-3.5 text-black" />
             </div>
-            <div>
-              <h1 className="font-bold text-white">Super Admin</h1>
-              <p className="text-xs text-gray-500">PremiumRadar</p>
-            </div>
-          </div>
+            <span className="font-medium text-sm text-white">PremiumRadar</span>
+          </Link>
+
+          {/* Main Nav */}
+          <nav className="flex items-center gap-1">
+            {navItems.map((item, i) => {
+              if (item.type === 'divider') {
+                return <div key={i} className="w-px h-4 bg-neutral-800 mx-2" />;
+              }
+
+              const isActive = pathname === item.href ||
+                (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''));
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href || '#'}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                    isActive
+                      ? 'bg-neutral-800 text-white'
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+                  }`}
+                >
+                  {Icon && <Icon className="w-3.5 h-3.5" />}
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4">
-          {navSections.map((section) => (
-            <div key={section.title} className="mb-6">
-              <h2 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                {section.title}
-              </h2>
-              <div className="space-y-1 px-2">
-                {section.items.map((item) => {
-                  const isActive = pathname === item.href ||
-                    (item.href !== '/superadmin' && pathname?.startsWith(item.href));
-                  const Icon = item.icon;
+        {/* Right Side */}
+        <div className="flex items-center gap-3">
+          {/* AI Command Bar */}
+          <AICommandBar />
 
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
-                        isActive
-                          ? 'bg-blue-600/20 text-blue-400'
-                          : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span className="text-sm">{item.label}</span>
-                      {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
-                    </Link>
-                  );
-                })}
-              </div>
+          {session && session.remainingMinutes < 30 && (
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded text-xs text-amber-400">
+              <AlertCircle className="w-3 h-3" />
+              <span>{session.remainingMinutes}m left</span>
             </div>
-          ))}
-        </nav>
+          )}
 
-        {/* Session Info & Logout */}
-        <div className="p-4 border-t border-gray-800">
           {session && (
-            <div className="mb-3 p-3 bg-gray-800/50 rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Logged in as</p>
-              <p className="text-sm text-gray-300 truncate">{session.email}</p>
-              <div className="flex items-center gap-1 mt-2">
-                <Clock className="w-3 h-3 text-gray-500" />
-                <span className={`text-xs ${
-                  session.remainingMinutes < 30 ? 'text-yellow-500' : 'text-gray-500'
-                }`}>
-                  {session.remainingMinutes} min remaining
-                </span>
-              </div>
-            </div>
+            <span className="text-xs text-neutral-500">{session.email}</span>
           )}
 
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-400 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 rounded transition-colors"
           >
             {isLoggingOut ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3 h-3" />
             )}
-            <span className="text-sm">Logout</span>
+            <span>Logout</span>
           </button>
         </div>
-      </aside>
+      </header>
 
       {/* Main Content */}
-      <main className="flex-1 ml-64">
-        {/* Top Bar */}
-        <div className="bg-gray-900/50 border-b border-gray-800 px-6 py-4 sticky top-0 z-10 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500">Super Admin</span>
-              {pathname && pathname !== '/superadmin' && (
-                <>
-                  <ChevronRight className="w-4 h-4 text-gray-600" />
-                  <span className="text-gray-300">
-                    {pathname.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </span>
-                </>
-              )}
-            </div>
-
-            {/* Session Warning */}
-            {session && session.remainingMinutes < 30 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-yellow-500" />
-                <span className="text-xs text-yellow-500">
-                  Session expires in {session.remainingMinutes} minutes
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Page Content */}
-        <div className="p-6">
+      <main className="pt-12 min-h-screen">
+        <div className="max-w-7xl mx-auto px-6 py-6">
           {children}
         </div>
       </main>

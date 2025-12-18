@@ -216,30 +216,30 @@ export default function OSConfigDashboard() {
     switch (osHealth) {
       case 'healthy':
         return (
-          <span className="flex items-center gap-1.5 text-green-400">
-            <CheckCircle className="w-4 h-4" />
-            All Systems Operational
+          <span className="flex items-center gap-1 text-emerald-400 text-xs">
+            <CheckCircle className="w-3.5 h-3.5" />
+            Operational
           </span>
         );
       case 'degraded':
         return (
-          <span className="flex items-center gap-1.5 text-yellow-400">
-            <AlertCircle className="w-4 h-4" />
-            Partial Connectivity
+          <span className="flex items-center gap-1 text-amber-400 text-xs">
+            <AlertCircle className="w-3.5 h-3.5" />
+            Partial
           </span>
         );
       case 'error':
         return (
-          <span className="flex items-center gap-1.5 text-red-400">
-            <AlertCircle className="w-4 h-4" />
-            Connection Issues
+          <span className="flex items-center gap-1 text-red-400 text-xs">
+            <AlertCircle className="w-3.5 h-3.5" />
+            Issues
           </span>
         );
       default:
         return (
-          <span className="flex items-center gap-1.5 text-gray-400">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Checking...
+          <span className="flex items-center gap-1 text-neutral-500 text-xs">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Checking
           </span>
         );
     }
@@ -263,26 +263,26 @@ export default function OSConfigDashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Server className="w-7 h-7 text-blue-400" />
-            UPR OS Configuration
+          <h1 className="text-lg font-medium text-white flex items-center gap-2">
+            <Server className="w-5 h-5 text-blue-400" />
+            OS Configuration
           </h1>
-          <p className="text-gray-400 mt-1">
-            Manage LLM routing, API providers, verticals, territories, and system config
+          <p className="text-neutral-500 text-sm mt-0.5">
+            LLM routing, API providers, verticals, territories
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {getHealthBadge()}
           <button
             onClick={fetchStatus}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-sm rounded transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
@@ -290,36 +290,34 @@ export default function OSConfigDashboard() {
 
       {/* Error Banner */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-          <AlertCircle className="w-5 h-5 text-red-400" />
+        <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded">
+          <AlertCircle className="w-4 h-4 text-red-400" />
           <div className="flex-1">
-            <span className="text-red-400">{error}</span>
-            <p className="text-red-400/70 text-sm mt-1">
-              Make sure UPR OS is running and UPR_OS_URL is configured correctly.
-            </p>
+            <span className="text-red-400 text-sm">{error}</span>
+            <p className="text-red-400/70 text-xs mt-0.5">Check UPR OS is running</p>
           </div>
         </div>
       )}
 
       {/* OS URL Info */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+      <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Activity className="w-5 h-5 text-blue-400" />
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-400" />
             <div>
-              <p className="text-white font-medium">Connected to UPR OS</p>
-              <p className="text-gray-500 text-sm font-mono">
+              <p className="text-sm text-white font-medium">UPR OS</p>
+              <p className="text-neutral-600 text-xs font-mono">
                 {process.env.NEXT_PUBLIC_UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6 text-sm">
+          <div className="flex items-center gap-4 text-xs">
             <div className="text-center">
-              <p className="text-gray-500">Sprints</p>
+              <p className="text-neutral-600">Sprints</p>
               <p className="text-white font-medium">S50-S55</p>
             </div>
             <div className="text-center">
-              <p className="text-gray-500">Configs</p>
+              <p className="text-neutral-600">Configs</p>
               <p className="text-white font-medium">180+</p>
             </div>
           </div>
@@ -327,89 +325,87 @@ export default function OSConfigDashboard() {
       </div>
 
       {/* Section Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {OS_SECTIONS.map((section) => {
           const Icon = section.icon;
           return (
             <Link
               key={section.id}
               href={section.href}
-              className={`group p-6 ${section.bgColor} border ${section.borderColor} rounded-xl hover:scale-[1.02] transition-all`}
+              className={`group p-4 bg-neutral-900/50 border border-neutral-800 rounded-lg hover:bg-neutral-800/50 transition-all`}
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-lg ${section.bgColor}`}>
-                  <Icon className={`w-6 h-6 ${section.color}`} />
-                </div>
-                <span className="text-xs font-mono text-gray-500">{section.sprint}</span>
+              <div className="flex items-start justify-between mb-2">
+                <Icon className={`w-4 h-4 ${section.color}`} />
+                <span className="text-[10px] font-mono text-neutral-600">{section.sprint}</span>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-1 group-hover:text-blue-400 transition-colors">
+              <h3 className="text-sm font-medium text-white mb-0.5 group-hover:text-blue-400 transition-colors">
                 {section.title}
               </h3>
-              <p className="text-gray-400 text-sm mb-3">{section.description}</p>
-              <p className={`text-sm ${section.color}`}>{getSectionStats(section)}</p>
+              <p className="text-neutral-500 text-xs mb-2">{section.description}</p>
+              <p className={`text-xs ${section.color}`}>{getSectionStats(section)}</p>
             </Link>
           );
         })}
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <Brain className="w-5 h-5 text-pink-400" />
-            <p className="text-gray-500 text-sm">LLM Models</p>
+      <div className="grid grid-cols-4 gap-3">
+        <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Brain className="w-4 h-4 text-pink-400" />
+            <p className="text-neutral-500 text-xs">LLM Models</p>
           </div>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl font-semibold text-white">
             {status.llm?.total_providers || '-'}
           </p>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <Plug className="w-5 h-5 text-purple-400" />
-            <p className="text-gray-500 text-sm">API Providers</p>
+        <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Plug className="w-4 h-4 text-purple-400" />
+            <p className="text-neutral-500 text-xs">API Providers</p>
           </div>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl font-semibold text-white">
             {status.providers?.total || '-'}
           </p>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <Building2 className="w-5 h-5 text-blue-400" />
-            <p className="text-gray-500 text-sm">Active Verticals</p>
+        <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Building2 className="w-4 h-4 text-blue-400" />
+            <p className="text-neutral-500 text-xs">Verticals</p>
           </div>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl font-semibold text-white">
             {status.verticals?.active || '-'}
           </p>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-          <div className="flex items-center gap-3 mb-2">
-            <Globe className="w-5 h-5 text-green-400" />
-            <p className="text-gray-500 text-sm">Territories</p>
+        <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Globe className="w-4 h-4 text-emerald-400" />
+            <p className="text-neutral-500 text-xs">Territories</p>
           </div>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-xl font-semibold text-white">
             {status.territories?.count || '-'}
           </p>
         </div>
       </div>
 
       {/* Architecture Note */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
-        <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-          <Zap className="w-5 h-5 text-yellow-400" />
+      <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-1.5">
+          <Zap className="w-4 h-4 text-amber-400" />
           Architecture
         </h3>
-        <div className="grid grid-cols-3 gap-6 text-sm">
+        <div className="grid grid-cols-3 gap-4 text-xs">
           <div>
-            <p className="text-gray-400 mb-2">Source of Truth</p>
-            <p className="text-white">All configs stored in UPR OS PostgreSQL database with versioning and audit trails.</p>
+            <p className="text-neutral-500 mb-1">Source of Truth</p>
+            <p className="text-neutral-300">UPR OS PostgreSQL with versioning</p>
           </div>
           <div>
-            <p className="text-gray-400 mb-2">Hot Reload</p>
-            <p className="text-white">Config changes are cached and can be hot-reloaded without restart.</p>
+            <p className="text-neutral-500 mb-1">Hot Reload</p>
+            <p className="text-neutral-300">Cached configs, no restart needed</p>
           </div>
           <div>
-            <p className="text-gray-400 mb-2">API Integration</p>
-            <p className="text-white">SaaS calls OS APIs for all config reads/writes. No duplication.</p>
+            <p className="text-neutral-500 mb-1">API Integration</p>
+            <p className="text-neutral-300">SaaS calls OS APIs, no duplication</p>
           </div>
         </div>
       </div>

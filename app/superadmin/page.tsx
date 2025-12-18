@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * Super Admin Dashboard
+ * Super Admin Dashboard - Professional Control Panel
  *
- * Overview of entire system with key metrics and quick actions.
+ * Design: Linear/Stripe inspired - minimal, functional, no gradients
  * Fetches REAL data from /api/superadmin/stats
  */
 
@@ -14,7 +14,6 @@ import {
   Building2,
   Activity,
   AlertTriangle,
-  TrendingUp,
   Server,
   Database,
   Zap,
@@ -126,8 +125,8 @@ export default function SuperAdminDashboard() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading dashboard stats...</p>
+          <Loader2 className="w-5 h-5 text-neutral-500 animate-spin mx-auto mb-3" />
+          <p className="text-neutral-500 text-sm">Loading...</p>
         </div>
       </div>
     );
@@ -137,11 +136,11 @@ export default function SuperAdminDashboard() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mb-4" />
-          <p className="text-gray-400 mb-4">{error}</p>
+          <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto mb-3" />
+          <p className="text-neutral-400 text-sm mb-4">{error}</p>
           <button
             onClick={fetchStats}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
           >
             Retry
           </button>
@@ -155,40 +154,40 @@ export default function SuperAdminDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-gray-400 mt-1">
-            System overview and key metrics
+          <h1 className="text-lg font-medium text-white">Overview</h1>
+          <p className="text-neutral-500 text-sm mt-0.5">
+            System metrics
             {lastRefresh && (
-              <span className="text-gray-600 ml-2">
-                · Updated {formatTimeAgo(lastRefresh)}
+              <span className="text-neutral-600 ml-2">
+                · {formatTimeAgo(lastRefresh)}
               </span>
             )}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={fetchStats}
             disabled={isLoading}
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-            title="Refresh stats"
+            className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+            title="Refresh"
           >
-            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
-          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
             systemHealth === 'healthy'
-              ? 'bg-green-500/10 text-green-400'
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
               : systemHealth === 'degraded'
-              ? 'bg-yellow-500/10 text-yellow-400'
-              : 'bg-red-500/10 text-red-400'
+              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              : 'bg-red-500/10 text-red-400 border border-red-500/20'
           }`}>
             {systemHealth === 'healthy' ? (
-              <CheckCircle className="w-4 h-4" />
+              <CheckCircle className="w-3 h-3" />
             ) : systemHealth === 'degraded' ? (
-              <AlertTriangle className="w-4 h-4" />
+              <AlertTriangle className="w-3 h-3" />
             ) : (
-              <XCircle className="w-4 h-4" />
+              <XCircle className="w-3 h-3" />
             )}
-            System {systemHealth}
+            {systemHealth}
           </span>
         </div>
       </div>
@@ -227,190 +226,182 @@ export default function SuperAdminDashboard() {
 
       {/* System Metrics */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">API Performance</h3>
-            <Server className="w-5 h-5 text-gray-500" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">API</h3>
+            <Server className="w-4 h-4 text-neutral-600" />
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-gray-400">Latency (P95)</span>
-                <span className="text-sm font-medium text-white">{stats?.api.latencyP95 || 0}ms</span>
+                <span className="text-xs text-neutral-500">P95 Latency</span>
+                <span className="text-xs font-medium text-white">{stats?.api.latencyP95 || 0}ms</span>
               </div>
-              <div className="h-2 bg-gray-800 rounded-full">
+              <div className="h-1 bg-neutral-800 rounded-full">
                 <div
-                  className="h-full bg-green-500 rounded-full transition-all"
+                  className="h-full bg-emerald-500/60 rounded-full transition-all"
                   style={{ width: `${Math.min(100, ((stats?.api.latencyP95 || 0) / 500) * 100)}%` }}
                 />
               </div>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-gray-400">Error Rate (1h)</span>
-                <span className={`text-sm font-medium ${stats?.api.hasRecentErrors ? 'text-red-400' : 'text-green-400'}`}>
-                  {stats?.api.hasRecentErrors ? `${((stats?.api.errorRate || 0) * 100).toFixed(2)}%` : '0% (No recent errors)'}
+                <span className="text-xs text-neutral-500">Error Rate (1h)</span>
+                <span className={`text-xs font-medium ${stats?.api.hasRecentErrors ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {stats?.api.hasRecentErrors ? `${((stats?.api.errorRate || 0) * 100).toFixed(2)}%` : '0%'}
                 </span>
               </div>
-              <div className="h-2 bg-gray-800 rounded-full">
+              <div className="h-1 bg-neutral-800 rounded-full">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    !stats?.api.hasRecentErrors ? 'bg-green-500' :
-                    (stats?.api.errorRate || 0) < 0.05 ? 'bg-yellow-500' : 'bg-red-500'
+                    !stats?.api.hasRecentErrors ? 'bg-emerald-500/60' :
+                    (stats?.api.errorRate || 0) < 0.05 ? 'bg-amber-500/60' : 'bg-red-500/60'
                   }`}
                   style={{ width: stats?.api.hasRecentErrors ? `${Math.min(100, (stats?.api.errorRate || 0) * 1000)}%` : '5%' }}
                 />
               </div>
-              {/* Show cumulative rate as reference */}
-              <p className="text-xs text-gray-600 mt-1">
-                All-time: {((stats?.api.cumulativeErrorRate || 0) * 100).toFixed(1)}%
-              </p>
             </div>
             {/* Integration Stats */}
-            <div className="pt-2 border-t border-gray-800">
-              <p className="text-xs text-gray-500 mb-2">API Integrations</p>
-              <div className="flex flex-wrap gap-2">
+            <div className="pt-2 border-t border-neutral-800">
+              <div className="flex flex-wrap gap-1.5">
                 {stats?.api.integrations.map((integration) => (
                   <span
                     key={integration.provider}
-                    className={`px-2 py-1 text-xs rounded ${
+                    className={`px-1.5 py-0.5 text-[10px] rounded ${
                       integration.isActive
-                        ? 'bg-green-500/10 text-green-400'
-                        : 'bg-gray-700 text-gray-400'
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : 'bg-neutral-800 text-neutral-500'
                     }`}
                   >
                     {integration.provider}
-                    {integration.usageCount > 0 && (
-                      <span className="ml-1 text-gray-500">({integration.usageCount})</span>
-                    )}
                   </span>
                 ))}
                 {(!stats?.api.integrations || stats.api.integrations.length === 0) && (
-                  <span className="text-xs text-gray-500">No integrations configured</span>
+                  <span className="text-[10px] text-neutral-600">No integrations</span>
                 )}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Database</h3>
-            <Database className={`w-5 h-5 ${stats?.database.healthy ? 'text-green-500' : 'text-red-500'}`} />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">Database</h3>
+            <Database className={`w-4 h-4 ${stats?.database.healthy ? 'text-emerald-500' : 'text-red-500'}`} />
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Status</span>
-              <span className={`text-sm font-medium ${stats?.database.healthy ? 'text-green-400' : 'text-red-400'}`}>
+              <span className="text-xs text-neutral-500">Status</span>
+              <span className={`text-xs font-medium ${stats?.database.healthy ? 'text-emerald-400' : 'text-red-400'}`}>
                 {stats?.database.healthy ? 'Connected' : 'Disconnected'}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Connections</span>
-              <span className="text-sm font-medium text-white">
+              <span className="text-xs text-neutral-500">Connections</span>
+              <span className="text-xs font-medium text-white">
                 {stats?.database.connectionCount || 0}/{stats?.database.maxConnections || 100}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Query Time (avg)</span>
-              <span className="text-sm font-medium text-white">{stats?.database.queryTimeAvg || 0}ms</span>
+              <span className="text-xs text-neutral-500">Avg Query</span>
+              <span className="text-xs font-medium text-white">{stats?.database.queryTimeAvg || 0}ms</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Storage Used</span>
-              <span className="text-sm font-medium text-white">
+              <span className="text-xs text-neutral-500">Storage</span>
+              <span className="text-xs font-medium text-white">
                 {formatStorageSize(stats?.database.storageUsedMb || 0)} / {formatStorageSize(stats?.database.storageMaxMb || 10240)}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Outreach</h3>
-            <BarChart3 className="w-5 h-5 text-gray-500" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">Outreach</h3>
+            <BarChart3 className="w-4 h-4 text-neutral-600" />
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Sent Today</span>
-              <span className="text-sm font-medium text-white">{stats?.outreach.sentToday || 0}</span>
+              <span className="text-xs text-neutral-500">Sent Today</span>
+              <span className="text-xs font-medium text-white">{stats?.outreach.sentToday || 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Open Rate</span>
-              <span className={`text-sm font-medium ${(stats?.outreach.openRate || 0) > 30 ? 'text-green-400' : 'text-white'}`}>
+              <span className="text-xs text-neutral-500">Open Rate</span>
+              <span className={`text-xs font-medium ${(stats?.outreach.openRate || 0) > 30 ? 'text-emerald-400' : 'text-white'}`}>
                 {stats?.outreach.openRate || 0}%
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Reply Rate</span>
-              <span className={`text-sm font-medium ${(stats?.outreach.replyRate || 0) > 5 ? 'text-green-400' : 'text-white'}`}>
+              <span className="text-xs text-neutral-500">Reply Rate</span>
+              <span className={`text-xs font-medium ${(stats?.outreach.replyRate || 0) > 5 ? 'text-emerald-400' : 'text-white'}`}>
                 {stats?.outreach.replyRate || 0}%
               </span>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-gray-800">
-            <p className="text-xs text-gray-500">Signals this month: {(stats?.signals.thisMonth || 0).toLocaleString()}</p>
+          <div className="mt-3 pt-2 border-t border-neutral-800">
+            <p className="text-[10px] text-neutral-600">Signals/month: {(stats?.signals.thisMonth || 0).toLocaleString()}</p>
           </div>
         </div>
       </div>
 
       {/* Activity & Quick Actions */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-2 gap-4">
         {/* Recent Activity */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Recent Activity</h3>
-            <Link href="/superadmin/activity" className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1">
-              View all <ArrowRight className="w-4 h-4" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">Activity</h3>
+            <Link href="/superadmin/activity" className="text-xs text-neutral-500 hover:text-white flex items-center gap-1 transition-colors">
+              View all <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {stats?.recentActivity && stats.recentActivity.length > 0 ? (
               stats.recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-800/50 rounded-lg">
-                  <div className={`w-2 h-2 rounded-full mt-1.5 ${
-                    activity.status === 'success' ? 'bg-green-500' :
-                    activity.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                <div key={activity.id} className="flex items-start gap-2 p-2 bg-neutral-800/30 rounded">
+                  <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${
+                    activity.status === 'success' ? 'bg-emerald-500' :
+                    activity.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'
                   }`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-300 truncate">{activity.message}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{formatTimeAgo(new Date(activity.timestamp))}</p>
+                    <p className="text-xs text-neutral-300 truncate">{activity.message}</p>
+                    <p className="text-[10px] text-neutral-600 mt-0.5">{formatTimeAgo(new Date(activity.timestamp))}</p>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="text-center py-8">
-                <Activity className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No recent activity</p>
+              <div className="text-center py-6">
+                <Activity className="w-5 h-5 text-neutral-700 mx-auto mb-2" />
+                <p className="text-xs text-neutral-600">No recent activity</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <h3 className="font-semibold text-white mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-3">
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <h3 className="text-sm font-medium text-neutral-300 mb-3">Quick Actions</h3>
+          <div className="grid grid-cols-2 gap-2">
             <QuickActionCard
-              title="Create Demo User"
-              description="For testing & demos"
+              title="Demo User"
+              description="Testing & demos"
               href="/superadmin/users/demo"
               icon={Users}
             />
             <QuickActionCard
-              title="Configure Vertical"
-              description="Personas & settings"
+              title="Verticals"
+              description="Personas & config"
               href="/superadmin/verticals"
               icon={Globe}
             />
             <QuickActionCard
-              title="View Logs"
-              description="Access & audit logs"
+              title="Logs"
+              description="Audit trail"
               href="/superadmin/logs"
               icon={Activity}
             />
             <QuickActionCard
-              title="API Integrations"
-              description="Apollo, SERP, etc."
+              title="Integrations"
+              description="API providers"
               href="/superadmin/integrations"
               icon={Zap}
             />
@@ -426,7 +417,6 @@ function StatCard({
   value,
   icon: Icon,
   subtitle,
-  color,
 }: {
   title: string;
   value: string | number;
@@ -434,25 +424,16 @@ function StatCard({
   subtitle?: string;
   color: 'blue' | 'purple' | 'green' | 'orange';
 }) {
-  const colors = {
-    blue: 'bg-blue-500/10 text-blue-400',
-    purple: 'bg-purple-500/10 text-purple-400',
-    green: 'bg-green-500/10 text-green-400',
-    orange: 'bg-orange-500/10 text-orange-400',
-  };
-
   return (
-    <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-gray-400">{title}</span>
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colors[color]}`}>
-          <Icon className="w-5 h-5" />
-        </div>
+    <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-neutral-500">{title}</span>
+        <Icon className="w-4 h-4 text-neutral-600" />
       </div>
       <div className="flex flex-col">
-        <span className="text-3xl font-bold text-white">{value}</span>
+        <span className="text-2xl font-semibold text-white">{value}</span>
         {subtitle && (
-          <span className="text-xs text-gray-500 mt-1">{subtitle}</span>
+          <span className="text-[10px] text-neutral-600 mt-0.5">{subtitle}</span>
         )}
       </div>
     </div>
@@ -473,11 +454,11 @@ function QuickActionCard({
   return (
     <Link
       href={href}
-      className="block p-4 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 hover:border-gray-600 rounded-xl transition-all group"
+      className="block p-3 bg-neutral-800/30 hover:bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 rounded transition-all group"
     >
-      <Icon className="w-5 h-5 text-gray-400 group-hover:text-blue-400 mb-2 transition-colors" />
-      <h4 className="font-medium text-white text-sm">{title}</h4>
-      <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+      <Icon className="w-4 h-4 text-neutral-500 group-hover:text-white mb-1.5 transition-colors" />
+      <h4 className="font-medium text-white text-xs">{title}</h4>
+      <p className="text-[10px] text-neutral-600 mt-0.5">{description}</p>
     </Link>
   );
 }

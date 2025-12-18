@@ -1,14 +1,13 @@
 'use client';
 
 /**
- * Financials Dashboard
+ * Financials Dashboard - Professional Control Panel
  *
- * Founder-focused financial overview:
- * - Revenue vs Expenses visualization
- * - GCP costs breakdown
- * - API costs by provider
+ * Design: Linear/Stripe inspired - minimal, functional, no gradients
+ * Solo founder financial overview:
+ * - Revenue vs Expenses
+ * - GCP/API costs breakdown
  * - Burn rate and runway
- * - Profit margins
  */
 
 import { useState, useEffect } from 'react';
@@ -28,7 +27,6 @@ import {
   CheckCircle,
   Clock,
   BarChart3,
-  PieChart,
   Loader2,
 } from 'lucide-react';
 
@@ -138,8 +136,8 @@ export default function FinancialsDashboard() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <DollarSign className="w-12 h-12 text-green-500 animate-pulse mx-auto mb-4" />
-          <p className="text-gray-400">Loading financial data...</p>
+          <Loader2 className="w-5 h-5 text-neutral-500 animate-spin mx-auto mb-3" />
+          <p className="text-neutral-500 text-sm">Loading...</p>
         </div>
       </div>
     );
@@ -149,13 +147,13 @@ export default function FinancialsDashboard() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-          <p className="text-gray-400 mb-4">{error}</p>
+          <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto mb-3" />
+          <p className="text-neutral-400 text-sm mb-4">{error}</p>
           <button
             onClick={handleRefresh}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
           >
-            Try Again
+            Retry
           </button>
         </div>
       </div>
@@ -176,29 +174,22 @@ export default function FinancialsDashboard() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-gradient-to-br from-green-600 to-emerald-600 rounded-2xl flex items-center justify-center">
-            <DollarSign className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Financials</h1>
-            <p className="text-gray-400">Revenue, Expenses & Runway</p>
-          </div>
+        <div>
+          <h1 className="text-lg font-medium text-white">Financials</h1>
+          <p className="text-neutral-500 text-sm mt-0.5">
+            Revenue, costs & runway
+            {lastUpdated && (
+              <span className="text-neutral-600 ml-2">· {lastUpdated.toLocaleTimeString()}</span>
+            )}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg disabled:opacity-50"
-          >
-            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-          {lastUpdated && (
-            <span className="text-xs text-gray-500">
-              Updated {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Key Metrics Row */}
@@ -237,59 +228,59 @@ export default function FinancialsDashboard() {
 
       {/* MRR/ARR Section */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Monthly Recurring Revenue</h3>
-            <BarChart3 className="w-5 h-5 text-green-500" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">MRR</h3>
+            <BarChart3 className="w-4 h-4 text-neutral-600" />
           </div>
-          <div className="text-4xl font-bold text-green-400">
+          <div className="text-2xl font-semibold text-emerald-400">
             ${data.revenue.mrr.toLocaleString()}
           </div>
-          <p className="text-sm text-gray-500 mt-2">MRR from subscriptions</p>
-          <div className="mt-4 pt-4 border-t border-gray-800">
+          <p className="text-[10px] text-neutral-600 mt-1">from subscriptions</p>
+          <div className="mt-3 pt-3 border-t border-neutral-800">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">ARR (Annual)</span>
-              <span className="text-lg font-semibold text-white">
+              <span className="text-xs text-neutral-500">ARR</span>
+              <span className="text-sm font-medium text-white">
                 ${data.revenue.arr.toLocaleString()}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Burn Rate</h3>
-            <Zap className="w-5 h-5 text-orange-500" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">Burn Rate</h3>
+            <Zap className="w-4 h-4 text-neutral-600" />
           </div>
-          <div className="text-4xl font-bold text-orange-400">
+          <div className="text-2xl font-semibold text-amber-400">
             ${data.burnRate.monthly.toFixed(0)}
           </div>
-          <p className="text-sm text-gray-500 mt-2">Net monthly burn</p>
-          <div className="mt-4 pt-4 border-t border-gray-800">
+          <p className="text-[10px] text-neutral-600 mt-1">net monthly burn</p>
+          <div className="mt-3 pt-3 border-t border-neutral-800">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Daily Burn</span>
-              <span className="text-lg font-semibold text-white">
+              <span className="text-xs text-neutral-500">Daily</span>
+              <span className="text-sm font-medium text-white">
                 ${data.burnRate.daily.toFixed(2)}/day
               </span>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Profit Margin</h3>
-            <PieChart className="w-5 h-5 text-blue-500" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">Margin</h3>
+            <BarChart3 className="w-4 h-4 text-neutral-600" />
           </div>
-          <div className={`text-4xl font-bold ${data.profit.margin >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <div className={`text-2xl font-semibold ${data.profit.margin >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {data.profit.margin.toFixed(1)}%
           </div>
-          <p className="text-sm text-gray-500 mt-2">
-            {data.profit.margin >= 0 ? 'Profitable' : 'Operating at loss'}
+          <p className="text-[10px] text-neutral-600 mt-1">
+            {data.profit.margin >= 0 ? 'profitable' : 'operating at loss'}
           </p>
-          <div className="mt-4 pt-4 border-t border-gray-800">
+          <div className="mt-3 pt-3 border-t border-neutral-800">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Last Month</span>
-              <span className="text-lg font-semibold text-white">
+              <span className="text-xs text-neutral-500">Last Month</span>
+              <span className="text-sm font-medium text-white">
                 ${data.profit.lastMonth.toLocaleString()}
               </span>
             </div>
@@ -300,24 +291,24 @@ export default function FinancialsDashboard() {
       {/* Expense Breakdown */}
       <div className="grid grid-cols-2 gap-4">
         {/* GCP Costs */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">GCP Infrastructure</h3>
-            <Cloud className="w-5 h-5 text-blue-500" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">GCP Infrastructure</h3>
+            <Cloud className="w-4 h-4 text-neutral-600" />
           </div>
-          <div className="text-2xl font-bold text-white mb-4">
-            ${data.breakdown.gcp.thisMonth.toFixed(2)} <span className="text-sm text-gray-500 font-normal">this month</span>
+          <div className="text-xl font-semibold text-white mb-3">
+            ${data.breakdown.gcp.thisMonth.toFixed(2)} <span className="text-xs text-neutral-600 font-normal">this month</span>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {data.breakdown.gcp.breakdown.slice(0, 5).map((item) => (
               <div key={item.service}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm text-gray-400">{item.description}</span>
-                  <span className="text-sm text-gray-300">${item.amount.toFixed(2)}</span>
+                  <span className="text-xs text-neutral-500">{item.description}</span>
+                  <span className="text-xs text-neutral-300">${item.amount.toFixed(2)}</span>
                 </div>
-                <div className="h-1.5 bg-gray-800 rounded-full">
+                <div className="h-1 bg-neutral-800 rounded-full">
                   <div
-                    className="h-full bg-blue-500 rounded-full"
+                    className="h-full bg-blue-500/60 rounded-full"
                     style={{ width: `${Math.min(100, item.percentage)}%` }}
                   />
                 </div>
@@ -327,48 +318,48 @@ export default function FinancialsDashboard() {
         </div>
 
         {/* API Costs */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">API Costs</h3>
-            <Cpu className="w-5 h-5 text-purple-500" />
+        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-neutral-300">API Costs</h3>
+            <Cpu className="w-4 h-4 text-neutral-600" />
           </div>
-          <div className="text-2xl font-bold text-white mb-4">
-            ${data.breakdown.api.thisMonth.toFixed(2)} <span className="text-sm text-gray-500 font-normal">this month</span>
+          <div className="text-xl font-semibold text-white mb-3">
+            ${data.breakdown.api.thisMonth.toFixed(2)} <span className="text-xs text-neutral-600 font-normal">this month</span>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <ProviderCostRow
               name="OpenAI"
-              icon={<Zap className="w-4 h-4 text-green-500" />}
+              icon={<Zap className="w-3.5 h-3.5 text-emerald-500" />}
               cost={data.breakdown.api.byProvider.openai.thisMonth}
               calls={data.breakdown.api.byProvider.openai.callCount}
-              color="bg-green-500"
+              color="bg-emerald-500/60"
               total={data.breakdown.api.thisMonth}
             />
             <ProviderCostRow
               name="Apollo"
-              icon={<Database className="w-4 h-4 text-blue-500" />}
+              icon={<Database className="w-3.5 h-3.5 text-blue-500" />}
               cost={data.breakdown.api.byProvider.apollo.thisMonth}
               calls={data.breakdown.api.byProvider.apollo.callCount}
-              color="bg-blue-500"
+              color="bg-blue-500/60"
               total={data.breakdown.api.thisMonth}
             />
             <ProviderCostRow
               name="SERP"
-              icon={<Globe className="w-4 h-4 text-purple-500" />}
+              icon={<Globe className="w-3.5 h-3.5 text-violet-500" />}
               cost={data.breakdown.api.byProvider.serp.thisMonth}
               calls={data.breakdown.api.byProvider.serp.callCount}
-              color="bg-purple-500"
+              color="bg-violet-500/60"
               total={data.breakdown.api.thisMonth}
             />
           </div>
 
           {data.breakdown.api.topOperations.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-800">
-              <p className="text-xs text-gray-500 mb-2">Top Operations by Cost</p>
+            <div className="mt-3 pt-3 border-t border-neutral-800">
+              <p className="text-[10px] text-neutral-600 mb-2">Top Operations</p>
               {data.breakdown.api.topOperations.slice(0, 3).map((op, i) => (
-                <div key={i} className="flex items-center justify-between text-sm py-1">
-                  <span className="text-gray-400">{op.operation}</span>
-                  <span className="text-gray-300">${op.totalCost.toFixed(2)}</span>
+                <div key={i} className="flex items-center justify-between text-xs py-0.5">
+                  <span className="text-neutral-500">{op.operation}</span>
+                  <span className="text-neutral-300">${op.totalCost.toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -377,9 +368,9 @@ export default function FinancialsDashboard() {
       </div>
 
       {/* Revenue vs Expenses Chart */}
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <h3 className="font-semibold text-white mb-4">Revenue vs Expenses (30 Days)</h3>
-        <div className="h-48 flex items-end gap-1">
+      <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+        <h3 className="text-sm font-medium text-neutral-300 mb-3">Revenue vs Expenses (30 Days)</h3>
+        <div className="h-32 flex items-end gap-0.5">
           {data.expenses.history.map((expense, i) => {
             const revenue = data.revenue.history.find(r => r.date === expense.date);
             const maxAmount = Math.max(
@@ -389,15 +380,15 @@ export default function FinancialsDashboard() {
             );
 
             return (
-              <div key={expense.date} className="flex-1 flex flex-col items-center gap-1 h-full">
+              <div key={expense.date} className="flex-1 flex flex-col items-center gap-0.5 h-full">
                 <div className="w-full flex gap-0.5 h-full items-end">
                   <div
-                    className="flex-1 bg-green-500/60 rounded-t transition-all"
+                    className="flex-1 bg-emerald-500/50 rounded-t transition-all"
                     style={{ height: `${(revenue?.amount || 0) / maxAmount * 100}%` }}
                     title={`Revenue: $${revenue?.amount.toFixed(2) || 0}`}
                   />
                   <div
-                    className="flex-1 bg-red-500/40 rounded-t transition-all"
+                    className="flex-1 bg-red-500/30 rounded-t transition-all"
                     style={{ height: `${expense.amount / maxAmount * 100}%` }}
                     title={`Expense: $${expense.amount.toFixed(2)}`}
                   />
@@ -406,14 +397,14 @@ export default function FinancialsDashboard() {
             );
           })}
         </div>
-        <div className="flex items-center justify-center gap-6 mt-4">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-green-500 rounded" />
-            <span className="text-xs text-gray-400">Revenue</span>
+        <div className="flex items-center justify-center gap-4 mt-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 bg-emerald-500 rounded" />
+            <span className="text-[10px] text-neutral-500">Revenue</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-red-500/60 rounded" />
-            <span className="text-xs text-gray-400">Expenses</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 bg-red-500/60 rounded" />
+            <span className="text-[10px] text-neutral-500">Expenses</span>
           </div>
         </div>
       </div>
@@ -440,40 +431,38 @@ function MetricCard({
   invertChange?: boolean;
   isMargin?: boolean;
 }) {
-  const colors = {
-    green: 'bg-green-500/10 text-green-400',
-    red: 'bg-red-500/10 text-red-400',
-    yellow: 'bg-yellow-500/10 text-yellow-400',
-    blue: 'bg-blue-500/10 text-blue-400',
+  const colorMap = {
+    green: 'text-emerald-400',
+    red: 'text-red-400',
+    yellow: 'text-amber-400',
+    blue: 'text-blue-400',
   };
 
   const isPositive = invertChange ? (change || 0) < 0 : (change || 0) > 0;
 
   return (
-    <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-gray-400">{title}</span>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${colors[color]}`}>
-          <Icon className="w-4 h-4" />
-        </div>
+    <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-neutral-500">{title}</span>
+        <Icon className={`w-4 h-4 ${colorMap[color]}`} />
       </div>
-      <div className="text-2xl font-bold text-white">{value}</div>
-      {subValue && <p className="text-sm text-gray-500 mt-1">{subValue}</p>}
+      <div className="text-xl font-semibold text-white">{value}</div>
+      {subValue && <p className="text-[10px] text-neutral-600 mt-0.5">{subValue}</p>}
       {change !== undefined && !isMargin && (
-        <div className="flex items-center gap-1 mt-2">
+        <div className="flex items-center gap-1 mt-1.5">
           {isPositive ? (
-            <ArrowUp className={`w-3 h-3 ${invertChange ? 'text-red-400' : 'text-green-400'}`} />
+            <ArrowUp className={`w-2.5 h-2.5 ${invertChange ? 'text-red-400' : 'text-emerald-400'}`} />
           ) : (
-            <ArrowDown className={`w-3 h-3 ${invertChange ? 'text-green-400' : 'text-red-400'}`} />
+            <ArrowDown className={`w-2.5 h-2.5 ${invertChange ? 'text-emerald-400' : 'text-red-400'}`} />
           )}
-          <span className={`text-xs ${isPositive ? (invertChange ? 'text-red-400' : 'text-green-400') : (invertChange ? 'text-green-400' : 'text-red-400')}`}>
+          <span className={`text-[10px] ${isPositive ? (invertChange ? 'text-red-400' : 'text-emerald-400') : (invertChange ? 'text-emerald-400' : 'text-red-400')}`}>
             {Math.abs(change).toFixed(1)}%
           </span>
-          <span className="text-xs text-gray-500">vs last month</span>
+          <span className="text-[10px] text-neutral-600">vs last month</span>
         </div>
       )}
       {isMargin && (
-        <p className="text-xs text-gray-500 mt-2">Profit margin</p>
+        <p className="text-[10px] text-neutral-600 mt-1">margin</p>
       )}
     </div>
   );
@@ -499,16 +488,16 @@ function ProviderCostRow({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {icon}
-          <span className="text-sm text-gray-400">{name}</span>
+          <span className="text-xs text-neutral-400">{name}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500">{calls} calls</span>
-          <span className="text-sm text-gray-300">${cost.toFixed(2)}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-neutral-600">{calls} calls</span>
+          <span className="text-xs text-neutral-300">${cost.toFixed(2)}</span>
         </div>
       </div>
-      <div className="h-1.5 bg-gray-800 rounded-full">
+      <div className="h-1 bg-neutral-800 rounded-full">
         <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.min(100, percentage)}%` }} />
       </div>
     </div>

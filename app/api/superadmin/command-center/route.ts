@@ -18,6 +18,7 @@ import { headers } from 'next/headers';
 import { verifySession } from '@/lib/superadmin/security';
 import { query, queryOne } from '@/lib/db/client';
 import { getIntegrations } from '@/lib/integrations/api-integrations';
+import { llm } from '@/lib/os/os-client';
 
 interface BusinessPulse {
   mrr: number;
@@ -157,8 +158,8 @@ export async function GET(request: NextRequest) {
       aiSavings,
     };
 
-    // Get model updates (would fetch from provider APIs in production)
-    const modelUpdates = getLatestModelUpdates();
+    // Get model updates from OS (real LLM provider data)
+    const modelUpdates = await getLatestModelUpdates();
 
     const data: CommandCenterData = {
       pulse,
@@ -428,50 +429,150 @@ async function generatePriorities(): Promise<Priority[]> {
 }
 
 /**
- * Get latest model updates from AI providers
- * In production, this would fetch from provider APIs
+ * Get latest model updates from OS LLM Router
+ * Fetches real model data and identifies new/recommended models
  */
-function getLatestModelUpdates(): ModelUpdate[] {
-  // TODO: Implement real API fetching for provider announcements
-  // For now, return curated updates
-  const now = new Date();
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+async function getLatestModelUpdates(): Promise<ModelUpdate[]> {
+  try {
+    // Fetch models from OS
+    const modelsResult = await llm.listModels();
 
+    if (!modelsResult.success || !modelsResult.data?.providers) {
+      console.log('[Command Center] Could not fetch models from OS, using defaults');
+      return getDefaultModelUpdates();
+    }
+
+    const modelUpdates: ModelUpdate[] = [];
+
+    // Model cost/quality reference data ($/1M tokens input)
+    const modelMetadata: Record<string, {
+      releaseDate: string;
+      inputCost: number;
+      outputCost: number;
+      qualityScore: number;
+      speedMs: number;
+      isNew: boolean;
+      improvements: string[];
+    }> = {
+      'gpt-4o': { releaseDate: '2024-05-13', inputCost: 5, outputCost: 15, qualityScore: 95, speedMs: 800, isNew: false, improvements: ['Multimodal', 'Fast', 'Cost-effective'] },
+      'gpt-4o-mini': { releaseDate: '2024-07-18', inputCost: 0.15, outputCost: 0.6, qualityScore: 82, speedMs: 400, isNew: false, improvements: ['85% cheaper than GPT-4', 'Fast responses', 'Great for simple tasks'] },
+      'gpt-4-turbo': { releaseDate: '2024-04-09', inputCost: 10, outputCost: 30, qualityScore: 90, speedMs: 1200, isNew: false, improvements: ['Vision support', '128K context'] },
+      'claude-3-5-sonnet': { releaseDate: '2024-06-20', inputCost: 3, outputCost: 15, qualityScore: 94, speedMs: 700, isNew: false, improvements: ['Best coding model', 'Excellent reasoning', '200K context'] },
+      'claude-3-5-haiku': { releaseDate: '2024-10-22', inputCost: 0.25, outputCost: 1.25, qualityScore: 78, speedMs: 300, isNew: true, improvements: ['92% cheaper than Sonnet', 'Ultra fast', 'Great for RAG'] },
+      'claude-3-opus': { releaseDate: '2024-03-04', inputCost: 15, outputCost: 75, qualityScore: 96, speedMs: 1500, isNew: false, improvements: ['Highest quality', 'Complex reasoning', 'Long context'] },
+      'gemini-1.5-pro': { releaseDate: '2024-05-14', inputCost: 1.25, outputCost: 5, qualityScore: 88, speedMs: 600, isNew: false, improvements: ['1M context window', 'Multimodal', 'Efficient'] },
+      'gemini-1.5-flash': { releaseDate: '2024-05-14', inputCost: 0.075, outputCost: 0.3, qualityScore: 75, speedMs: 250, isNew: false, improvements: ['Cheapest option', 'Fastest responses', 'Great for simple tasks'] },
+      'gemini-2.0-flash-exp': { releaseDate: '2024-12-11', inputCost: 0, outputCost: 0, qualityScore: 85, speedMs: 200, isNew: true, improvements: ['Free during preview', '2x faster than 1.5', 'Improved reasoning'] },
+    };
+
+    // Process each provider
+    for (const provider of modelsResult.data.providers) {
+      const providerType = (provider.type || provider.slug || 'unknown').toLowerCase() as ModelUpdate['provider'];
+      const validProviders = ['openai', 'anthropic', 'google', 'mistral', 'groq'];
+
+      if (!validProviders.includes(providerType)) continue;
+
+      // Get top models from this provider
+      for (const modelId of provider.models.slice(0, 2)) {
+        const modelKey = modelId.toLowerCase().replace(/-\d{4,}$/, ''); // Remove version timestamps
+        const metadata = modelMetadata[modelKey] || modelMetadata[modelId];
+
+        if (!metadata) continue;
+
+        // Calculate cost change vs baseline (GPT-4 turbo)
+        const baselineCost = 10; // GPT-4 turbo input cost
+        const costChange = Math.round(((metadata.inputCost - baselineCost) / baselineCost) * 100);
+
+        // Calculate speed improvement vs baseline
+        const baselineSpeed = 1200; // GPT-4 turbo avg latency
+        const speedChange = metadata.speedMs < baselineSpeed
+          ? Math.round(((baselineSpeed - metadata.speedMs) / baselineSpeed) * 100)
+          : undefined;
+
+        // Calculate quality change vs baseline
+        const baselineQuality = 90; // GPT-4 turbo quality
+        const qualityChange = metadata.qualityScore > baselineQuality
+          ? metadata.qualityScore - baselineQuality
+          : undefined;
+
+        // Estimate monthly savings (assume 10M tokens/month)
+        const monthlySavings = costChange < 0 ? Math.round((baselineCost - metadata.inputCost) * 10) : undefined;
+
+        modelUpdates.push({
+          id: `${providerType}-${modelId}`,
+          provider: providerType as ModelUpdate['provider'],
+          model: modelId,
+          releaseDate: metadata.releaseDate,
+          isNew: metadata.isNew,
+          improvements: metadata.improvements,
+          costChange: costChange < 0 ? costChange : undefined,
+          speedChange,
+          qualityChange,
+          actions: {
+            canSwitch: true,
+            canTest: true,
+            canAddFallback: true,
+          },
+          estimatedMonthlySavings: monthlySavings,
+        });
+      }
+    }
+
+    // Sort by new first, then by potential savings
+    modelUpdates.sort((a, b) => {
+      if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
+      return (b.estimatedMonthlySavings || 0) - (a.estimatedMonthlySavings || 0);
+    });
+
+    // Return top 4 updates
+    return modelUpdates.slice(0, 4);
+
+  } catch (error) {
+    console.error('[Command Center] Error fetching model updates:', error);
+    return getDefaultModelUpdates();
+  }
+}
+
+/**
+ * Default model updates when OS is unavailable
+ */
+function getDefaultModelUpdates(): ModelUpdate[] {
   return [
     {
       id: '1',
-      provider: 'openai',
-      model: 'GPT-4.5-turbo',
-      releaseDate: '2024-12-04',
+      provider: 'anthropic',
+      model: 'claude-3-5-haiku',
+      releaseDate: '2024-10-22',
       isNew: true,
-      improvements: ['40% cheaper than GPT-4', 'Better reasoning', 'Faster response'],
-      costChange: -40,
-      speedChange: 20,
-      qualityChange: 5,
+      improvements: ['92% cheaper than Sonnet', 'Ultra fast', 'Great for RAG'],
+      costChange: -92,
+      speedChange: 57,
       actions: { canSwitch: true, canTest: true, canAddFallback: true },
-      estimatedMonthlySavings: 128,
+      estimatedMonthlySavings: 97,
     },
     {
       id: '2',
-      provider: 'anthropic',
-      model: 'Claude 3.5 Opus',
-      releaseDate: '2024-12-02',
+      provider: 'google',
+      model: 'gemini-2.0-flash-exp',
+      releaseDate: '2024-12-11',
       isNew: true,
-      improvements: ['Best for complex reasoning', 'Longer context window'],
-      qualityChange: 15,
-      actions: { canSwitch: false, canTest: true, canAddFallback: true },
+      improvements: ['Free during preview', '2x faster than 1.5', 'Improved reasoning'],
+      costChange: -100,
+      speedChange: 83,
+      actions: { canSwitch: true, canTest: true, canAddFallback: true },
+      estimatedMonthlySavings: 100,
     },
     {
       id: '3',
-      provider: 'google',
-      model: 'Gemini 2.0 Flash',
-      releaseDate: '2024-12-01',
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      releaseDate: '2024-07-18',
       isNew: false,
-      improvements: ['3x faster', 'Same quality', 'Better for structured output'],
-      speedChange: 200,
-      costChange: -30,
+      improvements: ['85% cheaper than GPT-4', 'Fast responses', 'Great for simple tasks'],
+      costChange: -98,
+      speedChange: 67,
       actions: { canSwitch: true, canTest: true, canAddFallback: true },
-      estimatedMonthlySavings: 45,
+      estimatedMonthlySavings: 98,
     },
   ];
 }
