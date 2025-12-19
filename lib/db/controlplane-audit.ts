@@ -10,6 +10,8 @@ import { query } from './client';
 export type AuditAction =
   | 'create_vertical'
   | 'update_vertical'
+  | 'activate_vertical'
+  | 'deactivate_vertical'
   | 'delete_vertical'
   | 'create_sub_vertical'
   | 'update_sub_vertical'

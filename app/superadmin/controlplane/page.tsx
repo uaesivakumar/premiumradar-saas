@@ -214,10 +214,12 @@ export default function ControlPlanePage() {
 
   // Modal state
   const [showCreateVertical, setShowCreateVertical] = useState(false);
+  const [showEditVertical, setShowEditVertical] = useState<OSVertical | null>(null);
   const [showCreateSubVertical, setShowCreateSubVertical] = useState<string | null>(null);
   const [showCreatePersona, setShowCreatePersona] = useState<string | null>(null);
   const [showRuntimeConfig, setShowRuntimeConfig] = useState(false);
   const [showAuditViewer, setShowAuditViewer] = useState(false);
+  const [showBindingsViewer, setShowBindingsViewer] = useState(false);
 
   // Load all data
   const loadData = useCallback(async () => {
@@ -311,6 +313,13 @@ export default function ControlPlanePage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowBindingsViewer(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
+          >
+            <Users className="w-3.5 h-3.5" />
+            View Bindings
+          </button>
+          <button
             onClick={() => setShowAuditViewer(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
           >
@@ -367,6 +376,7 @@ export default function ControlPlanePage() {
                       )
                     }
                     onSelectPersona={handleSelectPersona}
+                    onEditVertical={() => setShowEditVertical(vertical)}
                     onAddSubVertical={() => setShowCreateSubVertical(vertical.id)}
                     onAddPersona={(subVerticalId) => setShowCreatePersona(subVerticalId)}
                   />
@@ -466,6 +476,31 @@ export default function ControlPlanePage() {
       {showAuditViewer && (
         <AuditViewer onClose={() => setShowAuditViewer(false)} />
       )}
+
+      {/* Edit Vertical Modal */}
+      {showEditVertical && (
+        <EditVerticalModal
+          vertical={showEditVertical}
+          onClose={() => setShowEditVertical(null)}
+          onSave={async (payload) => {
+            const res = await fetch(`/api/superadmin/controlplane/verticals/${showEditVertical.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || data.error || 'Failed to update vertical');
+            // Rule 2: Re-fetch after update
+            await loadData();
+            setShowEditVertical(null);
+          }}
+        />
+      )}
+
+      {/* Workspace Bindings Viewer (Read-only) */}
+      {showBindingsViewer && (
+        <WorkspaceBindingsViewer onClose={() => setShowBindingsViewer(false)} />
+      )}
     </div>
   );
 }
@@ -482,6 +517,7 @@ function VerticalItem({
   selectedPersonaId,
   onToggle,
   onSelectPersona,
+  onEditVertical,
   onAddSubVertical,
   onAddPersona,
 }: {
@@ -492,32 +528,43 @@ function VerticalItem({
   selectedPersonaId?: string;
   onToggle: () => void;
   onSelectPersona: (persona: OSPersona) => void;
+  onEditVertical: () => void;
   onAddSubVertical: () => void;
   onAddPersona: (subVerticalId: string) => void;
 }) {
   return (
     <div>
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-3 hover:bg-neutral-800/50 transition-colors"
-      >
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between p-3 hover:bg-neutral-800/50 transition-colors group">
+        <button
+          onClick={onToggle}
+          className="flex-1 flex items-center gap-2 text-left"
+        >
           <span className="text-lg">
             {vertical.key === 'saas_sales' ? '💼' : '🏦'}
           </span>
-          <div className="text-left">
+          <div>
             <p className="text-sm font-medium text-white">{vertical.name}</p>
             <p className="text-[10px] text-neutral-600">
               {vertical.entity_type} • {subVerticals.length} sub-verticals
             </p>
           </div>
-        </div>
+        </button>
         <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditVertical();
+            }}
+            className="p-1 text-neutral-600 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+            title="Edit vertical"
+          >
+            <Edit2 className="w-3 h-3" />
+          </button>
           <span
             className={`px-1.5 py-0.5 text-[10px] rounded ${
               vertical.is_active
                 ? 'bg-emerald-500/20 text-emerald-400'
-                : 'bg-neutral-800 text-neutral-500'
+                : 'bg-red-500/20 text-red-400'
             }`}
           >
             {vertical.is_active ? 'Active' : 'Inactive'}
@@ -528,7 +575,7 @@ function VerticalItem({
             <ChevronRight className="w-3.5 h-3.5 text-neutral-500" />
           )}
         </div>
-      </button>
+      </div>
 
       {isExpanded && (
         <div className="bg-neutral-800/30 px-3 pb-3">
@@ -1733,6 +1780,386 @@ function AuditViewer({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 onClick={() => loadAuditLog(offset + limit)}
+                disabled={offset + limit >= total}
+                className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 text-white rounded disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// EDIT VERTICAL MODAL
+// =============================================================================
+
+function EditVerticalModal({
+  vertical,
+  onClose,
+  onSave,
+}: {
+  vertical: OSVertical;
+  onClose: () => void;
+  onSave: (payload: { name?: string; region_scope?: string[]; is_active?: boolean }) => Promise<void>;
+}) {
+  const [name, setName] = useState(vertical.name);
+  const [regions, setRegions] = useState(vertical.region_scope.join(', '));
+  const [isActive, setIsActive] = useState(vertical.is_active);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasChanges =
+    name !== vertical.name ||
+    regions !== vertical.region_scope.join(', ') ||
+    isActive !== vertical.is_active;
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const payload: { name?: string; region_scope?: string[]; is_active?: boolean } = {};
+
+      if (name !== vertical.name) {
+        payload.name = name;
+      }
+      if (regions !== vertical.region_scope.join(', ')) {
+        payload.region_scope = regions.split(',').map((r) => r.trim()).filter(Boolean);
+      }
+      if (isActive !== vertical.is_active) {
+        payload.is_active = isActive;
+      }
+
+      await onSave(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
+        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-medium text-white">Edit Vertical</h2>
+            <p className="text-[10px] text-neutral-600 mt-0.5">
+              Key: {vertical.key} (immutable)
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Immutable fields - display only */}
+          <div className="p-3 bg-neutral-800/50 rounded border border-neutral-700">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <span className="text-neutral-500">Key (immutable):</span>
+                <p className="text-white font-mono">{vertical.key}</p>
+              </div>
+              <div>
+                <span className="text-neutral-500">Entity Type (immutable):</span>
+                <p className="text-white">{vertical.entity_type}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Editable: Name */}
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+          </div>
+
+          {/* Editable: Regions */}
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Regions</label>
+            <input
+              type="text"
+              value={regions}
+              onChange={(e) => setRegions(e.target.value)}
+              placeholder="US, UAE"
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+            <p className="text-[10px] text-neutral-600 mt-1">Comma-separated</p>
+          </div>
+
+          {/* Editable: Status */}
+          <div>
+            <label className="block text-xs text-neutral-500 mb-2">Status</label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsActive(true)}
+                className={`flex-1 px-3 py-2 rounded border text-sm transition-colors ${
+                  isActive
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600'
+                }`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setIsActive(false)}
+                className={`flex-1 px-3 py-2 rounded border text-sm transition-colors ${
+                  !isActive
+                    ? 'bg-red-500/20 border-red-500/40 text-red-400'
+                    : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600'
+                }`}
+              >
+                Inactive
+              </button>
+            </div>
+            {!isActive && vertical.is_active && (
+              <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded">
+                <p className="text-[10px] text-amber-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Deactivating will affect all workspace bindings using this vertical
+                </p>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="p-2 bg-red-500/10 border border-red-500/20 rounded">
+              <p className="text-xs text-red-400">{error}</p>
+            </div>
+          )}
+
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges || isSaving}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+            {hasChanges ? 'Save Changes' : 'No Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// WORKSPACE BINDINGS VIEWER (Read-only)
+// =============================================================================
+
+interface WorkspaceBindingRow {
+  id: string;
+  tenant_id: string;
+  workspace_id: string;
+  vertical_key: string;
+  vertical_name: string;
+  vertical_is_active: boolean;
+  sub_vertical_key: string;
+  sub_vertical_name: string;
+  persona_key: string;
+  persona_name: string;
+  is_active: boolean;
+  has_warnings: boolean;
+  warnings: string[];
+  updated_at: string;
+}
+
+function WorkspaceBindingsViewer({ onClose }: { onClose: () => void }) {
+  const [bindings, setBindings] = useState<WorkspaceBindingRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [summary, setSummary] = useState<{
+    total_bindings: number;
+    active_bindings: number;
+    bindings_with_warnings: number;
+  } | null>(null);
+  const limit = 20;
+
+  const loadBindings = useCallback(async (newOffset: number = 0) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `/api/superadmin/controlplane/bindings?limit=${limit}&offset=${newOffset}`
+      );
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to load bindings');
+      }
+
+      setBindings(data.data.bindings);
+      setTotal(data.data.pagination.total);
+      setOffset(newOffset);
+      setSummary(data.data.summary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBindings(0);
+  }, [loadBindings]);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-neutral-800 flex items-center justify-between flex-shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-violet-400" />
+              <h2 className="text-sm font-medium text-white">Workspace Bindings</h2>
+              <span className="text-xs text-neutral-500">({total} total)</span>
+            </div>
+            <p className="text-[10px] text-neutral-600 mt-0.5">
+              Read-only view of tenant/workspace configurations
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {summary && (
+              <div className="flex items-center gap-3 text-[10px]">
+                <span className="text-emerald-400">
+                  {summary.active_bindings} active
+                </span>
+                {summary.bindings_with_warnings > 0 && (
+                  <span className="text-amber-400">
+                    {summary.bindings_with_warnings} with warnings
+                  </span>
+                )}
+              </div>
+            )}
+            <button
+              onClick={() => loadBindings(offset)}
+              className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="w-5 h-5 text-neutral-500 animate-spin" />
+            </div>
+          ) : error ? (
+            <div className="text-center text-red-400 text-sm p-8">{error}</div>
+          ) : bindings.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-8 h-8 text-neutral-700 mx-auto mb-3" />
+              <p className="text-neutral-500 text-sm">No workspace bindings</p>
+              <p className="text-neutral-600 text-xs mt-1">
+                Create bindings to link workspaces to personas
+              </p>
+            </div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-neutral-800/50 sticky top-0">
+                <tr className="text-left text-neutral-500">
+                  <th className="px-4 py-2 font-medium">Tenant</th>
+                  <th className="px-4 py-2 font-medium">Workspace</th>
+                  <th className="px-4 py-2 font-medium">Vertical</th>
+                  <th className="px-4 py-2 font-medium">Sub-Vertical</th>
+                  <th className="px-4 py-2 font-medium">Persona</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Updated</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-800">
+                {bindings.map((binding) => (
+                  <tr
+                    key={binding.id}
+                    className={`hover:bg-neutral-800/30 ${
+                      binding.has_warnings ? 'bg-amber-500/5' : ''
+                    }`}
+                  >
+                    <td className="px-4 py-2.5">
+                      <span className="font-mono text-neutral-300">
+                        {binding.tenant_id.substring(0, 8)}...
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="font-mono text-neutral-300">
+                        {binding.workspace_id.substring(0, 12)}...
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div>
+                        <span className="text-white">{binding.vertical_name}</span>
+                        <span className="text-neutral-600 ml-1">({binding.vertical_key})</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="text-neutral-300">{binding.sub_vertical_name}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="text-neutral-300">{binding.persona_name}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`px-1.5 py-0.5 text-[10px] rounded ${
+                            binding.is_active
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : 'bg-neutral-700 text-neutral-400'
+                          }`}
+                        >
+                          {binding.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                        {binding.has_warnings && (
+                          <span title={binding.warnings.join(', ')}>
+                            <AlertTriangle className="w-3 h-3 text-amber-400" />
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-neutral-500">
+                      {new Date(binding.updated_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {total > limit && (
+          <div className="p-3 border-t border-neutral-800 flex items-center justify-between flex-shrink-0">
+            <span className="text-xs text-neutral-500">
+              Showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => loadBindings(Math.max(0, offset - limit))}
+                disabled={offset === 0}
+                className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 text-white rounded disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => loadBindings(offset + limit)}
                 disabled={offset + limit >= total}
                 className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 text-white rounded disabled:opacity-50"
               >
