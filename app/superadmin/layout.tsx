@@ -36,6 +36,7 @@ import {
   DollarSign,
   Box,
   Shield,
+  FlaskConical,
 } from 'lucide-react';
 import AICommandBar from '@/components/superadmin/AICommandBar';
 
@@ -48,6 +49,7 @@ const navItems = [
   { label: 'Overview', href: '/superadmin', icon: LayoutGrid },
   { label: 'Command Center', href: '/superadmin/command-center', icon: Sparkles },
   { label: 'Intelligence', href: '/superadmin/siva', icon: Cpu },
+  { label: 'Sales-Bench', href: '/superadmin/sales-bench', icon: FlaskConical },
   { label: 'Financials', href: '/superadmin/financials', icon: DollarSign },
   { type: 'divider' },
   { label: 'Control Plane', href: '/superadmin/controlplane', icon: Shield },

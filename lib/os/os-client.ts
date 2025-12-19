@@ -894,6 +894,200 @@ export const territories = {
 };
 
 // =============================================================================
+// SALES-BENCH GOVERNANCE API
+// =============================================================================
+
+export interface SalesBenchSuite {
+  id: string;
+  suite_key: string;
+  name: string;
+  description?: string;
+  vertical: string;
+  sub_vertical: string;
+  region_code: string;
+  stage: 'PRE_ENTRY' | 'POST_ENTRY';
+  scenario_count: number;
+  is_frozen: boolean;
+  frozen_at?: string;
+  status?: string;
+  system_validated_at?: string;
+  human_validated_at?: string;
+  ga_approved_at?: string;
+  spearman_rho?: number;
+}
+
+export interface SalesBenchRun {
+  id: string;
+  run_number: number;
+  run_mode: 'FULL' | 'FOUNDER' | 'QUICK';
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  golden_pass_rate?: number;
+  kill_containment_rate?: number;
+  cohens_d?: number;
+  started_at: string;
+  ended_at?: string;
+}
+
+export interface GovernanceCommand {
+  command: string;
+  suite_key: string;
+  triggered_by?: string;
+  [key: string]: unknown;
+}
+
+export const salesBench = {
+  /**
+   * List all suites (with optional filters)
+   */
+  async listSuites(filters?: {
+    vertical?: string;
+    sub_vertical?: string;
+    region?: string;
+    status?: string;
+    frozen_only?: boolean;
+  }): Promise<OSResponse<SalesBenchSuite[]>> {
+    return osRequest('/api/os/sales-bench/suites', { params: filters });
+  },
+
+  /**
+   * Get suite by key
+   */
+  async getSuite(suiteKey: string): Promise<OSResponse<SalesBenchSuite>> {
+    return osRequest(`/api/os/sales-bench/suites/${suiteKey}`);
+  },
+
+  /**
+   * Get suite status
+   */
+  async getSuiteStatus(suiteKey: string): Promise<OSResponse<{
+    status: string;
+    next_action?: string;
+    system_validated_at?: string;
+    human_validated_at?: string;
+    ga_approved_at?: string;
+  }>> {
+    return osRequest(`/api/os/sales-bench/suites/${suiteKey}/status`);
+  },
+
+  /**
+   * Get suite run history
+   */
+  async getSuiteHistory(suiteKey: string, options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<OSResponse<{ data: SalesBenchRun[]; total: number; trend?: unknown }>> {
+    return osRequest(`/api/os/sales-bench/suites/${suiteKey}/history`, { params: options });
+  },
+
+  /**
+   * Get suite audit trail
+   */
+  async getSuiteAudit(suiteKey: string, options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<OSResponse<{ data: unknown[]; count: number }>> {
+    return osRequest(`/api/os/sales-bench/suites/${suiteKey}/audit`, { params: options });
+  },
+
+  /**
+   * Get governance dashboard overview
+   */
+  async getDashboard(): Promise<OSResponse<{
+    total_suites: number;
+    by_status: Record<string, number>;
+    suites: SalesBenchSuite[];
+  }>> {
+    return osRequest('/api/os/sales-bench/suites/dashboard/overview');
+  },
+
+  /**
+   * Get available governance commands
+   */
+  async getCommands(): Promise<OSResponse<{ commands: unknown[] }>> {
+    return osRequest('/api/os/sales-bench/governance/commands');
+  },
+
+  /**
+   * Get governance status
+   */
+  async getGovernanceStatus(): Promise<OSResponse<{
+    status_summary: Record<string, number>;
+    recent_runs: SalesBenchRun[];
+    recent_events: unknown[];
+  }>> {
+    return osRequest('/api/os/sales-bench/governance/status');
+  },
+
+  /**
+   * Execute governance command
+   */
+  async executeCommand(command: GovernanceCommand): Promise<OSResponse<unknown>> {
+    return osRequest(`/api/os/sales-bench/governance/commands/${command.command}`, {
+      method: 'POST',
+      body: command,
+    });
+  },
+
+  /**
+   * Run system validation
+   */
+  async runSystemValidation(options: {
+    suite_key: string;
+    run_mode?: 'FULL' | 'FOUNDER' | 'QUICK';
+    triggered_by?: string;
+    environment?: string;
+  }): Promise<OSResponse<{ run_id: string; run_number: number }>> {
+    return osRequest('/api/os/sales-bench/governance/commands/run-system-validation', {
+      method: 'POST',
+      body: options,
+    });
+  },
+
+  /**
+   * Start human calibration
+   */
+  async startHumanCalibration(options: {
+    suite_key: string;
+    session_name?: string;
+    evaluator_count: number;
+    triggered_by?: string;
+  }): Promise<OSResponse<{ session_id: string }>> {
+    return osRequest('/api/os/sales-bench/governance/commands/start-human-calibration', {
+      method: 'POST',
+      body: options,
+    });
+  },
+
+  /**
+   * Approve suite for GA
+   */
+  async approveForGA(options: {
+    suite_key: string;
+    approved_by: string;
+    approval_notes?: string;
+  }): Promise<OSResponse<{ status: string }>> {
+    return osRequest('/api/os/sales-bench/governance/commands/approve-for-ga', {
+      method: 'POST',
+      body: options,
+    });
+  },
+
+  /**
+   * Deprecate suite
+   */
+  async deprecateSuite(options: {
+    suite_key: string;
+    deprecated_by: string;
+    deprecation_reason: string;
+  }): Promise<OSResponse<{ status: string }>> {
+    return osRequest('/api/os/sales-bench/governance/commands/deprecate-suite', {
+      method: 'POST',
+      body: options,
+    });
+  },
+};
+
+// =============================================================================
 // EXPORT
 // =============================================================================
 
@@ -903,6 +1097,7 @@ export const osClient = {
   providers,
   verticals,
   territories,
+  salesBench,
   // Direct request for custom endpoints
   request: osRequest,
 };

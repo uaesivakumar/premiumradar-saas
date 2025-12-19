@@ -5548,7 +5548,7 @@ All routes require:
 const response = await fetch('/api/os/score', {
   method: 'POST',
   headers: {
-    'Authorization': \`Bearer \${token}\`,
+    'Authorization': 'Bearer ' + token,
     'x-sales-context': JSON.stringify(salesContext),
     'Content-Type': 'application/json',
   },
@@ -6369,7 +6369,7 @@ S203-S217 | Target: $100M+ ARR
           'Model Router selects model based on: 50% stability, 30% cost, 20% latency',
           'When a new model launches, OS gets the upgrade for free',
         ],
-        deepDive: \`The Capability Registry (os_model_capabilities) defines what SIVA can request:
+        deepDive: `The Capability Registry (os_model_capabilities) defines what SIVA can request:
 
 CAPABILITY          | LATENCY | RISK   | REPLAY
 --------------------|---------|--------|--------
@@ -6385,8 +6385,8 @@ Each model declares which capabilities it supports:
 - gpt-4o-mini: summarize_fast, classify_cheap, chat_low_risk (cost-optimized)
 - claude-3-5-sonnet: reason_deep, extract_structured, draft_safe (quality-optimized)
 
-The genius: SIVA just says "I need reason_deep" and the OS picks the best model.\`,
-        techRationale: \`PRD v1.2 Law 1: "Authority precedes intelligence" - OS decides what SIVA can do.
+The genius: SIVA just says "I need reason_deep" and the OS picks the best model.`,
+        techRationale: `PRD v1.2 Law 1: "Authority precedes intelligence" - OS decides what SIVA can do.
 
 Why capability abstraction enforces Law 1:
 1. MODEL INDEPENDENCE: When GPT-5 launches, we flip a config. SIVA doesn't change.
@@ -6395,13 +6395,13 @@ Why capability abstraction enforces Law 1:
 4. FUTURE-PROOFING: When we train our own SLM, it just becomes another model option.
 5. TESTING: Mock any capability without mocking specific model APIs.
 
-SIVA requests capability → OS picks model. Authority flows down.\`,
-        futureCompatibility: \`By 2030:
+SIVA requests capability → OS picks model. Authority flows down.`,
+        futureCompatibility: `By 2030:
 - 50+ models in the registry
 - Automatic A/B testing of model performance
 - SLA-based routing (this persona requires 99.9% uptime)
 - Cost forecasting per persona per month
-- Self-healing: degraded model auto-excluded\`,
+- Self-healing: degraded model auto-excluded`,
       },
       {
         id: 'persona-capability-policy',
@@ -6415,7 +6415,7 @@ SIVA requests capability → OS picks model. Authority flows down.\`,
           'Every denial is logged to os_capability_denials for audit',
           'Budget constraints: max_cost_per_call, max_latency_ms',
         ],
-        deepDive: \`The authorize_capability() function enforces policy:
+        deepDive: `The authorize_capability() function enforces policy:
 
 1. Check if capability_key exists in registry → 403 CAPABILITY_NOT_FOUND
 2. Check if capability_key in forbidden_capabilities → 403 IN_FORBIDDEN
@@ -6432,8 +6432,8 @@ Example persona policy:
   "forbidden_capabilities": ["reason_deep"],  // Too expensive for this tier
   "max_cost_per_call": 0.01,
   "max_latency_ms": 2000
-}\`,
-        techRationale: \`PRD v1.2 Law 2: "Persona is policy, not personality" - Persona defines capability boundaries.
+}`,
+        techRationale: `PRD v1.2 Law 2: "Persona is policy, not personality" - Persona defines capability boundaries.
 
 Why persona-based policy enforces Law 2:
 1. COST CONTROL: Free tier can't access expensive reasoning
@@ -6442,7 +6442,7 @@ Why persona-based policy enforces Law 2:
 4. SECURITY: Admin personas get all, user personas get subset
 5. A/B TESTING: Roll out new capability to subset of personas first
 
-Persona = policy. Capabilities = boundaries. Authorization before intelligence.\`,
+Persona = policy. Capabilities = boundaries. Authorization before intelligence.`,
       },
       {
         id: 'deterministic-routing',
@@ -6456,7 +6456,7 @@ Persona = policy. Capabilities = boundaries. Authorization before intelligence.\
           'Tested: 10 identical requests → same model 10 times',
           'NO randomness, NO load balancing, NO "variety"',
         ],
-        deepDive: \`Routing Score Formula:
+        deepDive: `Routing Score Formula:
 
 score = (stability_score * 0.5) +
         (100 - cost_rank * 10) * 0.3 +
@@ -6473,8 +6473,8 @@ claude-3-5-haiku: (90 * 0.5) + (80 * 0.3) + (85 * 0.2) = 45 + 24 + 17 = 86
 
 Winner: gpt-4o-mini with score 92.5
 
-This is deterministic. Run it 1000 times, same result.\`,
-        techRationale: \`PRD v1.2 Law 4: "Every output must be explainable or escalated" - No black boxes.
+This is deterministic. Run it 1000 times, same result.`,
+        techRationale: `PRD v1.2 Law 4: "Every output must be explainable or escalated" - No black boxes.
 PRD v1.2 Law 5: "If it cannot be replayed, it did not happen" - Determinism required.
 
 Why determinism enforces Laws 4 & 5:
@@ -6484,7 +6484,7 @@ Why determinism enforces Laws 4 & 5:
 4. REPLAY: Historical interactions can be exactly replayed
 5. TRUST: No "AI magic" - everything is explainable
 
-Same inputs → same model. Every time. No exceptions.\`,
+Same inputs → same model. Every time. No exceptions.`,
       },
       {
         id: 'replay-safety',
@@ -6498,7 +6498,7 @@ Same inputs → same model. Every time. No exceptions.\`,
           'replay_deviation: Boolean flag when model differs',
           'deviation_reason: MODEL_INACTIVE, MODEL_INELIGIBLE, CAPABILITY_CHANGED',
         ],
-        deepDive: \`The v_routing_decision_audit view shows replay status:
+        deepDive: `The v_routing_decision_audit view shows replay status:
 
 SELECT interaction_id, capability_key, model_slug, replay_status
 FROM v_routing_decision_audit;
@@ -6513,8 +6513,8 @@ Possible replay_status values:
 - MODEL_INACTIVE: Model was deactivated
 - MODEL_INELIGIBLE: Model marked ineligible (maintenance)
 - MODEL_DELETED: Model removed from registry
-- CAPABILITY_CHANGED: Model no longer supports this capability\`,
-        techRationale: \`PRD v1.2 Law 5: "If it cannot be replayed, it did not happen" - Deterministic replay.
+- CAPABILITY_CHANGED: Model no longer supports this capability`,
+        techRationale: `PRD v1.2 Law 5: "If it cannot be replayed, it did not happen" - Deterministic replay.
 
 Why replay safety enforces Law 5:
 1. COMPLIANCE: Auditors can verify "what happened on March 15th at 2pm"
@@ -6523,7 +6523,7 @@ Why replay safety enforces Law 5:
 4. LEGAL: Prove that decisions were made correctly
 5. TRUST: No hidden changes, no silent substitutions
 
-Deviation is FLAGGED, never hidden. Replay is law.\`,
+Deviation is FLAGGED, never hidden. Replay is law.`,
       },
       {
         id: 'budget-gating',
@@ -6537,7 +6537,7 @@ Deviation is FLAGGED, never hidden. Replay is law.\`,
           'If no models fit budget → NO_ELIGIBLE_MODEL error (hard failure)',
           'No silent downgrades - user must know constraints can\'t be met',
         ],
-        deepDive: \`Budget enforcement in Model Router:
+        deepDive: `Budget enforcement in Model Router:
 
 1. Load persona policy (max_cost_per_call, max_latency_ms)
 2. For each model supporting capability:
@@ -6554,14 +6554,14 @@ Models:
 - gpt-4o: $0.00625/call → EXCLUDED
 - claude-3-opus: $0.045/call → EXCLUDED
 
-Result: Only gpt-4o-mini considered. If it\'s down, routing fails.\`,
-        techRationale: \`Why hard failure over silent downgrade?
+Result: Only gpt-4o-mini considered. If it\'s down, routing fails.`,
+        techRationale: `Why hard failure over silent downgrade?
 
 1. PREDICTABILITY: Users know their cost/latency constraints are enforced
 2. ALERTING: Operations team sees budget failures, can adjust
 3. NO SURPRISES: Never hit with unexpected bills
 4. SLA COMPLIANCE: Can guarantee max latency to enterprise customers
-5. TRANSPARENCY: Every constraint visible in logs\`,
+5. TRANSPARENCY: Every constraint visible in logs`,
       },
       {
         id: 'model-radar-ui',
@@ -6575,7 +6575,7 @@ Result: Only gpt-4o-mini considered. If it\'s down, routing fails.\`,
           'Routing Decision Viewer: Read-only log with filters',
           'NO force_model, NO default_model override - UI observes only',
         ],
-        deepDive: \`Model Radar Security:
+        deepDive: `Model Radar Security:
 
 ALLOWED operations:
 ✅ View capability registry (read-only)
@@ -6590,8 +6590,8 @@ BLOCKED operations:
 ❌ model_id in authorize-capability body → Ignored
 ❌ default_model override → 405 Method Not Allowed
 
-The UI is a window, not a door.\`,
-        techRationale: \`PRD v1.2 Law 3: "SIVA never mutates the world" - SIVA interprets, OS acts.
+The UI is a window, not a door.`,
+        techRationale: `PRD v1.2 Law 3: "SIVA never mutates the world" - SIVA interprets, OS acts.
 PRD v1.2 Law 4: "Every output must be explainable" - Algorithm decides, not admin.
 
 Why read-only UI enforces Laws 3 & 4:
@@ -6601,7 +6601,7 @@ Why read-only UI enforces Laws 3 & 4:
 4. COST CONTROL: Can\'t route expensive tasks to cheap model manually
 5. TRUST: "Why this model?" has one answer, always
 
-The UI is a window, not a door. Observe, never control.\`,
+The UI is a window, not a door. Observe, never control.`,
       },
     ],
   },

@@ -31,6 +31,10 @@ import {
   FileText,
   RefreshCw,
   Clock,
+  FlaskConical,
+  Play,
+  TrendingUp,
+  Lock,
 } from 'lucide-react';
 
 // =============================================================================
