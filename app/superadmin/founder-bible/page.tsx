@@ -247,7 +247,7 @@ export default function FounderBiblePage() {
 
 // Calculate total topics dynamically
 // 20 comprehensive modules with 100+ topics covering every inch of the product
-const TOTAL_TOPICS = 108;
+const TOTAL_TOPICS = 114; // Updated Dec 2025: Added 6 topics for Model Capability Routing (S228-S233)
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: '🏠' },
@@ -6341,6 +6341,267 @@ S203-S217 | Target: $100M+ ARR
 • Open-source SLM
 • Global regions
 • Platform ecosystem`,
+      },
+    ],
+  },
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MODEL CAPABILITY ROUTING MODULE (S228-S233)
+  // Added: December 2025 - Production Go-Live
+  // ═══════════════════════════════════════════════════════════════════════════
+  {
+    id: 'model-routing',
+    title: 'Module 16: Model Capability Routing',
+    description: 'How SIVA routes to models without knowing model names - enforcing PRD v1.2 Laws 1 (Authority), 2 (Persona is Policy), 4 (Explainability), 5 (Replay)',
+    icon: '🔀',
+    estimatedTime: '45 min',
+    difficulty: 'advanced',
+    category: 'architecture',
+    topics: [
+      {
+        id: 'capability-abstraction',
+        title: 'The Capability Abstraction',
+        content: 'SIVA never sees model names. SIVA only requests capabilities like "summarize_fast" or "reason_deep". The OS Model Router selects the best model based on cost, latency, and quality constraints. This is the key insight that makes AI commoditized.',
+        analogy: 'Think of a power grid. Your devices don\'t know or care which power plant generated the electricity. They just request "power" and the grid delivers it from the best available source. Similarly, SIVA requests "reasoning capability" and the OS delivers it from the best available model.',
+        keyPoints: [
+          'SIVA never sees model names (gpt-4o, claude-3, etc.)',
+          '6 core capabilities: summarize_fast, reason_deep, classify_cheap, extract_structured, draft_safe, chat_low_risk',
+          'Each capability has: latency_class, risk_class, replay_tolerance',
+          'Model Router selects model based on: 50% stability, 30% cost, 20% latency',
+          'When a new model launches, OS gets the upgrade for free',
+        ],
+        deepDive: \`The Capability Registry (os_model_capabilities) defines what SIVA can request:
+
+CAPABILITY          | LATENCY | RISK   | REPLAY
+--------------------|---------|--------|--------
+summarize_fast      | low     | low    | relaxed
+reason_deep         | high    | medium | strict
+classify_cheap      | low     | low    | relaxed
+extract_structured  | medium  | low    | strict
+draft_safe          | medium  | low    | strict
+chat_low_risk       | low     | low    | relaxed
+
+Each model declares which capabilities it supports:
+- gpt-4o: all 6 capabilities
+- gpt-4o-mini: summarize_fast, classify_cheap, chat_low_risk (cost-optimized)
+- claude-3-5-sonnet: reason_deep, extract_structured, draft_safe (quality-optimized)
+
+The genius: SIVA just says "I need reason_deep" and the OS picks the best model.\`,
+        techRationale: \`PRD v1.2 Law 1: "Authority precedes intelligence" - OS decides what SIVA can do.
+
+Why capability abstraction enforces Law 1:
+1. MODEL INDEPENDENCE: When GPT-5 launches, we flip a config. SIVA doesn't change.
+2. COST OPTIMIZATION: Cheap tasks use cheap models. Expensive tasks use premium models.
+3. VENDOR INDEPENDENCE: Switch from OpenAI to Anthropic without touching SIVA code.
+4. FUTURE-PROOFING: When we train our own SLM, it just becomes another model option.
+5. TESTING: Mock any capability without mocking specific model APIs.
+
+SIVA requests capability → OS picks model. Authority flows down.\`,
+        futureCompatibility: \`By 2030:
+- 50+ models in the registry
+- Automatic A/B testing of model performance
+- SLA-based routing (this persona requires 99.9% uptime)
+- Cost forecasting per persona per month
+- Self-healing: degraded model auto-excluded\`,
+      },
+      {
+        id: 'persona-capability-policy',
+        title: 'Persona Capability Policy',
+        content: 'Each persona has an allowed_capabilities whitelist and forbidden_capabilities blacklist. If SIVA requests a capability not in the whitelist, it gets 403 DENIED. If it\'s in the blacklist, denial wins even if also in whitelist. This is how we control what each persona can do.',
+        analogy: 'Think of building access cards. Your keycard only opens certain doors (whitelist). Some doors are marked "NO ENTRY" regardless of your card level (blacklist). The security system doesn\'t negotiate - it denies or allows instantly.',
+        keyPoints: [
+          'allowed_capabilities: Array of capabilities this persona can use',
+          'forbidden_capabilities: Array of capabilities this persona can NEVER use (blacklist wins)',
+          'Authorization happens BEFORE routing (deny fast, never invoke SIVA on denial)',
+          'Every denial is logged to os_capability_denials for audit',
+          'Budget constraints: max_cost_per_call, max_latency_ms',
+        ],
+        deepDive: \`The authorize_capability() function enforces policy:
+
+1. Check if capability_key exists in registry → 403 CAPABILITY_NOT_FOUND
+2. Check if capability_key in forbidden_capabilities → 403 IN_FORBIDDEN
+3. Check if capability_key in allowed_capabilities → continue
+4. Else → 403 NOT_IN_ALLOWED
+
+CRITICAL: Authorization is checked BEFORE model routing.
+If denied, SIVA is NEVER invoked. No tokens consumed. No cost.
+
+Example persona policy:
+{
+  "persona_id": "employee-banking-uae",
+  "allowed_capabilities": ["summarize_fast", "classify_cheap", "draft_safe"],
+  "forbidden_capabilities": ["reason_deep"],  // Too expensive for this tier
+  "max_cost_per_call": 0.01,
+  "max_latency_ms": 2000
+}\`,
+        techRationale: \`PRD v1.2 Law 2: "Persona is policy, not personality" - Persona defines capability boundaries.
+
+Why persona-based policy enforces Law 2:
+1. COST CONTROL: Free tier can't access expensive reasoning
+2. COMPLIANCE: Some verticals can't use certain models (data residency)
+3. PERFORMANCE: High-volume personas get fast-only capabilities
+4. SECURITY: Admin personas get all, user personas get subset
+5. A/B TESTING: Roll out new capability to subset of personas first
+
+Persona = policy. Capabilities = boundaries. Authorization before intelligence.\`,
+      },
+      {
+        id: 'deterministic-routing',
+        title: 'Deterministic Routing',
+        content: 'Given the same inputs (capability, persona, envelope), the Model Router ALWAYS selects the same model. This is critical for reproducibility, debugging, and audit trails. No randomness. No "best effort". Same inputs → same model, every single time.',
+        analogy: 'Think of a vending machine with fixed prices and stock. If you insert $1.50 and press B7, you always get the same snack. The machine doesn\'t randomly decide. Same input → same output.',
+        keyPoints: [
+          'Fixed weights: 50% stability_score, 30% cost_weight, 20% latency_weight',
+          'All eligible models scored, highest score wins',
+          'Ties broken by model_id (deterministic)',
+          'Tested: 10 identical requests → same model 10 times',
+          'NO randomness, NO load balancing, NO "variety"',
+        ],
+        deepDive: \`Routing Score Formula:
+
+score = (stability_score * 0.5) +
+        (100 - cost_rank * 10) * 0.3 +
+        (100 - latency_rank * 10) * 0.2
+
+Where:
+- stability_score: 0-100 from model config
+- cost_rank: 1=cheapest, 2=second cheapest, etc.
+- latency_rank: 1=fastest, 2=second fastest, etc.
+
+Example:
+gpt-4o-mini: (95 * 0.5) + (90 * 0.3) + (90 * 0.2) = 47.5 + 27 + 18 = 92.5
+claude-3-5-haiku: (90 * 0.5) + (80 * 0.3) + (85 * 0.2) = 45 + 24 + 17 = 86
+
+Winner: gpt-4o-mini with score 92.5
+
+This is deterministic. Run it 1000 times, same result.\`,
+        techRationale: \`PRD v1.2 Law 4: "Every output must be explainable or escalated" - No black boxes.
+PRD v1.2 Law 5: "If it cannot be replayed, it did not happen" - Determinism required.
+
+Why determinism enforces Laws 4 & 5:
+1. DEBUGGING: "Why did SIVA pick this model?" → Run query, see score breakdown
+2. AUDIT: Regulators can verify any decision is reproducible
+3. TESTING: Automated tests can assert expected model selection
+4. REPLAY: Historical interactions can be exactly replayed
+5. TRUST: No "AI magic" - everything is explainable
+
+Same inputs → same model. Every time. No exceptions.\`,
+      },
+      {
+        id: 'replay-safety',
+        title: 'Replay Safety & Deviation Detection',
+        content: 'Every routing decision is logged with interaction_id. On replay, the system checks if the original model is still available and eligible. If yes → exact replay. If no → deviation is FLAGGED, not hidden. No silent substitutions ever.',
+        analogy: 'Think of a pharmacy filling a prescription. If you come back for a refill, they check: same medication available? same dosage? If the original is discontinued, they don\'t silently substitute - they flag it for pharmacist review.',
+        keyPoints: [
+          'os_routing_decisions: Append-only log of every decision',
+          'interaction_id: Unique ID for replay lookup',
+          'resolve_model_for_replay(): Checks if original model still valid',
+          'replay_deviation: Boolean flag when model differs',
+          'deviation_reason: MODEL_INACTIVE, MODEL_INELIGIBLE, CAPABILITY_CHANGED',
+        ],
+        deepDive: \`The v_routing_decision_audit view shows replay status:
+
+SELECT interaction_id, capability_key, model_slug, replay_status
+FROM v_routing_decision_audit;
+
+interaction_id                        | capability     | model        | replay_status
+--------------------------------------|----------------|--------------|---------------
+a2640925-7eab-48e3-9fc5-8ad5ce7440e3 | summarize_fast | gpt-4o-mini  | REPLAYABLE
+089629e5-1bdf-4671-b67c-9e483b159e82 | reason_deep    | claude-3-5   | MODEL_INELIGIBLE
+
+Possible replay_status values:
+- REPLAYABLE: Original model still works
+- MODEL_INACTIVE: Model was deactivated
+- MODEL_INELIGIBLE: Model marked ineligible (maintenance)
+- MODEL_DELETED: Model removed from registry
+- CAPABILITY_CHANGED: Model no longer supports this capability\`,
+        techRationale: \`PRD v1.2 Law 5: "If it cannot be replayed, it did not happen" - Deterministic replay.
+
+Why replay safety enforces Law 5:
+1. COMPLIANCE: Auditors can verify "what happened on March 15th at 2pm"
+2. DEBUGGING: Reproduce exact conditions of a problematic interaction
+3. REGRESSION: Compare behavior before/after model changes
+4. LEGAL: Prove that decisions were made correctly
+5. TRUST: No hidden changes, no silent substitutions
+
+Deviation is FLAGGED, never hidden. Replay is law.\`,
+      },
+      {
+        id: 'budget-gating',
+        title: 'Budget Gating',
+        content: 'Persona policies include max_cost_per_call and max_latency_ms. Models exceeding these budgets are EXCLUDED from routing, not just deprioritized. If no model satisfies the budget, routing fails with NO_ELIGIBLE_MODEL rather than silently downgrading.',
+        analogy: 'Think of a corporate travel policy. If your limit is $500/night, the booking system won\'t show you $800 hotels at all - they\'re filtered out, not just sorted lower.',
+        keyPoints: [
+          'max_cost_per_call: Maximum $ per API call for this persona',
+          'max_latency_ms: Maximum response time allowed',
+          'Models exceeding budget are EXCLUDED, not deprioritized',
+          'If no models fit budget → NO_ELIGIBLE_MODEL error (hard failure)',
+          'No silent downgrades - user must know constraints can\'t be met',
+        ],
+        deepDive: \`Budget enforcement in Model Router:
+
+1. Load persona policy (max_cost_per_call, max_latency_ms)
+2. For each model supporting capability:
+   - Calculate cost_per_call from input/output token rates
+   - If cost > max_cost_per_call → EXCLUDE
+   - If avg_latency_ms > max_latency_ms → EXCLUDE
+3. If zero models remain → Return NO_ELIGIBLE_MODEL
+4. Score and rank remaining models
+
+Example:
+Persona: max_cost_per_call = $0.001
+Models:
+- gpt-4o-mini: $0.000375/call → ELIGIBLE
+- gpt-4o: $0.00625/call → EXCLUDED
+- claude-3-opus: $0.045/call → EXCLUDED
+
+Result: Only gpt-4o-mini considered. If it\'s down, routing fails.\`,
+        techRationale: \`Why hard failure over silent downgrade?
+
+1. PREDICTABILITY: Users know their cost/latency constraints are enforced
+2. ALERTING: Operations team sees budget failures, can adjust
+3. NO SURPRISES: Never hit with unexpected bills
+4. SLA COMPLIANCE: Can guarantee max latency to enterprise customers
+5. TRANSPARENCY: Every constraint visible in logs\`,
+      },
+      {
+        id: 'model-radar-ui',
+        title: 'Model Radar UI',
+        content: 'Super Admin includes a Model Radar dashboard showing all models, their capabilities, eligibility status, and routing decisions. Admins can toggle eligibility but CANNOT override routing decisions. The UI observes, it never controls.',
+        analogy: 'Think of air traffic control radar. Controllers can see all planes and their status. They can close runways (toggle eligibility). But they can\'t manually force a plane to land on a specific runway - the autopilot (Model Router) decides based on conditions.',
+        keyPoints: [
+          'Capability Registry Grid: Shows all 6 capabilities with metadata',
+          'Model Table: Shows all models with supported/blocked capabilities',
+          'Eligibility Toggle: Admin can mark model ineligible (maintenance)',
+          'Routing Decision Viewer: Read-only log with filters',
+          'NO force_model, NO default_model override - UI observes only',
+        ],
+        deepDive: \`Model Radar Security:
+
+ALLOWED operations:
+✅ View capability registry (read-only)
+✅ View model list with capabilities (read-only)
+✅ Toggle is_eligible (resource control)
+✅ View routing decisions (read-only)
+✅ Filter by capability, persona, deviation status
+
+BLOCKED operations:
+❌ force_model URL param → Ignored
+❌ POST to routing-decisions → 405 Method Not Allowed
+❌ model_id in authorize-capability body → Ignored
+❌ default_model override → 405 Method Not Allowed
+
+The UI is a window, not a door.\`,
+        techRationale: \`PRD v1.2 Law 3: "SIVA never mutates the world" - SIVA interprets, OS acts.
+PRD v1.2 Law 4: "Every output must be explainable" - Algorithm decides, not admin.
+
+Why read-only UI enforces Laws 3 & 4:
+1. CONSISTENCY: One routing algorithm, no exceptions
+2. AUDIT: All decisions explainable by algorithm
+3. SECURITY: Can\'t game the system via admin
+4. COST CONTROL: Can\'t route expensive tasks to cheap model manually
+5. TRUST: "Why this model?" has one answer, always
+
+The UI is a window, not a door. Observe, never control.\`,
       },
     ],
   },
