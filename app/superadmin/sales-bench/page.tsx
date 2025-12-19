@@ -84,8 +84,8 @@ export default function SalesBenchDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedVerticals, setExpandedVerticals] = useState<Set<string>>(new Set(['Banking']));
-  const [expandedSubVerticals, setExpandedSubVerticals] = useState<Set<string>>(new Set(['Banking:Employee Banking']));
+  const [expandedVerticals, setExpandedVerticals] = useState<Set<string>>(new Set(['banking']));
+  const [expandedSubVerticals, setExpandedSubVerticals] = useState<Set<string>>(new Set(['banking:employee_banking']));
   const [selectedSuite, setSelectedSuite] = useState<Suite | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -108,10 +108,33 @@ export default function SalesBenchDashboard() {
       const dashboardData = await dashboardRes.json();
 
       if (suitesData.success) {
-        setSuites(suitesData.suites || []);
-      }
-      if (dashboardData.success) {
-        setStats(dashboardData.stats || null);
+        const suitesList = suitesData.suites || suitesData.data || [];
+        setSuites(suitesList);
+
+        // Calculate stats from suites if dashboard doesn't provide them
+        if (!dashboardData.success || !dashboardData.stats) {
+          const statsByStatus: Record<string, number> = {
+            DRAFT: 0,
+            SYSTEM_VALIDATED: 0,
+            HUMAN_VALIDATED: 0,
+            GA_APPROVED: 0,
+            DEPRECATED: 0,
+          };
+          suitesList.forEach((s: Suite) => {
+            const status = s.status || 'DRAFT';
+            if (status in statsByStatus) {
+              statsByStatus[status]++;
+            }
+          });
+          setStats({
+            total_suites: suitesList.length,
+            by_status: statsByStatus as DashboardStats['by_status'],
+            pending_human_validation: statsByStatus.SYSTEM_VALIDATED,
+            ready_for_ga: statsByStatus.HUMAN_VALIDATED,
+          });
+        } else {
+          setStats(dashboardData.stats);
+        }
       }
       setLastUpdated(new Date());
     } catch (err) {
