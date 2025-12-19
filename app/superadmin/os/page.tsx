@@ -116,6 +116,17 @@ const OS_SECTIONS = [
     href: '/superadmin/os/discovery-templates',
     sprint: 'S77',
   },
+  {
+    id: 'model-radar',
+    title: 'Model Radar',
+    description: 'Capability routing visibility and eligibility control',
+    icon: Activity,
+    color: 'text-rose-400',
+    bgColor: 'bg-rose-500/10',
+    borderColor: 'border-rose-500/20',
+    href: '/superadmin/os/model-radar',
+    sprint: 'S232',
+  },
 ];
 
 export default function OSConfigDashboard() {
@@ -257,6 +268,10 @@ export default function OSConfigDashboard() {
         return status.territories ? `${status.territories.count} regions` : 'Loading...';
       case 'config':
         return 'Namespaced configs';
+      case 'discovery':
+        return 'Query templates';
+      case 'model-radar':
+        return 'Routing visibility';
       default:
         return '';
     }
