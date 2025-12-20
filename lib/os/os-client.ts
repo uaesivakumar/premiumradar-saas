@@ -1044,14 +1044,28 @@ export const salesBench = {
   },
 
   /**
-   * Start human calibration
+   * Start human calibration with email-based evaluator invites
    */
   async startHumanCalibration(options: {
     suite_key: string;
     session_name?: string;
-    evaluator_count: number;
+    evaluator_count?: number;
+    evaluator_emails?: string[];
+    deadline_days?: number;
     triggered_by?: string;
-  }): Promise<OSResponse<{ session_id: string }>> {
+  }): Promise<OSResponse<{
+    session_id: string;
+    evaluator_count: number;
+    deadline: string;
+    invites: Array<{
+      evaluator_id: string;
+      email: string;
+      token: string;
+      scoring_url: string;
+      scenarios_to_score: number;
+      expires_at: string;
+    }>;
+  }>> {
     return osRequest('/api/os/sales-bench/governance/commands/start-human-calibration', {
       method: 'POST',
       body: options,

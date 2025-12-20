@@ -29,6 +29,8 @@ import {
   TrendingUp,
   Archive,
   XCircle,
+  Calendar,
+  Mail,
 } from 'lucide-react';
 
 interface Suite {
@@ -40,14 +42,21 @@ interface Suite {
   description: string;
   status: 'DRAFT' | 'SYSTEM_VALIDATED' | 'HUMAN_VALIDATED' | 'GA_APPROVED' | 'DEPRECATED';
   scenario_count: number;
-  last_run_at: string | null;
   last_run_result: {
     golden_pass_rate: number;
     kill_containment_rate: number;
     cohens_d: number;
   } | null;
   is_frozen: boolean;
+  frozen_at: string | null;
   created_at: string;
+  system_validated_at: string | null;
+  human_validated_at: string | null;
+  ga_approved_at: string | null;
+  version: number;
+  base_suite_key: string | null;
+  is_latest_version: boolean;
+  version_notes: string | null;
 }
 
 interface SuitesByHierarchy {
@@ -78,6 +87,18 @@ const STATUS_CONFIG = {
   GA_APPROVED: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: Shield, label: 'GA Approved' },
   DEPRECATED: { color: 'text-red-400', bg: 'bg-red-500/10', icon: Archive, label: 'Deprecated' },
 };
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateTime(dateStr: string | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
 
 export default function SalesBenchDashboard() {
   const [suites, setSuites] = useState<Suite[]>([]);
@@ -459,6 +480,9 @@ function SuiteCard({
 
       <div className="flex items-center gap-4 text-xs text-neutral-500">
         <span>{suite.scenario_count} scenarios</span>
+        {suite.version > 0 && (
+          <span className="text-violet-400">v{suite.version}</span>
+        )}
         {suite.is_frozen && (
           <span className="text-blue-400">Frozen</span>
         )}
@@ -472,6 +496,10 @@ function SuiteCard({
             </span>
           </>
         )}
+        <span className="ml-auto flex items-center gap-1">
+          <Calendar className="w-3 h-3" />
+          {formatDate(suite.created_at)}
+        </span>
       </div>
     </button>
   );
@@ -491,10 +519,47 @@ function SuiteDetailPanel({
   const config = STATUS_CONFIG[suite.status];
   const StatusIcon = config.icon;
   const [approvalNotes, setApprovalNotes] = useState('');
+  const [evaluatorEmails, setEvaluatorEmails] = useState('');
+  const [showCalibrationForm, setShowCalibrationForm] = useState(false);
+  const [inviteLinks, setInviteLinks] = useState<Array<{ email: string; scoring_url: string }>>([]);
+  const [showInviteLinks, setShowInviteLinks] = useState(false);
 
   const canRunSystemValidation = suite.status === 'DRAFT' || suite.status === 'SYSTEM_VALIDATED';
   const canStartHumanCalibration = suite.status === 'SYSTEM_VALIDATED';
   const canApproveForGA = suite.status === 'HUMAN_VALIDATED';
+
+  const handleStartCalibration = async () => {
+    const emails = evaluatorEmails.split(',').map(e => e.trim()).filter(e => e);
+    if (emails.length < 2) {
+      alert('Please enter at least 2 evaluator emails (comma-separated)');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/superadmin/os/sales-bench', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'start-human-calibration',
+          suite_key: suite.suite_key,
+          evaluator_emails: emails,
+          evaluator_count: emails.length
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success && result.data?.invites) {
+        setInviteLinks(result.data.invites);
+        setShowInviteLinks(true);
+        setShowCalibrationForm(false);
+        setEvaluatorEmails('');
+      } else {
+        alert(`Failed: ${result.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert('Network error. Please try again.');
+    }
+  };
 
   return (
     <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
@@ -542,30 +607,66 @@ function SuiteDetailPanel({
         )}
       </div>
 
-      {/* Context */}
-      <div className="flex items-center gap-4 mb-4 text-xs text-neutral-500">
-        <div className="flex items-center gap-1">
-          <Building2 className="w-3 h-3" />
-          {suite.vertical}
+      {/* Context + Dates */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4 text-xs text-neutral-500">
+          <div className="flex items-center gap-1">
+            <Building2 className="w-3 h-3" />
+            {suite.vertical}
+          </div>
+          <div className="flex items-center gap-1">
+            <Layers className="w-3 h-3" />
+            {suite.sub_vertical}
+          </div>
+          <div className="flex items-center gap-1">
+            <Globe className="w-3 h-3" />
+            {suite.region}
+          </div>
+          {suite.is_frozen && (
+            <span className="text-blue-400">Frozen</span>
+          )}
         </div>
-        <div className="flex items-center gap-1">
-          <Layers className="w-3 h-3" />
-          {suite.sub_vertical}
+        <div className="flex items-center gap-1 text-xs text-neutral-600">
+          <Calendar className="w-3 h-3" />
+          Created {formatDate(suite.created_at)}
         </div>
-        <div className="flex items-center gap-1">
-          <Globe className="w-3 h-3" />
-          {suite.region}
+      </div>
+
+      {/* Timeline */}
+      <div className="bg-neutral-800/30 rounded p-3 mb-4">
+        <div className="grid grid-cols-4 gap-2 text-xs">
+          <div>
+            <span className="text-neutral-500 block">Created</span>
+            <span className="text-white">{formatDate(suite.created_at)}</span>
+          </div>
+          <div>
+            <span className="text-neutral-500 block">System Validated</span>
+            <span className={suite.system_validated_at ? 'text-blue-400' : 'text-neutral-600'}>
+              {suite.system_validated_at ? formatDate(suite.system_validated_at) : 'Pending'}
+            </span>
+          </div>
+          <div>
+            <span className="text-neutral-500 block">Human Validated</span>
+            <span className={suite.human_validated_at ? 'text-amber-400' : 'text-neutral-600'}>
+              {suite.human_validated_at ? formatDate(suite.human_validated_at) : 'Pending'}
+            </span>
+          </div>
+          <div>
+            <span className="text-neutral-500 block">GA Approved</span>
+            <span className={suite.ga_approved_at ? 'text-emerald-400' : 'text-neutral-600'}>
+              {suite.ga_approved_at ? formatDate(suite.ga_approved_at) : 'Pending'}
+            </span>
+          </div>
         </div>
-        {suite.is_frozen && (
-          <span className="text-blue-400">Frozen</span>
-        )}
       </div>
 
       {/* Actions */}
       <div className="border-t border-neutral-800 pt-4">
         <h4 className="text-xs font-medium text-neutral-400 mb-3">Governance Commands</h4>
-        <div className="flex flex-wrap gap-2">
-          {canRunSystemValidation && (
+
+        {/* System Validation */}
+        {canRunSystemValidation && (
+          <div className="mb-3">
             <button
               onClick={() => onExecute('run-system-validation', suite.suite_key)}
               disabled={isExecuting}
@@ -574,24 +675,112 @@ function SuiteDetailPanel({
               {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
               Run System Validation
             </button>
-          )}
+            <p className="text-[10px] text-neutral-600 mt-1">SIVA scores all {suite.scenario_count} scenarios automatically</p>
+          </div>
+        )}
 
-          {canStartHumanCalibration && (
-            <button
-              onClick={() => onExecute('start-human-calibration', suite.suite_key, { evaluator_count: 3 })}
-              disabled={isExecuting}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs rounded transition-colors disabled:opacity-50"
-            >
-              {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
-              Start Human Calibration
-            </button>
-          )}
+        {/* Invite Links Display */}
+        {showInviteLinks && inviteLinks.length > 0 && (
+          <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 rounded p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+                <span className="text-xs font-medium">Calibration Started - Send These Links</span>
+              </div>
+              <button
+                onClick={() => setShowInviteLinks(false)}
+                className="text-neutral-500 hover:text-white text-xs"
+              >
+                Dismiss
+              </button>
+            </div>
+            <p className="text-[10px] text-neutral-500 mb-2">
+              Copy and send each link to the corresponding evaluator. They can score scenarios without logging in.
+            </p>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {inviteLinks.map((invite, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="text-neutral-400 w-32 truncate">{invite.email}</span>
+                  <input
+                    type="text"
+                    value={invite.scoring_url}
+                    readOnly
+                    className="flex-1 px-2 py-1 bg-neutral-900 border border-neutral-700 rounded text-neutral-300 text-[10px] select-all"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(invite.scoring_url);
+                    }}
+                    className="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 rounded text-[10px]"
+                  >
+                    Copy
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-          {canApproveForGA && (
-            <div className="flex items-center gap-2 flex-1">
+        {/* Human Calibration */}
+        {canStartHumanCalibration && !showInviteLinks && (
+          <div className="mb-3">
+            {!showCalibrationForm ? (
+              <button
+                onClick={() => setShowCalibrationForm(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs rounded transition-colors"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Start Human Calibration
+              </button>
+            ) : (
+              <div className="bg-neutral-800/50 rounded p-3 border border-amber-500/20">
+                <div className="flex items-center gap-2 text-amber-400 mb-2">
+                  <Users className="w-4 h-4" />
+                  <span className="text-xs font-medium">Human Calibration Setup</span>
+                </div>
+                <p className="text-[10px] text-neutral-500 mb-2">
+                  Enter evaluator emails. They will receive a link to score scenarios.
+                  We need at least 2 evaluators for Spearman correlation.
+                </p>
+                <input
+                  type="text"
+                  placeholder="email1@example.com, email2@example.com, email3@example.com"
+                  value={evaluatorEmails}
+                  onChange={(e) => setEvaluatorEmails(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-neutral-900 border border-neutral-700 rounded text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/50 mb-2"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleStartCalibration}
+                    disabled={isExecuting || evaluatorEmails.split(',').filter(e => e.trim()).length < 2}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs rounded transition-colors disabled:opacity-50"
+                  >
+                    {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                    Send Invites
+                  </button>
+                  <button
+                    onClick={() => setShowCalibrationForm(false)}
+                    className="px-3 py-1.5 text-neutral-500 hover:text-white text-xs rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            {!showCalibrationForm && (
+              <p className="text-[10px] text-neutral-600 mt-1">Invite human evaluators to score scenarios for SIVA correlation</p>
+            )}
+          </div>
+        )}
+
+        {/* GA Approval */}
+        {canApproveForGA && (
+          <div className="mb-3">
+            <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Approval notes..."
+                placeholder="Approval notes (required)..."
                 value={approvalNotes}
                 onChange={(e) => setApprovalNotes(e.target.value)}
                 className="flex-1 px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500/50"
@@ -605,15 +794,17 @@ function SuiteDetailPanel({
                 Approve for GA
               </button>
             </div>
-          )}
+            <p className="text-[10px] text-neutral-600 mt-1">Mark suite ready for production after human validation passes</p>
+          </div>
+        )}
 
-          {suite.status === 'GA_APPROVED' && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs rounded">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Production Ready
-            </div>
-          )}
-        </div>
+        {/* GA Approved Badge */}
+        {suite.status === 'GA_APPROVED' && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs rounded inline-flex">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Production Ready
+          </div>
+        )}
 
         {/* Status Progression */}
         <div className="mt-4 pt-4 border-t border-neutral-800/50">

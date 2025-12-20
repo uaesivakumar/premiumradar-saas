@@ -170,16 +170,22 @@ export async function POST(request: NextRequest) {
       }
 
       case 'start-human-calibration': {
-        if (!body.evaluator_count || body.evaluator_count < 2) {
+        // Accept either evaluator_emails array or evaluator_count
+        const emails = body.evaluator_emails || [];
+        const count = body.evaluator_count || emails.length;
+
+        if (count < 2) {
           return NextResponse.json(
-            { error: 'evaluator_count required (minimum 2)' },
+            { error: 'At least 2 evaluators required (provide evaluator_emails or evaluator_count)' },
             { status: 400 }
           );
         }
         const result = await salesBench.startHumanCalibration({
           suite_key,
           session_name: body.session_name,
-          evaluator_count: body.evaluator_count,
+          evaluator_count: count,
+          evaluator_emails: emails,
+          deadline_days: body.deadline_days || 7,
           triggered_by: triggeredBy,
         });
         return NextResponse.json(result);
