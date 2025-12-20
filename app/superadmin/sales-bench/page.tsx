@@ -578,10 +578,14 @@ function SuiteDetailPanel({
   const [runScenarios, setRunScenarios] = useState<Record<string, unknown[]>>({});
   const [runResults, setRunResults] = useState<Record<string, { summary: Record<string, unknown>; results: unknown[] }>>({});
   const [loadingRunResults, setLoadingRunResults] = useState<string | null>(null);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
-  // Check if there's a run currently in progress
+  // Check if there's a run currently in progress or completed recently
   const hasRunningRun = runHistory.some(r => r.status === 'RUNNING');
-  const canRunSystemValidation = (suite.status === 'DRAFT' || suite.status === 'SYSTEM_VALIDATED') && !hasRunningRun;
+  const lastCompletedRun = runHistory.find(r => r.status === 'COMPLETED');
+  const lastRunTime = lastCompletedRun?.ended_at ? new Date(lastCompletedRun.ended_at).getTime() : 0;
+  const minutesSinceLastRun = lastRunTime ? Math.floor((Date.now() - lastRunTime) / 60000) : 999;
+  const canRunSystemValidation = (suite.status === 'DRAFT' || suite.status === 'SYSTEM_VALIDATED') && !hasRunningRun && minutesSinceLastRun >= 5;
   const canStartHumanCalibration = suite.status === 'SYSTEM_VALIDATED';
   const canApproveForGA = suite.status === 'HUMAN_VALIDATED';
 
@@ -596,8 +600,9 @@ function SuiteDetailPanel({
     try {
       const response = await fetch(`/api/superadmin/os/sales-bench?action=history&suite_key=${suite.suite_key}`);
       const result = await response.json();
-      if (result.success && result.runs) {
-        setRunHistory(result.runs);
+      // API returns { success: true, data: [...runs...] }
+      if (result.success && result.data) {
+        setRunHistory(result.data);
       }
     } catch (err) {
       console.error('Failed to load run history:', err);
@@ -918,6 +923,12 @@ function SuiteDetailPanel({
                 <span className="text-amber-400 text-xs">Run in progress...</span>
                 <span className="text-neutral-500 text-[10px]">Wait for completion before starting new run</span>
               </div>
+            ) : minutesSinceLastRun < 5 ? (
+              <div className="flex items-center gap-2 px-3 py-2 bg-neutral-800/50 border border-neutral-700 rounded">
+                <Clock className="w-3.5 h-3.5 text-neutral-500" />
+                <span className="text-neutral-400 text-xs">Cooldown active</span>
+                <span className="text-neutral-500 text-[10px]">Next run available in {5 - minutesSinceLastRun} min</span>
+              </div>
             ) : (
               <>
                 <button
@@ -968,10 +979,16 @@ function SuiteDetailPanel({
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(invite.scoring_url);
+                      setCopiedLinkId(invite.email);
+                      setTimeout(() => setCopiedLinkId(null), 2000);
                     }}
-                    className="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 text-neutral-300 rounded text-[10px]"
+                    className={`px-2 py-1 rounded text-[10px] transition-colors ${
+                      copiedLinkId === invite.email
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
+                    }`}
                   >
-                    Copy
+                    {copiedLinkId === invite.email ? '✓ Copied' : 'Copy'}
                   </button>
                 </div>
               ))}
@@ -1264,20 +1281,34 @@ No login required - just click the link.`}
           </div>
         )}
 
-        {/* Run History Table */}
-        {runHistory.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-neutral-800/50">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-medium text-neutral-300">Run History</h4>
-              <button
-                onClick={loadRunHistory}
-                disabled={loadingHistory}
-                className="text-[10px] text-neutral-500 hover:text-white"
-              >
-                {loadingHistory ? 'Loading...' : 'Refresh'}
-              </button>
+        {/* Run History Table - Always visible */}
+        <div className="mt-4 pt-4 border-t border-neutral-800/50">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-medium text-neutral-300 flex items-center gap-2">
+              <TrendingUp className="w-3.5 h-3.5 text-violet-400" />
+              Run History ({runHistory.length} runs)
+            </h4>
+            <button
+              onClick={loadRunHistory}
+              disabled={loadingHistory}
+              className="flex items-center gap-1 text-[10px] text-neutral-500 hover:text-white"
+            >
+              <RefreshCw className={`w-3 h-3 ${loadingHistory ? 'animate-spin' : ''}`} />
+              {loadingHistory ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+
+          {loadingHistory && runHistory.length === 0 ? (
+            <div className="flex items-center justify-center py-4 text-neutral-500 text-xs">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Loading run history...
             </div>
-            <div className="space-y-2">
+          ) : runHistory.length === 0 ? (
+            <div className="text-center py-4 text-neutral-600 text-xs">
+              No runs yet. Click &quot;Run System Validation&quot; to start.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
               {runHistory.map((run) => (
                 <div
                   key={run.id}
@@ -1488,8 +1519,8 @@ No login required - just click the link.`}
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Status Progression */}
         <div className="mt-4 pt-4 border-t border-neutral-800/50">
