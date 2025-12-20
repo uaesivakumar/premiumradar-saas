@@ -881,7 +881,7 @@ function SuiteDetailPanel({
               <p>Started: {formatDateTime(validationResult.started_at)}</p>
               {validationResult.golden_pass_rate !== undefined && (
                 <p className="text-emerald-400 mt-1">
-                  Golden Pass: {(validationResult.golden_pass_rate * 100).toFixed(1)}%
+                  Golden Pass: {(parseFloat(String(validationResult.golden_pass_rate)) * 100).toFixed(1)}%
                 </p>
               )}
             </div>
