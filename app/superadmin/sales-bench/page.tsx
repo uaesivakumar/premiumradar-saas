@@ -60,6 +60,31 @@ interface Scenario {
   };
 }
 
+interface ScenarioResult {
+  execution_order: number;
+  scenario_id: string;
+  company?: { name?: string; employees?: number; industry?: string };
+  contact?: { title?: string; name?: string };
+  signals?: { signal?: string; strength?: number };
+  path_type: string;
+  expected_outcome: string;
+  outcome: string;
+  is_correct: boolean;
+  crs_scores?: {
+    qualification?: number;
+    needs_discovery?: number;
+    value_articulation?: number;
+    objection_handling?: number;
+    process_adherence?: number;
+    compliance?: number;
+    relationship_building?: number;
+    next_step_secured?: number;
+    weighted?: number;
+  };
+  siva_reason?: string;
+  latency_ms?: number;
+}
+
 interface ValidationRun {
   id: string;  // API returns 'id' not 'run_id'
   run_id?: string;  // Alias for compatibility
@@ -579,6 +604,8 @@ function SuiteDetailPanel({
   const [runResults, setRunResults] = useState<Record<string, { summary: Record<string, unknown>; results: unknown[] }>>({});
   const [loadingRunResults, setLoadingRunResults] = useState<string | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+  const [selectedScenarioResult, setSelectedScenarioResult] = useState<ScenarioResult | null>(null);
+  const [showScenarioModal, setShowScenarioModal] = useState(false);
 
   // Check if there's a run currently in progress or completed recently
   const hasRunningRun = runHistory.some(r => r.status === 'RUNNING');
@@ -1440,21 +1467,21 @@ No login required - just click the link.`}
                                   </span>
                                 </div>
 
-                                {/* Scenario Results Table */}
-                                <div className="max-h-64 overflow-y-auto bg-neutral-900/50 rounded border border-neutral-800/50">
-                                  <table className="w-full text-[9px]">
-                                    <thead className="sticky top-0 bg-neutral-900">
-                                      <tr className="text-neutral-500 border-b border-neutral-800">
-                                        <th className="px-2 py-1 text-left">#</th>
-                                        <th className="px-2 py-1 text-left">Company</th>
-                                        <th className="px-2 py-1 text-left">Path</th>
-                                        <th className="px-2 py-1 text-left">Expected</th>
-                                        <th className="px-2 py-1 text-left">SIVA</th>
-                                        <th className="px-2 py-1 text-left">CRS</th>
-                                        <th className="px-2 py-1 text-left">Reason</th>
+                                {/* Scenario Results - Clean Table */}
+                                <div className="bg-neutral-900/50 rounded border border-neutral-800/50 overflow-hidden">
+                                  <table className="w-full text-[10px]">
+                                    <thead className="bg-neutral-800/50">
+                                      <tr className="text-neutral-400">
+                                        <th className="px-2 py-2 text-left w-8">#</th>
+                                        <th className="px-2 py-2 text-left w-16">Path</th>
+                                        <th className="px-2 py-2 text-left">Company</th>
+                                        <th className="px-2 py-2 text-left w-20">Expected</th>
+                                        <th className="px-2 py-2 text-left w-16">SIVA</th>
+                                        <th className="px-2 py-2 text-left w-14">CRS</th>
+                                        <th className="px-2 py-2 text-left w-10">OK</th>
                                       </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="divide-y divide-neutral-800/30">
                                       {(runResults[run.id].results as Array<{
                                         execution_order: number;
                                         company?: { name?: string };
@@ -1463,20 +1490,20 @@ No login required - just click the link.`}
                                         outcome: string;
                                         is_correct: boolean;
                                         crs_scores?: { weighted?: number };
-                                        siva_reason?: string;
                                       }>).map((result, idx) => (
                                         <tr
                                           key={idx}
-                                          className={`border-b border-neutral-800/30 ${
-                                            result.is_correct ? '' : 'bg-red-500/5'
+                                          className={`hover:bg-neutral-800/30 cursor-pointer ${
+                                            !result.is_correct ? 'bg-red-500/5' : ''
                                           }`}
+                                          onClick={() => {
+                                            setSelectedScenarioResult(runResults[run.id].results[idx] as ScenarioResult);
+                                            setShowScenarioModal(true);
+                                          }}
                                         >
-                                          <td className="px-2 py-1 text-neutral-500">{result.execution_order}</td>
-                                          <td className="px-2 py-1 text-neutral-300 max-w-[100px] truncate">
-                                            {result.company?.name || 'Unknown'}
-                                          </td>
-                                          <td className="px-2 py-1">
-                                            <span className={`px-1 py-0.5 rounded ${
+                                          <td className="px-2 py-1.5 text-neutral-500">{result.execution_order}</td>
+                                          <td className="px-2 py-1.5">
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] ${
                                               result.path_type === 'GOLDEN'
                                                 ? 'bg-emerald-500/20 text-emerald-400'
                                                 : 'bg-red-500/20 text-red-400'
@@ -1484,31 +1511,35 @@ No login required - just click the link.`}
                                               {result.path_type}
                                             </span>
                                           </td>
-                                          <td className="px-2 py-1 text-neutral-400">{result.expected_outcome}</td>
-                                          <td className="px-2 py-1">
-                                            <span className={`px-1 py-0.5 rounded ${
+                                          <td className="px-2 py-1.5 text-white truncate max-w-[200px]">
+                                            {result.company?.name || 'Unknown'}
+                                          </td>
+                                          <td className="px-2 py-1.5 text-neutral-400">{result.expected_outcome}</td>
+                                          <td className="px-2 py-1.5">
+                                            <span className={`px-1.5 py-0.5 rounded text-[9px] ${
                                               result.outcome === 'PASS'
                                                 ? 'bg-emerald-500/20 text-emerald-400'
-                                                : result.outcome === 'BLOCK'
-                                                ? 'bg-blue-500/20 text-blue-400'
-                                                : 'bg-amber-500/20 text-amber-400'
+                                                : 'bg-blue-500/20 text-blue-400'
                                             }`}>
                                               {result.outcome}
                                             </span>
                                           </td>
-                                          <td className="px-2 py-1 text-violet-400">
+                                          <td className="px-2 py-1.5 text-violet-400">
                                             {result.crs_scores?.weighted
                                               ? `${(result.crs_scores.weighted * 100).toFixed(0)}%`
                                               : '-'}
                                           </td>
-                                          <td className="px-2 py-1 text-neutral-500 max-w-[150px] truncate" title={result.siva_reason}>
-                                            {result.siva_reason || '-'}
+                                          <td className="px-2 py-1.5">
+                                            <span className={result.is_correct ? 'text-emerald-400' : 'text-red-400'}>
+                                              {result.is_correct ? '✓' : '✗'}
+                                            </span>
                                           </td>
                                         </tr>
                                       ))}
                                     </tbody>
                                   </table>
                                 </div>
+                                <p className="text-[9px] text-neutral-600 mt-1">Click any row to see full SIVA reasoning</p>
                               </div>
                             )}
                           </div>
@@ -1549,6 +1580,158 @@ No login required - just click the link.`}
           </div>
         </div>
       </div>
+
+      {/* Scenario Detail Modal */}
+      {showScenarioModal && selectedScenarioResult && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-neutral-900 border-b border-neutral-800 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  selectedScenarioResult.path_type === 'GOLDEN'
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}>
+                  {selectedScenarioResult.path_type}
+                </span>
+                <h3 className="text-white font-medium">
+                  {selectedScenarioResult.company?.name || 'Unknown Company'}
+                </h3>
+                <span className={`text-xs ${selectedScenarioResult.is_correct ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {selectedScenarioResult.is_correct ? '✓ Correct' : '✗ Incorrect'}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowScenarioModal(false)}
+                className="text-neutral-400 hover:text-white p-1"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-4">
+              {/* Company & Contact */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-neutral-800/50 rounded p-3">
+                  <h4 className="text-xs text-neutral-500 mb-2">COMPANY</h4>
+                  <p className="text-white font-medium">{selectedScenarioResult.company?.name || '-'}</p>
+                  {selectedScenarioResult.company?.employees && (
+                    <p className="text-sm text-neutral-400 mt-1">
+                      {selectedScenarioResult.company.employees} employees · {selectedScenarioResult.company.industry || 'Unknown industry'}
+                    </p>
+                  )}
+                </div>
+                <div className="bg-neutral-800/50 rounded p-3">
+                  <h4 className="text-xs text-neutral-500 mb-2">CONTACT</h4>
+                  <p className="text-white">{selectedScenarioResult.contact?.name || '-'}</p>
+                  <p className="text-sm text-neutral-400">{selectedScenarioResult.contact?.title || '-'}</p>
+                </div>
+              </div>
+
+              {/* Signal */}
+              {selectedScenarioResult.signals?.signal && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded p-3">
+                  <h4 className="text-xs text-amber-400 mb-1">SIGNAL</h4>
+                  <p className="text-white">{selectedScenarioResult.signals.signal}</p>
+                  {selectedScenarioResult.signals.strength && (
+                    <p className="text-sm text-amber-400/70 mt-1">Strength: {selectedScenarioResult.signals.strength}%</p>
+                  )}
+                </div>
+              )}
+
+              {/* SIVA Reasoning - THE KEY SECTION */}
+              <div className="bg-violet-500/10 border border-violet-500/20 rounded p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm text-violet-400 font-medium">SIVA REASONING</h4>
+                  {selectedScenarioResult.latency_ms && (
+                    <span className="text-xs text-neutral-500">{selectedScenarioResult.latency_ms}ms</span>
+                  )}
+                </div>
+                <p className="text-white leading-relaxed">
+                  {selectedScenarioResult.siva_reason || 'No reasoning provided'}
+                </p>
+              </div>
+
+              {/* Decision */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-neutral-800/50 rounded p-3 text-center">
+                  <p className="text-xs text-neutral-500 mb-1">Expected</p>
+                  <p className="text-white font-medium">{selectedScenarioResult.expected_outcome}</p>
+                </div>
+                <div className={`rounded p-3 text-center ${
+                  selectedScenarioResult.outcome === 'PASS'
+                    ? 'bg-emerald-500/10'
+                    : 'bg-blue-500/10'
+                }`}>
+                  <p className="text-xs text-neutral-500 mb-1">SIVA Said</p>
+                  <p className={`font-medium ${
+                    selectedScenarioResult.outcome === 'PASS' ? 'text-emerald-400' : 'text-blue-400'
+                  }`}>
+                    {selectedScenarioResult.outcome}
+                  </p>
+                </div>
+                <div className={`rounded p-3 text-center ${
+                  selectedScenarioResult.is_correct ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                }`}>
+                  <p className="text-xs text-neutral-500 mb-1">Result</p>
+                  <p className={`font-medium ${selectedScenarioResult.is_correct ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {selectedScenarioResult.is_correct ? '✓ CORRECT' : '✗ WRONG'}
+                  </p>
+                </div>
+              </div>
+
+              {/* CRS Breakdown */}
+              {selectedScenarioResult.crs_scores && (
+                <div className="bg-neutral-800/30 rounded p-4">
+                  <h4 className="text-xs text-neutral-500 mb-3">CRS DIMENSION SCORES</h4>
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { key: 'qualification', label: 'Qualification' },
+                      { key: 'needs_discovery', label: 'Needs' },
+                      { key: 'value_articulation', label: 'Value' },
+                      { key: 'objection_handling', label: 'Objection' },
+                      { key: 'process_adherence', label: 'Process' },
+                      { key: 'compliance', label: 'Compliance' },
+                      { key: 'relationship_building', label: 'Relationship' },
+                      { key: 'next_step_secured', label: 'Next Step' },
+                    ].map(({ key, label }) => {
+                      const score = selectedScenarioResult.crs_scores?.[key as keyof typeof selectedScenarioResult.crs_scores];
+                      return (
+                        <div key={key} className="text-center">
+                          <p className="text-xs text-neutral-500">{label}</p>
+                          <p className="text-lg font-medium text-blue-400">
+                            {typeof score === 'number' ? score.toFixed(0) : '-'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-neutral-700 flex justify-between items-center">
+                    <span className="text-neutral-400">Weighted CRS</span>
+                    <span className="text-xl font-bold text-violet-400">
+                      {selectedScenarioResult.crs_scores.weighted
+                        ? `${(selectedScenarioResult.crs_scores.weighted * 100).toFixed(1)}%`
+                        : '-'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-neutral-800 p-4 flex justify-end">
+              <button
+                onClick={() => setShowScenarioModal(false)}
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

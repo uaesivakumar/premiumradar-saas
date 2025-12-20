@@ -98,17 +98,67 @@ async function fetchReportData(suiteKey: string): Promise<ReportData | null> {
     const completedRuns = runs.filter((r: { status: string }) => r.status === 'COMPLETED');
     const latestRun = completedRuns[0] || {};
 
-    // Use real metrics from run if available
-    const crs = {
-      qualification: 0.82,
-      needs_discovery: 0.78,
-      value_articulation: 0.85,
-      objection_handling: 0.73,
-      process_adherence: 0.91,
-      compliance: 0.95,
-      relationship_building: 0.76,
-      next_step_secured: 0.79,
+    // Fetch REAL CRS data from run results
+    let crs = {
+      qualification: 0,
+      needs_discovery: 0,
+      value_articulation: 0,
+      objection_handling: 0,
+      process_adherence: 0,
+      compliance: 0,
+      relationship_building: 0,
+      next_step_secured: 0,
     };
+
+    if (latestRun.id) {
+      const resultsRes = await fetch(
+        `${OS_BASE_URL}/api/os/sales-bench/suites/${suiteKey}/runs/${latestRun.id}/results`,
+        { headers: { 'x-pr-os-token': PR_OS_TOKEN } }
+      );
+      const resultsData = await resultsRes.json();
+
+      if (resultsData.success && resultsData.data?.results) {
+        const results = resultsData.data.results;
+        const count = results.length || 1;
+
+        // Calculate average CRS across all scenarios
+        const totals = {
+          qualification: 0,
+          needs_discovery: 0,
+          value_articulation: 0,
+          objection_handling: 0,
+          process_adherence: 0,
+          compliance: 0,
+          relationship_building: 0,
+          next_step_secured: 0,
+        };
+
+        for (const r of results) {
+          if (r.crs_scores) {
+            totals.qualification += r.crs_scores.qualification || 0;
+            totals.needs_discovery += r.crs_scores.needs_discovery || 0;
+            totals.value_articulation += r.crs_scores.value_articulation || 0;
+            totals.objection_handling += r.crs_scores.objection_handling || 0;
+            totals.process_adherence += r.crs_scores.process_adherence || 0;
+            totals.compliance += r.crs_scores.compliance || 0;
+            totals.relationship_building += r.crs_scores.relationship_building || 0;
+            totals.next_step_secured += r.crs_scores.next_step_secured || 0;
+          }
+        }
+
+        // Normalize to 0-1 scale (scores are 0-100)
+        crs = {
+          qualification: (totals.qualification / count) / 100,
+          needs_discovery: (totals.needs_discovery / count) / 100,
+          value_articulation: (totals.value_articulation / count) / 100,
+          objection_handling: (totals.objection_handling / count) / 100,
+          process_adherence: (totals.process_adherence / count) / 100,
+          compliance: (totals.compliance / count) / 100,
+          relationship_building: (totals.relationship_building / count) / 100,
+          next_step_secured: (totals.next_step_secured / count) / 100,
+        };
+      }
+    }
 
     // Generate insights based on performance (parse string values from API)
     const goldenPass = parseFloat(latestRun.golden_pass_rate) / 100 || 0;

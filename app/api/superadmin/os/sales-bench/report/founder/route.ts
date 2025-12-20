@@ -96,38 +96,73 @@ async function fetchFounderReportData(suiteKey: string): Promise<FounderReportDa
     const killContainment = parseFloat(latestRun.kill_containment_rate) / 100 || 0;
     const cohensD = parseFloat(latestRun.cohens_d) || 0;
 
-    // Calculate failure counts
-    const goldenTotal = latestRun.golden_count || 35;
-    const killTotal = latestRun.kill_count || 35;
-    const goldenFailCount = Math.round(goldenTotal * (1 - goldenPass));
-    const killEscapeCount = Math.round(killTotal * (1 - killContainment));
+    // Fetch REAL scenario results from the latest run
+    let goldenFailures: FounderReportData['failures']['golden_failures'] = [];
+    let killEscapes: FounderReportData['failures']['kill_escapes'] = [];
 
-    // Generate mock failure details (in production, fetch from run_scenarios table)
-    const goldenFailures = goldenFailCount > 0 ? Array.from({ length: Math.min(goldenFailCount, 5) }, (_, i) => ({
-      scenario_id: `golden-fail-${i + 1}`,
-      company: `TechCorp ${i + 1} (500+ employees, hiring)`,
-      reason: i % 2 === 0
-        ? 'SIVA incorrectly blocked a qualified lead'
-        : 'SIVA failed to identify clear opportunity signals',
-      expected: 'PASS (engage lead)',
-      actual: 'BLOCK (refused engagement)',
-      fix_suggestion: i % 2 === 0
-        ? 'Review blocking thresholds - current config may be too aggressive for high-growth companies'
-        : 'Add signal pattern for rapid headcount growth + funding combination',
-    })) : [];
+    if (latestRun.id) {
+      const resultsRes = await fetch(
+        `${OS_BASE_URL}/api/os/sales-bench/suites/${suiteKey}/runs/${latestRun.id}/results`,
+        { headers: { 'x-pr-os-token': PR_OS_TOKEN } }
+      );
+      const resultsData = await resultsRes.json();
 
-    const killEscapes = killEscapeCount > 0 ? Array.from({ length: Math.min(killEscapeCount, 5) }, (_, i) => ({
-      scenario_id: `kill-escape-${i + 1}`,
-      company: `BadFit Corp ${i + 1} (10 employees, no signals)`,
-      reason: i % 2 === 0
-        ? 'SIVA engaged a company that should have been blocked'
-        : 'SIVA missed critical disqualification criteria',
-      expected: 'BLOCK (refuse engagement)',
-      actual: 'PASS (engaged lead)',
-      fix_suggestion: i % 2 === 0
-        ? 'Tighten minimum employee threshold for employee banking vertical'
-        : 'Add disqualification rule for companies with no recent signals',
-    })) : [];
+      if (resultsData.success && resultsData.data?.results) {
+        const results = resultsData.data.results;
+
+        // Find GOLDEN scenarios that were incorrectly BLOCKED
+        goldenFailures = results
+          .filter((r: { path_type: string; outcome: string; expected_outcome: string }) =>
+            r.path_type === 'GOLDEN' && r.outcome !== r.expected_outcome
+          )
+          .slice(0, 10) // Limit to 10
+          .map((r: {
+            scenario_id: string;
+            company?: { name?: string; employees?: number; industry?: string };
+            signals?: { signal?: string };
+            expected_outcome: string;
+            outcome: string;
+            siva_reason?: string;
+          }) => ({
+            scenario_id: r.scenario_id,
+            company: `${r.company?.name || 'Unknown'} (${r.company?.employees || '?'} employees, ${r.company?.industry || 'unknown'})`,
+            reason: r.siva_reason || 'SIVA incorrectly blocked this qualified lead',
+            expected: `${r.expected_outcome} (engage lead)`,
+            actual: `${r.outcome} (refused engagement)`,
+            fix_suggestion: r.signals?.signal
+              ? `Review signal "${r.signals.signal}" - may need to be recognized as engagement trigger`
+              : 'Review blocking thresholds - may be too aggressive for this company profile',
+          }));
+
+        // Find KILL scenarios that were incorrectly PASSED
+        killEscapes = results
+          .filter((r: { path_type: string; outcome: string; expected_outcome: string }) =>
+            r.path_type === 'KILL' && r.outcome !== r.expected_outcome
+          )
+          .slice(0, 10) // Limit to 10
+          .map((r: {
+            scenario_id: string;
+            company?: { name?: string; employees?: number; industry?: string };
+            signals?: { signal?: string };
+            expected_outcome: string;
+            outcome: string;
+            siva_reason?: string;
+          }) => ({
+            scenario_id: r.scenario_id,
+            company: `${r.company?.name || 'Unknown'} (${r.company?.employees || '?'} employees, ${r.company?.industry || 'unknown'})`,
+            reason: r.siva_reason || 'SIVA incorrectly engaged this bad lead',
+            expected: `${r.expected_outcome} (refuse engagement)`,
+            actual: `${r.outcome} (engaged lead)`,
+            fix_suggestion: r.signals?.signal
+              ? `Add blocker rule for signal pattern "${r.signals.signal}" in this context`
+              : 'Add stricter disqualification criteria for companies with this profile',
+          }));
+      }
+    }
+
+    // Calculate failure counts from the actual data
+    const goldenFailCount = goldenFailures.length;
+    const killEscapeCount = killEscapes.length;
 
     // Generate action items based on performance
     const actionItems: FounderReportData['action_items'] = [];
