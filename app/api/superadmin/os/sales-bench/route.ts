@@ -74,6 +74,25 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(result);
       }
 
+      case 'scenarios': {
+        if (!suiteKey) {
+          return NextResponse.json({ error: 'suite_key required' }, { status: 400 });
+        }
+        // Fetch scenarios for this suite from OS
+        const osBaseUrl = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
+        const scenariosRes = await fetch(
+          `${osBaseUrl}/api/os/sales-bench/suites/${suiteKey}/scenarios`,
+          {
+            headers: {
+              'x-pr-os-token': process.env.PR_OS_TOKEN || '',
+              'X-Request-Source': 'saas-superadmin',
+            },
+          }
+        );
+        const scenariosData = await scenariosRes.json();
+        return NextResponse.json(scenariosData);
+      }
+
       case 'history': {
         if (!suiteKey) {
           return NextResponse.json({ error: 'suite_key required' }, { status: 400 });

@@ -31,7 +31,45 @@ import {
   XCircle,
   Calendar,
   Mail,
+  Eye,
+  FileText,
+  User,
+  Target,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
+
+interface Scenario {
+  id: string;
+  path_type: 'GOLDEN' | 'KILL';
+  expected_outcome: 'PASS' | 'FAIL' | 'BLOCK';
+  entry_intent: string;
+  success_condition: string;
+  company_profile?: {
+    name: string;
+    employees: number;
+    industry: string;
+  };
+  contact_profile?: {
+    title: string;
+    name: string;
+  };
+  signal_context?: {
+    signal: string;
+    strength: number;
+  };
+}
+
+interface ValidationRun {
+  run_id: string;
+  run_number: number;
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+  golden_pass_rate?: number;
+  kill_containment_rate?: number;
+  cohens_d?: number;
+  started_at: string;
+  ended_at?: string;
+}
 
 interface Suite {
   suite_key: string;
@@ -524,9 +562,69 @@ function SuiteDetailPanel({
   const [inviteLinks, setInviteLinks] = useState<Array<{ email: string; scoring_url: string }>>([]);
   const [showInviteLinks, setShowInviteLinks] = useState(false);
 
+  // New state for scenarios and validation
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [loadingScenarios, setLoadingScenarios] = useState(false);
+  const [showScenarios, setShowScenarios] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationRun | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+
   const canRunSystemValidation = suite.status === 'DRAFT' || suite.status === 'SYSTEM_VALIDATED';
   const canStartHumanCalibration = suite.status === 'SYSTEM_VALIDATED';
   const canApproveForGA = suite.status === 'HUMAN_VALIDATED';
+
+  // Load scenarios when panel opens
+  useEffect(() => {
+    loadScenarios();
+  }, [suite.suite_key]);
+
+  async function loadScenarios() {
+    setLoadingScenarios(true);
+    try {
+      const response = await fetch(`/api/superadmin/os/sales-bench?action=scenarios&suite_key=${suite.suite_key}`);
+      const result = await response.json();
+      if (result.success && result.scenarios) {
+        setScenarios(result.scenarios);
+      }
+    } catch (err) {
+      console.error('Failed to load scenarios:', err);
+    } finally {
+      setLoadingScenarios(false);
+    }
+  }
+
+  // Run system validation with feedback
+  const handleRunValidation = async () => {
+    setValidationResult(null);
+    setValidationError(null);
+
+    try {
+      const response = await fetch('/api/superadmin/os/sales-bench', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'run-system-validation',
+          suite_key: suite.suite_key,
+          run_mode: 'FULL'
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        setValidationResult({
+          run_id: result.data.run_id,
+          run_number: result.data.run_number,
+          status: result.data.status,
+          started_at: new Date().toISOString(),
+        });
+      } else {
+        setValidationError(result.error || result.message || 'Validation failed');
+      }
+    } catch (err) {
+      setValidationError('Network error. Please try again.');
+    }
+  };
 
   const handleStartCalibration = async () => {
     const emails = evaluatorEmails.split(',').map(e => e.trim()).filter(e => e);
@@ -534,6 +632,8 @@ function SuiteDetailPanel({
       alert('Please enter at least 2 evaluator emails (comma-separated)');
       return;
     }
+
+    setValidationError(null);
 
     try {
       const response = await fetch('/api/superadmin/os/sales-bench', {
@@ -552,14 +652,18 @@ function SuiteDetailPanel({
         setInviteLinks(result.data.invites);
         setShowInviteLinks(true);
         setShowCalibrationForm(false);
+        setShowEmailPreview(false);
         setEvaluatorEmails('');
       } else {
-        alert(`Failed: ${result.error || 'Unknown error'}`);
+        setValidationError(result.error || result.message || 'Failed to start calibration');
       }
     } catch (err) {
-      alert('Network error. Please try again.');
+      setValidationError('Network error. Please try again.');
     }
   };
+
+  // Parse emails for preview
+  const parsedEmails = evaluatorEmails.split(',').map(e => e.trim()).filter(e => e && e.includes('@'));
 
   return (
     <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
@@ -660,22 +764,139 @@ function SuiteDetailPanel({
         </div>
       </div>
 
+      {/* Scenarios Preview Section */}
+      <div className="border-t border-neutral-800 pt-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs font-medium text-neutral-400 flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" />
+            Scenarios ({scenarios.length || suite.scenario_count})
+          </h4>
+          <button
+            onClick={() => setShowScenarios(!showScenarios)}
+            className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300"
+          >
+            <Eye className="w-3 h-3" />
+            {showScenarios ? 'Hide' : 'Preview'}
+          </button>
+        </div>
+
+        {/* Scenario counts by type */}
+        <div className="flex gap-3 mb-2">
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 rounded text-[10px]">
+            <Target className="w-3 h-3 text-emerald-400" />
+            <span className="text-emerald-400">{scenarios.filter(s => s.path_type === 'GOLDEN').length} GOLDEN</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 rounded text-[10px]">
+            <XCircle className="w-3 h-3 text-red-400" />
+            <span className="text-red-400">{scenarios.filter(s => s.path_type === 'KILL').length} KILL</span>
+          </div>
+        </div>
+
+        {/* Scenarios list (expandable) */}
+        {showScenarios && (
+          <div className="bg-neutral-800/30 rounded p-2 max-h-48 overflow-y-auto">
+            {loadingScenarios ? (
+              <div className="flex items-center gap-2 text-neutral-500 text-xs py-2">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading scenarios...
+              </div>
+            ) : scenarios.length === 0 ? (
+              <p className="text-neutral-500 text-xs py-2">No scenarios linked to this suite</p>
+            ) : (
+              <div className="space-y-1.5">
+                {scenarios.slice(0, 10).map((s, i) => (
+                  <div key={s.id} className="flex items-start gap-2 text-[10px] p-1.5 bg-neutral-900/50 rounded">
+                    <span className={`px-1.5 py-0.5 rounded ${s.path_type === 'GOLDEN' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {s.path_type}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-neutral-300 truncate">{s.entry_intent}</p>
+                      <div className="flex items-center gap-2 text-neutral-500 mt-0.5">
+                        {s.company_profile?.name && (
+                          <span className="flex items-center gap-0.5">
+                            <Building2 className="w-2.5 h-2.5" />
+                            {s.company_profile.name}
+                          </span>
+                        )}
+                        {s.contact_profile?.title && (
+                          <span className="flex items-center gap-0.5">
+                            <User className="w-2.5 h-2.5" />
+                            {s.contact_profile.title}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className={`px-1.5 py-0.5 rounded ${s.expected_outcome === 'PASS' ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                      {s.expected_outcome}
+                    </span>
+                  </div>
+                ))}
+                {scenarios.length > 10 && (
+                  <p className="text-neutral-500 text-[10px] text-center py-1">
+                    ... and {scenarios.length - 10} more scenarios
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Actions */}
       <div className="border-t border-neutral-800 pt-4">
         <h4 className="text-xs font-medium text-neutral-400 mb-3">Governance Commands</h4>
+
+        {/* Error Display */}
+        {validationError && (
+          <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded">
+            <div className="flex items-center gap-2 text-red-400 text-xs">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>{validationError}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Validation Result Display */}
+        {validationResult && (
+          <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded">
+            <div className="flex items-center gap-2 text-blue-400 mb-2">
+              {validationResult.status === 'RUNNING' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : validationResult.status === 'COMPLETED' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <XCircle className="w-4 h-4 text-red-400" />
+              )}
+              <span className="text-xs font-medium">
+                Run #{validationResult.run_number} - {validationResult.status}
+              </span>
+            </div>
+            <div className="text-[10px] text-neutral-400">
+              <p>Run ID: {validationResult.run_id}</p>
+              <p>Started: {formatDateTime(validationResult.started_at)}</p>
+              {validationResult.golden_pass_rate !== undefined && (
+                <p className="text-emerald-400 mt-1">
+                  Golden Pass: {(validationResult.golden_pass_rate * 100).toFixed(1)}%
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* System Validation */}
         {canRunSystemValidation && (
           <div className="mb-3">
             <button
-              onClick={() => onExecute('run-system-validation', suite.suite_key)}
+              onClick={handleRunValidation}
               disabled={isExecuting}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs rounded transition-colors disabled:opacity-50"
             >
               {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
               Run System Validation
             </button>
-            <p className="text-[10px] text-neutral-600 mt-1">SIVA scores all {suite.scenario_count} scenarios automatically</p>
+            <p className="text-[10px] text-neutral-600 mt-1">
+              SIVA scores all {scenarios.length || suite.scenario_count} scenarios ({scenarios.filter(s => s.path_type === 'GOLDEN').length} golden, {scenarios.filter(s => s.path_type === 'KILL').length} kill)
+            </p>
           </div>
         )}
 
@@ -733,34 +954,103 @@ function SuiteDetailPanel({
                 <Mail className="w-3.5 h-3.5" />
                 Start Human Calibration
               </button>
-            ) : (
+            ) : !showEmailPreview ? (
               <div className="bg-neutral-800/50 rounded p-3 border border-amber-500/20">
                 <div className="flex items-center gap-2 text-amber-400 mb-2">
                   <Users className="w-4 h-4" />
                   <span className="text-xs font-medium">Human Calibration Setup</span>
                 </div>
                 <p className="text-[10px] text-neutral-500 mb-2">
-                  Enter evaluator emails. They will receive a link to score scenarios.
-                  We need at least 2 evaluators for Spearman correlation.
+                  Enter evaluator emails. They will receive a link to score {scenarios.length || suite.scenario_count} scenarios.
+                  Need at least 2 evaluators for Spearman correlation.
                 </p>
                 <input
                   type="text"
-                  placeholder="email1@example.com, email2@example.com, email3@example.com"
+                  placeholder="email1@example.com, email2@example.com"
                   value={evaluatorEmails}
                   onChange={(e) => setEvaluatorEmails(e.target.value)}
                   className="w-full px-2 py-1.5 bg-neutral-900 border border-neutral-700 rounded text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/50 mb-2"
                 />
+
+                {/* Parsed emails preview */}
+                {parsedEmails.length > 0 && (
+                  <div className="mb-2 p-2 bg-neutral-900/50 rounded text-[10px]">
+                    <span className="text-neutral-500">Will invite {parsedEmails.length} evaluator(s):</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {parsedEmails.map((email, i) => (
+                        <span key={i} className="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded">
+                          {email}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowEmailPreview(true)}
+                    disabled={parsedEmails.length < 2}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs rounded transition-colors disabled:opacity-50"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Preview & Confirm
+                  </button>
+                  <button
+                    onClick={() => { setShowCalibrationForm(false); setEvaluatorEmails(''); }}
+                    className="px-3 py-1.5 text-neutral-500 hover:text-white text-xs rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {parsedEmails.length < 2 && parsedEmails.length > 0 && (
+                  <p className="text-[10px] text-amber-500 mt-1">Need at least 2 valid emails</p>
+                )}
+              </div>
+            ) : (
+              /* Email Preview Confirmation */
+              <div className="bg-neutral-800/50 rounded p-3 border border-amber-500/20">
+                <div className="flex items-center gap-2 text-amber-400 mb-3">
+                  <Mail className="w-4 h-4" />
+                  <span className="text-xs font-medium">Confirm Calibration Invites</span>
+                </div>
+
+                <div className="bg-neutral-900/50 rounded p-3 mb-3 text-[10px]">
+                  <p className="text-neutral-400 mb-2">Each evaluator will receive:</p>
+                  <div className="border-l-2 border-amber-500/50 pl-2 text-neutral-300 space-y-1">
+                    <p>• Unique scoring link (no login required)</p>
+                    <p>• {scenarios.length || suite.scenario_count} scenarios to evaluate</p>
+                    <p>• Shuffled order (reduces bias)</p>
+                    <p>• 7 days to complete</p>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-neutral-700">
+                    <p className="text-neutral-500 mb-1">Evaluators:</p>
+                    {parsedEmails.map((email, i) => (
+                      <div key={i} className="flex items-center gap-2 py-1">
+                        <span className="text-amber-400">{i + 1}.</span>
+                        <span className="text-white">{email}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex gap-2">
                   <button
                     onClick={handleStartCalibration}
-                    disabled={isExecuting || evaluatorEmails.split(',').filter(e => e.trim()).length < 2}
+                    disabled={isExecuting}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs rounded transition-colors disabled:opacity-50"
                   >
                     {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                    Send Invites
+                    Create Invites
                   </button>
                   <button
-                    onClick={() => setShowCalibrationForm(false)}
+                    onClick={() => setShowEmailPreview(false)}
+                    className="px-3 py-1.5 text-neutral-500 hover:text-white text-xs rounded transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={() => { setShowCalibrationForm(false); setShowEmailPreview(false); setEvaluatorEmails(''); }}
                     className="px-3 py-1.5 text-neutral-500 hover:text-white text-xs rounded transition-colors"
                   >
                     Cancel
