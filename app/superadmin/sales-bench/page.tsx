@@ -61,12 +61,13 @@ interface Scenario {
 }
 
 interface ValidationRun {
-  run_id: string;
+  id: string;  // API returns 'id' not 'run_id'
+  run_id?: string;  // Alias for compatibility
   run_number: number;
-  status: 'RUNNING' | 'COMPLETED' | 'FAILED';
-  golden_pass_rate?: number;
-  kill_containment_rate?: number;
-  cohens_d?: number;
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  golden_pass_rate?: number | string;
+  kill_containment_rate?: number | string;
+  cohens_d?: number | string;
   started_at: string;
   ended_at?: string;
 }
@@ -570,14 +571,38 @@ function SuiteDetailPanel({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
 
-  const canRunSystemValidation = suite.status === 'DRAFT' || suite.status === 'SYSTEM_VALIDATED';
+  // Run history state
+  const [runHistory, setRunHistory] = useState<ValidationRun[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [runScenarios, setRunScenarios] = useState<Record<string, unknown[]>>({});
+
+  // Check if there's a run currently in progress
+  const hasRunningRun = runHistory.some(r => r.status === 'RUNNING');
+  const canRunSystemValidation = (suite.status === 'DRAFT' || suite.status === 'SYSTEM_VALIDATED') && !hasRunningRun;
   const canStartHumanCalibration = suite.status === 'SYSTEM_VALIDATED';
   const canApproveForGA = suite.status === 'HUMAN_VALIDATED';
 
-  // Load scenarios when panel opens
+  // Load scenarios and run history when panel opens
   useEffect(() => {
     loadScenarios();
+    loadRunHistory();
   }, [suite.suite_key]);
+
+  async function loadRunHistory() {
+    setLoadingHistory(true);
+    try {
+      const response = await fetch(`/api/superadmin/os/sales-bench?action=history&suite_key=${suite.suite_key}`);
+      const result = await response.json();
+      if (result.success && result.runs) {
+        setRunHistory(result.runs);
+      }
+    } catch (err) {
+      console.error('Failed to load run history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
 
   async function loadScenarios() {
     setLoadingScenarios(true);
@@ -851,7 +876,7 @@ function SuiteDetailPanel({
               </span>
             </div>
             <div className="text-[10px] text-neutral-400">
-              <p>Run ID: {validationResult.run_id}</p>
+              <p>Run ID: {validationResult.id || validationResult.run_id}</p>
               <p>Started: {formatDateTime(validationResult.started_at)}</p>
               {validationResult.golden_pass_rate !== undefined && (
                 <p className="text-emerald-400 mt-1">
@@ -863,19 +888,29 @@ function SuiteDetailPanel({
         )}
 
         {/* System Validation */}
-        {canRunSystemValidation && (
+        {(suite.status === 'DRAFT' || suite.status === 'SYSTEM_VALIDATED') && (
           <div className="mb-3">
-            <button
-              onClick={handleRunValidation}
-              disabled={isExecuting}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs rounded transition-colors disabled:opacity-50"
-            >
-              {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-              Run System Validation
-            </button>
-            <p className="text-[10px] text-neutral-600 mt-1">
-              SIVA scores all {scenarios.length || suite.scenario_count} scenarios ({scenarios.filter(s => s.path_type === 'GOLDEN').length} golden, {scenarios.filter(s => s.path_type === 'KILL').length} kill)
-            </p>
+            {hasRunningRun ? (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                <span className="text-amber-400 text-xs">Run in progress...</span>
+                <span className="text-neutral-500 text-[10px]">Wait for completion before starting new run</span>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={handleRunValidation}
+                  disabled={isExecuting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs rounded transition-colors disabled:opacity-50"
+                >
+                  {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  Run System Validation
+                </button>
+                <p className="text-[10px] text-neutral-600 mt-1">
+                  SIVA scores all {scenarios.length || suite.scenario_count} scenarios ({scenarios.filter(s => s.path_type === 'GOLDEN').length} golden, {scenarios.filter(s => s.path_type === 'KILL').length} kill)
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -1091,6 +1126,135 @@ function SuiteDetailPanel({
               <ExternalLink className="w-3 h-3" />
             </a>
             <p className="text-[10px] text-neutral-600 mt-1">Professional report for investors & stakeholders (print to PDF)</p>
+          </div>
+        )}
+
+        {/* Run History Table */}
+        {runHistory.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-neutral-800/50">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-neutral-300">Run History</h4>
+              <button
+                onClick={loadRunHistory}
+                disabled={loadingHistory}
+                className="text-[10px] text-neutral-500 hover:text-white"
+              >
+                {loadingHistory ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+            <div className="space-y-2">
+              {runHistory.map((run) => (
+                <div
+                  key={run.id}
+                  className={`bg-neutral-900/50 rounded border ${
+                    run.status === 'RUNNING' ? 'border-amber-500/30' :
+                    run.status === 'COMPLETED' ? 'border-emerald-500/20' :
+                    'border-neutral-700/30'
+                  }`}
+                >
+                  <div
+                    className="flex items-center justify-between p-2 cursor-pointer hover:bg-neutral-800/30"
+                    onClick={() => setExpandedRunId(expandedRunId === run.id ? null : run.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {run.status === 'RUNNING' ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                      ) : run.status === 'COMPLETED' ? (
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      ) : (
+                        <XCircle className="w-3 h-3 text-neutral-500" />
+                      )}
+                      <span className="text-xs text-white">Run #{run.run_number}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        run.status === 'RUNNING' ? 'bg-amber-500/10 text-amber-400' :
+                        run.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' :
+                        'bg-neutral-700/30 text-neutral-500'
+                      }`}>
+                        {run.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {run.status === 'COMPLETED' && (
+                        <>
+                          <span className="text-[10px] text-emerald-400">
+                            Golden: {typeof run.golden_pass_rate === 'number'
+                              ? `${(run.golden_pass_rate).toFixed(1)}%`
+                              : `${parseFloat(String(run.golden_pass_rate || '0')).toFixed(1)}%`}
+                          </span>
+                          <span className="text-[10px] text-blue-400">
+                            Kill: {typeof run.kill_containment_rate === 'number'
+                              ? `${(run.kill_containment_rate).toFixed(1)}%`
+                              : `${parseFloat(String(run.kill_containment_rate || '0')).toFixed(1)}%`}
+                          </span>
+                        </>
+                      )}
+                      <span className="text-[10px] text-neutral-500">
+                        {formatDateTime(run.started_at)}
+                      </span>
+                      {expandedRunId === run.id ? (
+                        <ChevronDown className="w-3 h-3 text-neutral-400" />
+                      ) : (
+                        <ChevronRight className="w-3 h-3 text-neutral-400" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expanded Run Details */}
+                  {expandedRunId === run.id && (
+                    <div className="px-3 pb-3 border-t border-neutral-800/50">
+                      <div className="grid grid-cols-4 gap-2 mt-2 text-[10px]">
+                        <div>
+                          <span className="text-neutral-500">Run ID:</span>
+                          <p className="text-neutral-300 truncate">{run.id}</p>
+                        </div>
+                        <div>
+                          <span className="text-neutral-500">Started:</span>
+                          <p className="text-neutral-300">{formatDateTime(run.started_at)}</p>
+                        </div>
+                        {run.ended_at && (
+                          <div>
+                            <span className="text-neutral-500">Completed:</span>
+                            <p className="text-neutral-300">{formatDateTime(run.ended_at)}</p>
+                          </div>
+                        )}
+                        {run.cohens_d && (
+                          <div>
+                            <span className="text-neutral-500">Cohen&apos;s d:</span>
+                            <p className="text-violet-400 font-medium">
+                              {typeof run.cohens_d === 'number'
+                                ? run.cohens_d.toFixed(2)
+                                : parseFloat(String(run.cohens_d)).toFixed(2)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {run.status === 'COMPLETED' && (
+                        <div className="mt-3 pt-2 border-t border-neutral-800/30">
+                          <p className="text-[10px] text-neutral-500 mb-1">Performance Summary:</p>
+                          <div className="flex gap-4">
+                            <div className="flex-1 bg-emerald-500/5 rounded p-2">
+                              <p className="text-[9px] text-neutral-500">Golden Path Success</p>
+                              <p className="text-lg font-bold text-emerald-400">
+                                {parseFloat(String(run.golden_pass_rate || '0')).toFixed(1)}%
+                              </p>
+                              <p className="text-[9px] text-neutral-600">of qualified leads engaged</p>
+                            </div>
+                            <div className="flex-1 bg-blue-500/5 rounded p-2">
+                              <p className="text-[9px] text-neutral-500">Kill Path Containment</p>
+                              <p className="text-lg font-bold text-blue-400">
+                                {parseFloat(String(run.kill_containment_rate || '0')).toFixed(1)}%
+                              </p>
+                              <p className="text-[9px] text-neutral-600">of bad leads blocked</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
