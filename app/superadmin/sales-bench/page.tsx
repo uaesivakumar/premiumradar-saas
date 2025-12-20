@@ -1125,7 +1125,19 @@ function SuiteDetailPanel({
               Download Benchmark Report
               <ExternalLink className="w-3 h-3" />
             </a>
-            <p className="text-[10px] text-neutral-600 mt-1">Professional report for investors & stakeholders (print to PDF)</p>
+            <a
+              href={`/api/superadmin/os/sales-bench/report/founder?suite_key=${suite.suite_key}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs rounded transition-colors w-fit"
+            >
+              <Target className="w-3.5 h-3.5" />
+              Founder Report
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            <p className="text-[10px] text-neutral-600 mt-1">
+              Investor Report (print to PDF) | Founder Report (actionable fixes)
+            </p>
           </div>
         )}
 
