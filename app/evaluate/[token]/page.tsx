@@ -85,12 +85,20 @@ const DIMENSION_KEYS = [
 ];
 
 export default function EvaluatorPage({ params }: { params: Promise<{ token: string }> }) {
-  const resolvedParams = use(params);
-  const { token } = resolvedParams;
+  // Use React 19's use() to unwrap the params Promise
+  let token: string;
+  try {
+    const resolvedParams = use(params);
+    token = resolvedParams.token;
+  } catch (e) {
+    // Fallback for older React versions or SSR issues
+    token = '';
+  }
 
   const [data, setData] = useState<EvaluatorData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [startTime, setStartTime] = useState<number>(Date.now());
 
@@ -101,6 +109,13 @@ export default function EvaluatorPage({ params }: { params: Promise<{ token: str
   const [notes, setNotes] = useState('');
 
   const fetchData = useCallback(async () => {
+    if (!token) {
+      setError('INVALID_TOKEN');
+      setErrorMessage('Invalid evaluation link');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch(`/api/evaluate/${token}`);
       const result = await response.json();
@@ -114,10 +129,12 @@ export default function EvaluatorPage({ params }: { params: Promise<{ token: str
         setNotes('');
         setStartTime(Date.now());
       } else {
-        setError(result.error || 'Failed to load evaluation');
+        setError(result.error || 'UNKNOWN_ERROR');
+        setErrorMessage(result.message || 'Failed to load evaluation');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      setError('NETWORK_ERROR');
+      setErrorMessage('Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -212,9 +229,17 @@ export default function EvaluatorPage({ params }: { params: Promise<{ token: str
         <div className="bg-neutral-900 rounded-lg border border-neutral-800 p-8 max-w-md text-center">
           <AlertTriangle className="w-12 h-12 text-amber-400 mx-auto mb-4" />
           <h1 className="text-xl font-semibold text-white mb-2">Evaluation Unavailable</h1>
-          <p className="text-neutral-400 mb-4">{error}</p>
+          <p className="text-neutral-400 mb-4">
+            {errorMessage || 'This evaluation link is not valid or has expired.'}
+          </p>
           <p className="text-neutral-500 text-sm">
-            If you believe this is an error, please contact your administrator.
+            {error === 'INVITE_NOT_FOUND'
+              ? 'No evaluation session found for this link. Please check your email for the correct link.'
+              : error === 'INVITE_EXPIRED'
+              ? 'This evaluation session has expired. Please contact your administrator for a new link.'
+              : error === 'ALREADY_COMPLETED'
+              ? 'You have already completed all scenarios in this evaluation session.'
+              : 'If you believe this is an error, please contact your administrator.'}
           </p>
         </div>
       </div>

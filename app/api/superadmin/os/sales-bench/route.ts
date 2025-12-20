@@ -106,6 +106,29 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(result);
       }
 
+      case 'run-results': {
+        if (!suiteKey) {
+          return NextResponse.json({ error: 'suite_key required' }, { status: 400 });
+        }
+        const runId = searchParams.get('run_id');
+        if (!runId) {
+          return NextResponse.json({ error: 'run_id required' }, { status: 400 });
+        }
+        // Fetch run results from OS
+        const osBaseUrl = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
+        const resultsRes = await fetch(
+          `${osBaseUrl}/api/os/sales-bench/suites/${suiteKey}/runs/${runId}/results`,
+          {
+            headers: {
+              'x-pr-os-token': process.env.PR_OS_TOKEN || '',
+              'X-Request-Source': 'saas-superadmin',
+            },
+          }
+        );
+        const resultsData = await resultsRes.json();
+        return NextResponse.json(resultsData);
+      }
+
       case 'audit': {
         if (!suiteKey) {
           return NextResponse.json({ error: 'suite_key required' }, { status: 400 });

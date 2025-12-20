@@ -576,6 +576,8 @@ function SuiteDetailPanel({
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [runScenarios, setRunScenarios] = useState<Record<string, unknown[]>>({});
+  const [runResults, setRunResults] = useState<Record<string, { summary: Record<string, unknown>; results: unknown[] }>>({});
+  const [loadingRunResults, setLoadingRunResults] = useState<string | null>(null);
 
   // Check if there's a run currently in progress
   const hasRunningRun = runHistory.some(r => r.status === 'RUNNING');
@@ -616,6 +618,25 @@ function SuiteDetailPanel({
       console.error('Failed to load scenarios:', err);
     } finally {
       setLoadingScenarios(false);
+    }
+  }
+
+  async function loadRunResults(runId: string) {
+    if (runResults[runId]) return; // Already loaded
+    setLoadingRunResults(runId);
+    try {
+      const response = await fetch(`/api/superadmin/os/sales-bench?action=run-results&suite_key=${suite.suite_key}&run_id=${runId}`);
+      const result = await response.json();
+      if (result.success && result.data) {
+        setRunResults(prev => ({
+          ...prev,
+          [runId]: { summary: result.data.summary, results: result.data.results }
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load run results:', err);
+    } finally {
+      setLoadingRunResults(null);
     }
   }
 
@@ -1029,22 +1050,123 @@ function SuiteDetailPanel({
                   <span className="text-xs font-medium">Confirm Calibration Invites</span>
                 </div>
 
-                <div className="bg-neutral-900/50 rounded p-3 mb-3 text-[10px]">
-                  <p className="text-neutral-400 mb-2">Each evaluator will receive:</p>
-                  <div className="border-l-2 border-amber-500/50 pl-2 text-neutral-300 space-y-1">
-                    <p>• Unique scoring link (no login required)</p>
-                    <p>• {scenarios.length || suite.scenario_count} scenarios to evaluate</p>
-                    <p>• Shuffled order (reduces bias)</p>
-                    <p>• 7 days to complete</p>
-                  </div>
+                {/* Email Template Preview - THE ACTUAL EMAIL CONTENT */}
+                <div className="mb-3 bg-neutral-900/50 rounded p-3 border border-blue-500/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-blue-400 font-medium">Email Template (Copy for Each Evaluator)</p>
+                    <button
+                      onClick={() => {
+                        const template = `Subject: SIVA Sales Benchmark Evaluation - Your Scoring Link
 
-                  <div className="mt-3 pt-2 border-t border-neutral-700">
-                    <p className="text-neutral-500 mb-1">Evaluators:</p>
-                    {parsedEmails.map((email, i) => (
-                      <div key={i} className="flex items-center gap-2 py-1">
-                        <span className="text-amber-400">{i + 1}.</span>
-                        <span className="text-white">{email}</span>
+Hi [Evaluator Name],
+
+You've been selected to help calibrate SIVA, our AI sales assistant, by evaluating ${scenarios.length || suite.scenario_count} real sales scenarios.
+
+YOUR UNIQUE LINK: [Will be provided after creating invites]
+
+WHAT YOU'LL DO:
+• Review ${scenarios.length || suite.scenario_count} sales scenarios (companies, contacts, signals)
+• Score each on 8 dimensions (1-5 scale)
+• Indicate if YOU would pursue each lead
+• Takes about 15-20 minutes total
+
+SCORING DIMENSIONS:
+Q - Qualification (does lead match target profile?)
+N - Needs Discovery (clear addressable needs?)
+V - Value Articulation (can we articulate value?)
+O - Objection Handling (manageable objections?)
+P - Process Adherence (follows sales process?)
+C - Compliance (any regulatory concerns?)
+R - Relationship Building (relationship potential?)
+S - Next Step Secured (can we get next step?)
+
+DEADLINE: 7 days from today
+
+Your expert judgment helps SIVA learn what good salespeople look for. No login required - just click the link.
+
+Thank you!
+${suite.name} Calibration Team`;
+                        navigator.clipboard.writeText(template);
+                        alert('Email template copied!');
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-[10px] rounded"
+                    >
+                      <Copy className="w-3 h-3" />
+                      Copy Template
+                    </button>
+                  </div>
+                  <div className="bg-neutral-950 rounded p-2 text-[10px] text-neutral-300 font-mono max-h-40 overflow-y-auto whitespace-pre-wrap border border-neutral-800">
+{`Subject: SIVA Sales Benchmark Evaluation - Your Scoring Link
+
+Hi [Evaluator Name],
+
+You've been selected to help calibrate SIVA, our AI sales assistant, by evaluating ${scenarios.length || suite.scenario_count} real sales scenarios.
+
+YOUR UNIQUE LINK: [Will be provided after creating invites]
+
+WHAT YOU'LL DO:
+• Review ${scenarios.length || suite.scenario_count} sales scenarios
+• Score each on 8 dimensions (1-5 scale)
+• Indicate if YOU would pursue each lead
+• Takes about 15-20 minutes total
+
+DEADLINE: 7 days from today
+
+No login required - just click the link.`}
+                  </div>
+                </div>
+
+                {/* Evaluator Scoring Criteria Guide */}
+                <details className="mb-3 bg-neutral-900/50 rounded p-2 border border-neutral-700">
+                  <summary className="text-xs text-neutral-400 cursor-pointer flex items-center gap-2">
+                    <Target className="w-3 h-3" />
+                    View Scoring Criteria Details
+                  </summary>
+                  <div className="mt-2 text-[10px] text-neutral-300 space-y-2">
+                    <div className="grid gap-1.5">
+                      <div className="flex gap-2">
+                        <span className="text-blue-400 font-bold w-4">Q:</span>
+                        <span className="text-neutral-400">Qualification — target profile match</span>
                       </div>
+                      <div className="flex gap-2">
+                        <span className="text-blue-400 font-bold w-4">N:</span>
+                        <span className="text-neutral-400">Needs Discovery — addressable needs</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-blue-400 font-bold w-4">V:</span>
+                        <span className="text-neutral-400">Value Articulation — clear value</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-blue-400 font-bold w-4">O:</span>
+                        <span className="text-neutral-400">Objection Handling — manageable</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-blue-400 font-bold w-4">P:</span>
+                        <span className="text-neutral-400">Process Adherence — follows process</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-blue-400 font-bold w-4">C:</span>
+                        <span className="text-neutral-400">Compliance — no regulatory issues</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-blue-400 font-bold w-4">R:</span>
+                        <span className="text-neutral-400">Relationship Building — potential</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-blue-400 font-bold w-4">S:</span>
+                        <span className="text-neutral-400">Next Step Secured — can progress</span>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+
+                <div className="bg-neutral-900/50 rounded p-2 mb-3 text-[10px]">
+                  <p className="text-neutral-500 mb-1">Evaluators ({parsedEmails.length}):</p>
+                  <div className="flex flex-wrap gap-1">
+                    {parsedEmails.map((email, i) => (
+                      <span key={i} className="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded">
+                        {email}
+                      </span>
                     ))}
                   </div>
                 </div>
@@ -1260,6 +1382,104 @@ function SuiteDetailPanel({
                               </p>
                               <p className="text-[9px] text-neutral-600">of bad leads blocked</p>
                             </div>
+                          </div>
+
+                          {/* Load Scenario Results Button */}
+                          <div className="mt-3">
+                            {!runResults[run.id] ? (
+                              <button
+                                onClick={() => loadRunResults(run.id)}
+                                disabled={loadingRunResults === run.id}
+                                className="flex items-center gap-1.5 px-2 py-1 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 text-[10px] rounded transition-colors"
+                              >
+                                {loadingRunResults === run.id ? (
+                                  <><Loader2 className="w-3 h-3 animate-spin" /> Loading scenarios...</>
+                                ) : (
+                                  <><Eye className="w-3 h-3" /> View Scenario-by-Scenario Results</>
+                                )}
+                              </button>
+                            ) : (
+                              <div className="mt-2">
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-[10px] text-neutral-400">
+                                    Scenario Results ({(runResults[run.id].summary as { total_scenarios?: number })?.total_scenarios || 0} scenarios)
+                                  </p>
+                                  <span className="text-[9px] text-emerald-400">
+                                    {(runResults[run.id].summary as { correct?: number })?.correct || 0} correct / {(runResults[run.id].summary as { incorrect?: number })?.incorrect || 0} incorrect
+                                  </span>
+                                </div>
+
+                                {/* Scenario Results Table */}
+                                <div className="max-h-64 overflow-y-auto bg-neutral-900/50 rounded border border-neutral-800/50">
+                                  <table className="w-full text-[9px]">
+                                    <thead className="sticky top-0 bg-neutral-900">
+                                      <tr className="text-neutral-500 border-b border-neutral-800">
+                                        <th className="px-2 py-1 text-left">#</th>
+                                        <th className="px-2 py-1 text-left">Company</th>
+                                        <th className="px-2 py-1 text-left">Path</th>
+                                        <th className="px-2 py-1 text-left">Expected</th>
+                                        <th className="px-2 py-1 text-left">SIVA</th>
+                                        <th className="px-2 py-1 text-left">CRS</th>
+                                        <th className="px-2 py-1 text-left">Reason</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(runResults[run.id].results as Array<{
+                                        execution_order: number;
+                                        company?: { name?: string };
+                                        path_type: string;
+                                        expected_outcome: string;
+                                        outcome: string;
+                                        is_correct: boolean;
+                                        crs_scores?: { weighted?: number };
+                                        siva_reason?: string;
+                                      }>).map((result, idx) => (
+                                        <tr
+                                          key={idx}
+                                          className={`border-b border-neutral-800/30 ${
+                                            result.is_correct ? '' : 'bg-red-500/5'
+                                          }`}
+                                        >
+                                          <td className="px-2 py-1 text-neutral-500">{result.execution_order}</td>
+                                          <td className="px-2 py-1 text-neutral-300 max-w-[100px] truncate">
+                                            {result.company?.name || 'Unknown'}
+                                          </td>
+                                          <td className="px-2 py-1">
+                                            <span className={`px-1 py-0.5 rounded ${
+                                              result.path_type === 'GOLDEN'
+                                                ? 'bg-emerald-500/20 text-emerald-400'
+                                                : 'bg-red-500/20 text-red-400'
+                                            }`}>
+                                              {result.path_type}
+                                            </span>
+                                          </td>
+                                          <td className="px-2 py-1 text-neutral-400">{result.expected_outcome}</td>
+                                          <td className="px-2 py-1">
+                                            <span className={`px-1 py-0.5 rounded ${
+                                              result.outcome === 'PASS'
+                                                ? 'bg-emerald-500/20 text-emerald-400'
+                                                : result.outcome === 'BLOCK'
+                                                ? 'bg-blue-500/20 text-blue-400'
+                                                : 'bg-amber-500/20 text-amber-400'
+                                            }`}>
+                                              {result.outcome}
+                                            </span>
+                                          </td>
+                                          <td className="px-2 py-1 text-violet-400">
+                                            {result.crs_scores?.weighted
+                                              ? `${(result.crs_scores.weighted * 100).toFixed(0)}%`
+                                              : '-'}
+                                          </td>
+                                          <td className="px-2 py-1 text-neutral-500 max-w-[150px] truncate" title={result.siva_reason}>
+                                            {result.siva_reason || '-'}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
