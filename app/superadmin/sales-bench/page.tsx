@@ -792,50 +792,29 @@ function SuiteDetailPanel({
           </div>
         </div>
 
-        {/* Scenarios list (expandable) */}
+        {/* Scenarios list (compact summary - 5 samples only) */}
         {showScenarios && (
-          <div className="bg-neutral-800/30 rounded p-2 max-h-48 overflow-y-auto">
+          <div className="bg-neutral-800/30 rounded p-2">
             {loadingScenarios ? (
-              <div className="flex items-center gap-2 text-neutral-500 text-xs py-2">
+              <div className="flex items-center gap-2 text-neutral-500 text-xs py-1">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                Loading scenarios...
+                Loading...
               </div>
             ) : scenarios.length === 0 ? (
-              <p className="text-neutral-500 text-xs py-2">No scenarios linked to this suite</p>
+              <p className="text-neutral-500 text-xs py-1">No scenarios linked</p>
             ) : (
-              <div className="space-y-1.5">
-                {scenarios.slice(0, 10).map((s, i) => (
-                  <div key={s.id} className="flex items-start gap-2 text-[10px] p-1.5 bg-neutral-900/50 rounded">
-                    <span className={`px-1.5 py-0.5 rounded ${s.path_type === 'GOLDEN' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+              <div className="space-y-0.5">
+                <p className="text-[10px] text-neutral-600 mb-1">Sample (5 of {scenarios.length}):</p>
+                {scenarios.slice(0, 5).map((s) => (
+                  <div key={s.id} className="flex items-center gap-1.5 text-[10px] py-0.5 px-1 bg-neutral-900/30 rounded">
+                    <span className={`w-12 text-center px-1 py-0.5 rounded text-[9px] ${s.path_type === 'GOLDEN' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
                       {s.path_type}
                     </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-neutral-300 truncate">{s.entry_intent}</p>
-                      <div className="flex items-center gap-2 text-neutral-500 mt-0.5">
-                        {s.company_profile?.name && (
-                          <span className="flex items-center gap-0.5">
-                            <Building2 className="w-2.5 h-2.5" />
-                            {s.company_profile.name}
-                          </span>
-                        )}
-                        {s.contact_profile?.title && (
-                          <span className="flex items-center gap-0.5">
-                            <User className="w-2.5 h-2.5" />
-                            {s.contact_profile.title}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <span className={`px-1.5 py-0.5 rounded ${s.expected_outcome === 'PASS' ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                      {s.expected_outcome}
-                    </span>
+                    <span className="text-neutral-400 truncate">{s.company_profile?.name || 'Company'}</span>
+                    <span className="text-neutral-600">→</span>
+                    <span className="text-neutral-500">{s.contact_profile?.title || 'Contact'}</span>
                   </div>
                 ))}
-                {scenarios.length > 10 && (
-                  <p className="text-neutral-500 text-[10px] text-center py-1">
-                    ... and {scenarios.length - 10} more scenarios
-                  </p>
-                )}
               </div>
             )}
           </div>
