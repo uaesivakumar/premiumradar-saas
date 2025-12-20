@@ -638,6 +638,7 @@ function SuiteDetailPanel({
       const result = await response.json();
       if (result.success && result.data) {
         setValidationResult({
+          id: result.data.id || result.data.run_id,
           run_id: result.data.run_id,
           run_number: result.data.run_number,
           status: result.data.status,
