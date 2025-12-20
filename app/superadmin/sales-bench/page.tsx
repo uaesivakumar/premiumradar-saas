@@ -1069,9 +1069,28 @@ function SuiteDetailPanel({
 
         {/* GA Approved Badge */}
         {suite.status === 'GA_APPROVED' && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs rounded inline-flex">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Production Ready
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs rounded">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Production Ready
+            </div>
+          </div>
+        )}
+
+        {/* Download Report - available for SYSTEM_VALIDATED and above */}
+        {(suite.status === 'SYSTEM_VALIDATED' || suite.status === 'HUMAN_VALIDATED' || suite.status === 'GA_APPROVED') && (
+          <div className="mt-3">
+            <a
+              href={`/api/superadmin/os/sales-bench/report?suite_key=${suite.suite_key}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 text-xs rounded transition-colors w-fit"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Download Benchmark Report
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            <p className="text-[10px] text-neutral-600 mt-1">Professional report for investors & stakeholders (print to PDF)</p>
           </div>
         )}
 
