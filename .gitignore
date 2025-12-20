@@ -33,7 +33,7 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-# Vercel
+# Build artifacts
 .vercel
 
 # TypeScript

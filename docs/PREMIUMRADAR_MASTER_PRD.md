@@ -89,7 +89,7 @@ Tenants can ONLY:
 | Completed Sprints | S1-S132 (754 features) |
 | SIVA Status | Basic OS integration |
 | Backend | UPR OS (Cloud Run) |
-| Frontend | Next.js 15 (Vercel) |
+| Frontend | Next.js 15 (Cloud Run) |
 | Database | Cloud SQL PostgreSQL |
 
 ## A.7 Jobs To Be Done (JTBD)
@@ -706,7 +706,7 @@ Super Admin SIVA:
 │                         CLIENTS                                  │
 ├─────────────────────────────────────────────────────────────────┤
 │  SaaS Frontend    │  Super Admin    │  Mobile App   │  SDK     │
-│  (Vercel/Next.js) │  (Vercel)       │  (Phase 3)    │ (Phase 3)│
+│  (Cloud Run)      │  (Cloud Run)    │  (Phase 3)    │ (Phase 3)│
 └────────┬──────────┴────────┬────────┴───────┬───────┴────┬─────┘
          │                   │                │            │
          └───────────────────┴────────────────┴────────────┘
@@ -747,10 +747,10 @@ Super Admin SIVA:
 
 | Service | Responsibility | Tech | Phase |
 |---------|---------------|------|-------|
-| **SaaS Frontend** | User-facing web app | Next.js 15, Vercel | 1 |
-| **Super Admin** | Internal admin panel | Next.js 15, Vercel | 1 |
+| **SaaS Frontend** | User-facing web app | Next.js 15, Cloud Run | 1 |
+| **Super Admin** | Internal admin panel | Next.js 15, Cloud Run | 1 |
 | **UPR OS** | Intelligence engine | Node.js, Cloud Run | 1 |
-| **SaaS API** | User/tenant management | Next.js API, Vercel | 1 |
+| **SaaS API** | User/tenant management | Next.js API, Cloud Run | 1 |
 | **Auth Service** | Authentication | Auth0 | 1 |
 | **Analytics** | Event processing | BigQuery | 1 |
 | **Mobile API** | Mobile-specific routes | Cloud Run | 3 |

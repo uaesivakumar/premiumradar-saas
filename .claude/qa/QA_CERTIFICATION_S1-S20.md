@@ -30,7 +30,7 @@
 | Next.js 14 App Router | Done | `/` |
 | TailwindCSS + TypeScript | Done | Global |
 | ESLint + Prettier | Done | Build |
-| Vercel Deploy Config | Done | CI/CD |
+| Cloud Run Deploy Config | Done | CI/CD |
 
 ### Sprint S2: Security Foundation
 **Status:** CERTIFIED

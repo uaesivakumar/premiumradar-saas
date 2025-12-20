@@ -3028,7 +3028,7 @@ SIVA has 12 atomic tools organized in 3 layers:
 - Server Components reduce client JS bundle by 40%
 - App Router enables better code organization
 - Built-in image optimization & middleware
-- Vercel deployment is seamless
+- Cloud Run deployment via GitHub Actions
 
 **State Management: Zustand (Not Redux)**
 - 11 specialized stores (auth, siva, signals, companies, etc.)
@@ -5215,7 +5215,7 @@ no one cares about.`,
           'App Router: File-based routing with layouts',
           'Streaming: Progressive page loading',
           'Edge Runtime: Low-latency API routes',
-          'Vercel deployment: Seamless scaling',
+          'Cloud Run deployment: Seamless scaling',
         ],
         techRationale: `Why Next.js over alternatives?
 
@@ -5223,7 +5223,7 @@ CONSIDERED: Vite + React
 Rejected because: No SSR out of box, more manual setup
 
 CONSIDERED: Remix
-Rejected because: Smaller ecosystem, less Vercel integration
+Rejected because: Smaller ecosystem, less GCP integration
 
 CONSIDERED: Pure React (CRA)
 Rejected because: No SSR, poor SEO, slower initial load
@@ -5234,7 +5234,7 @@ Reasons:
 2. App Router enables better code organization
 3. Built-in image optimization
 4. Middleware for auth/protection
-5. Vercel deployment is 1-click
+5. Cloud Run deployment via GitHub Actions
 
 NEXT.JS 14 SPECIFIC FEATURES WE USE:
 - Server Actions (form handling)

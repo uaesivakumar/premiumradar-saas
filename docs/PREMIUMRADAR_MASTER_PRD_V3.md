@@ -2039,7 +2039,7 @@ interface SecurityGuardrails {
 
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| **Frontend** | Next.js 15, React, TypeScript | Vercel hosting |
+| **Frontend** | Next.js 15, React, TypeScript | Cloud Run hosting |
 | **Backend** | Node.js, Express | Cloud Run |
 | **Database** | PostgreSQL (Cloud SQL) | Multi-tenant |
 | **Analytics** | BigQuery | Event streaming |
