@@ -44,70 +44,48 @@ export async function GET(request: NextRequest) {
 
     switch (action) {
       case 'dashboard': {
-        // Build dashboard data from suites list with run history
+        // Build dashboard data from suites list
         const suitesResult = await salesBench.listSuites({});
         if (!suitesResult.success) {
           return NextResponse.json(suitesResult);
         }
 
         const suites = suitesResult.data || [];
-        const osBaseUrl = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
-        const prOsToken = process.env.PR_OS_TOKEN || '';
 
-        // Fetch run history for each suite (in parallel, limited)
-        const suiteSummaries = await Promise.all(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          suites.slice(0, 20).map(async (suite: any) => {
-            try {
-              const historyRes = await fetch(
-                `${osBaseUrl}/api/os/sales-bench/suites/${suite.key}/history?limit=2`,
-                { headers: { 'x-pr-os-token': prOsToken } }
-              );
-              const historyData = await historyRes.json();
-              const runs = historyData.data || [];
-              const completedRuns = runs.filter((r: { status: string }) => r.status === 'COMPLETED');
-              const latestRun = completedRuns[0];
-              const previousRun = completedRuns[1];
+        // Map suites - last_run_result is already included in the response
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const suiteSummaries = suites.map((suite: any) => {
+          const lastRun = suite.last_run_result;
+          // Rates come as decimals (0-1), convert to percentage
+          const goldenRate = lastRun?.golden_pass_rate != null ? lastRun.golden_pass_rate * 100 : null;
+          const killRate = lastRun?.kill_containment_rate != null ? lastRun.kill_containment_rate * 100 : null;
+          const cohensD = lastRun?.cohens_d ?? null;
 
-              return {
-                key: suite.key,
-                name: suite.name,
-                type: suite.stage || 'PRE_ENTRY',
-                vertical: suite.vertical,
-                sub_vertical: suite.sub_vertical,
-                region: suite.region_code,
-                scenario_count: suite.scenario_count,
-                status: suite.status,
-                latest_run: latestRun ? {
-                  run_number: latestRun.run_number,
-                  golden_pass_rate: parseFloat(latestRun.golden_pass_rate) || 0,
-                  kill_containment_rate: parseFloat(latestRun.kill_containment_rate) || 0,
-                  cohens_d: parseFloat(latestRun.cohens_d) || 0,
-                  date: latestRun.started_at,
-                } : undefined,
-                previous_run: previousRun ? {
-                  golden_pass_rate: parseFloat(previousRun.golden_pass_rate) || 0,
-                  kill_containment_rate: parseFloat(previousRun.kill_containment_rate) || 0,
-                } : undefined,
-              };
-            } catch {
-              return {
-                key: suite.key,
-                name: suite.name,
-                type: suite.stage || 'PRE_ENTRY',
-                vertical: suite.vertical,
-                sub_vertical: suite.sub_vertical,
-                region: suite.region_code,
-                scenario_count: suite.scenario_count,
-                status: suite.status,
-              };
-            }
-          })
-        );
+          return {
+            key: suite.suite_key,
+            name: suite.name,
+            type: suite.stage || 'PRE_ENTRY',
+            vertical: suite.vertical,
+            sub_vertical: suite.sub_vertical,
+            region: suite.region,
+            scenario_count: suite.scenario_count,
+            status: suite.status,
+            latest_run: lastRun ? {
+              run_number: lastRun.run_number || 1,
+              golden_pass_rate: goldenRate,
+              kill_containment_rate: killRate,
+              cohens_d: cohensD,
+              date: suite.system_validated_at || suite.created_at,
+            } : undefined,
+          };
+        });
 
         // Calculate stats
-        const suitesWithRuns = suiteSummaries.filter(s => s.latest_run);
-        const totalRuns = suitesWithRuns.reduce((sum, s) => sum + (s.latest_run?.run_number || 0), 0);
+        const suitesWithRuns = suiteSummaries.filter((s: { latest_run?: { golden_pass_rate: number | null } }) =>
+          s.latest_run && s.latest_run.golden_pass_rate !== null
+        );
+        // Count suites that have been run (not individual run numbers)
+        const totalRuns = suitesWithRuns.length;
         const avgGolden = suitesWithRuns.length > 0
           ? suitesWithRuns.reduce((sum, s) => sum + (s.latest_run?.golden_pass_rate || 0), 0) / suitesWithRuns.length
           : 0;
