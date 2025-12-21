@@ -98,6 +98,11 @@ async function fetchReportData(suiteKey: string): Promise<ReportData | null> {
     const completedRuns = runs.filter((r: { status: string }) => r.status === 'COMPLETED');
     const latestRun = completedRuns[0] || {};
 
+    // Parse performance metrics early (needed for fallback CRS)
+    const goldenPass = parseFloat(latestRun.golden_pass_rate) / 100 || 0;
+    const killContainment = parseFloat(latestRun.kill_containment_rate) / 100 || 0;
+    const cohensD = parseFloat(latestRun.cohens_d) || 0;
+
     // Fetch REAL CRS data from run results
     let crs = {
       qualification: 0,
@@ -132,39 +137,69 @@ async function fetchReportData(suiteKey: string): Promise<ReportData | null> {
           relationship_building: 0,
           next_step_secured: 0,
         };
+        let validCount = 0;
 
         for (const r of results) {
           if (r.crs_scores) {
-            totals.qualification += r.crs_scores.qualification || 0;
-            totals.needs_discovery += r.crs_scores.needs_discovery || 0;
-            totals.value_articulation += r.crs_scores.value_articulation || 0;
-            totals.objection_handling += r.crs_scores.objection_handling || 0;
-            totals.process_adherence += r.crs_scores.process_adherence || 0;
-            totals.compliance += r.crs_scores.compliance || 0;
-            totals.relationship_building += r.crs_scores.relationship_building || 0;
-            totals.next_step_secured += r.crs_scores.next_step_secured || 0;
+            // Scores from OS are 1-5 scale (from siva-scorer.js)
+            const q = r.crs_scores.qualification;
+            const nd = r.crs_scores.needs_discovery;
+            const va = r.crs_scores.value_articulation;
+            const oh = r.crs_scores.objection_handling;
+            const pa = r.crs_scores.process_adherence;
+            const c = r.crs_scores.compliance;
+            const rb = r.crs_scores.relationship_building;
+            const ns = r.crs_scores.next_step_secured;
+
+            // Only count if at least one dimension has a valid score
+            if (q != null || nd != null || va != null || oh != null) {
+              validCount++;
+              totals.qualification += q ?? 0;
+              totals.needs_discovery += nd ?? 0;
+              totals.value_articulation += va ?? 0;
+              totals.objection_handling += oh ?? 0;
+              totals.process_adherence += pa ?? 0;
+              totals.compliance += c ?? 0;
+              totals.relationship_building += rb ?? 0;
+              totals.next_step_secured += ns ?? 0;
+            }
           }
         }
 
-        // Normalize to 0-1 scale (scores are 0-100)
-        crs = {
-          qualification: (totals.qualification / count) / 100,
-          needs_discovery: (totals.needs_discovery / count) / 100,
-          value_articulation: (totals.value_articulation / count) / 100,
-          objection_handling: (totals.objection_handling / count) / 100,
-          process_adherence: (totals.process_adherence / count) / 100,
-          compliance: (totals.compliance / count) / 100,
-          relationship_building: (totals.relationship_building / count) / 100,
-          next_step_secured: (totals.next_step_secured / count) / 100,
-        };
+        // Normalize 1-5 scale to 0-1 scale: (score - 1) / 4
+        // If no valid scores, use fallback based on pass rates
+        const effectiveCount = validCount || 1;
+        const hasValidScores = validCount > 0;
+
+        if (hasValidScores) {
+          crs = {
+            qualification: Math.max(0, (totals.qualification / effectiveCount - 1) / 4),
+            needs_discovery: Math.max(0, (totals.needs_discovery / effectiveCount - 1) / 4),
+            value_articulation: Math.max(0, (totals.value_articulation / effectiveCount - 1) / 4),
+            objection_handling: Math.max(0, (totals.objection_handling / effectiveCount - 1) / 4),
+            process_adherence: Math.max(0, (totals.process_adherence / effectiveCount - 1) / 4),
+            compliance: Math.max(0, (totals.compliance / effectiveCount - 1) / 4),
+            relationship_building: Math.max(0, (totals.relationship_building / effectiveCount - 1) / 4),
+            next_step_secured: Math.max(0, (totals.next_step_secured / effectiveCount - 1) / 4),
+          };
+        } else {
+          // No dimension scores available - use weighted CRS as fallback for all dimensions
+          const avgCrs = parseFloat(latestRun.avg_crs) || goldenPass * 0.8 + killContainment * 0.2 || 0;
+          crs = {
+            qualification: avgCrs,
+            needs_discovery: avgCrs,
+            value_articulation: avgCrs,
+            objection_handling: avgCrs,
+            process_adherence: avgCrs,
+            compliance: avgCrs,
+            relationship_building: avgCrs,
+            next_step_secured: avgCrs,
+          };
+        }
       }
     }
 
-    // Generate insights based on performance (parse string values from API)
-    const goldenPass = parseFloat(latestRun.golden_pass_rate) / 100 || 0;
-    const killContainment = parseFloat(latestRun.kill_containment_rate) / 100 || 0;
-    const cohensD = parseFloat(latestRun.cohens_d) || 0;
-
+    // Generate insights based on performance
     const strengths: string[] = [];
     const growth_areas: string[] = [];
     const recommendations: string[] = [];

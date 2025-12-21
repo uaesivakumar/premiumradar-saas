@@ -23,7 +23,7 @@ import {
 interface ScenarioResult {
   execution_order: number;
   scenario_id: string;
-  company?: { name?: string; employees?: number; industry?: string };
+  company?: { name?: string; employees?: number; employee_count?: number; industry?: string };
   contact?: { title?: string; name?: string };
   signals?: { signal?: string; strength?: number };
   path_type: string;
@@ -573,11 +573,11 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
                 <div className="bg-neutral-800/50 rounded p-3">
                   <h4 className="text-xs text-neutral-500 mb-2">COMPANY</h4>
                   <p className="text-white font-medium">{selectedScenario.company?.name || '-'}</p>
-                  {selectedScenario.company?.employees && (
+                  {(selectedScenario.company?.employees || selectedScenario.company?.employee_count) ? (
                     <p className="text-sm text-neutral-400 mt-1">
-                      {selectedScenario.company.employees} employees · {selectedScenario.company.industry || 'Unknown'}
+                      {selectedScenario.company.employees || selectedScenario.company.employee_count} employees · {selectedScenario.company.industry || 'Unknown'}
                     </p>
-                  )}
+                  ) : null}
                 </div>
                 <div className="bg-neutral-800/50 rounded p-3">
                   <h4 className="text-xs text-neutral-500 mb-2">CONTACT</h4>
@@ -601,7 +601,7 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
               <div className="bg-violet-500/10 border border-violet-500/20 rounded p-4">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-sm text-violet-400 font-medium">SIVA REASONING</h4>
-                  {selectedScenario.latency_ms && (
+                  {selectedScenario.latency_ms != null && selectedScenario.latency_ms > 0 && (
                     <span className="text-xs text-neutral-500">{selectedScenario.latency_ms}ms</span>
                   )}
                 </div>
