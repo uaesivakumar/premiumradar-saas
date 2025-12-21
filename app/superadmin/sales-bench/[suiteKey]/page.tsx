@@ -46,12 +46,12 @@ interface ScenarioResult {
 }
 
 interface SuiteDetails {
-  key: string;
+  suite_key: string;
   name: string;
   description?: string;
   vertical: string;
   sub_vertical: string;
-  region_code: string;
+  region: string;
   stage: string;
   scenario_count: number;
   golden_count?: number;
@@ -85,21 +85,33 @@ export default function SuiteDetailPage({ params }: { params: Promise<{ suiteKey
   const [runningValidation, setRunningValidation] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<ScenarioResult | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>('scenarios');
+  const [error, setError] = useState<string | null>(null);
 
-  const suiteKey = resolvedParams.suiteKey;
+  const suiteKey = resolvedParams?.suiteKey;
 
   useEffect(() => {
     fetchSuiteDetails();
   }, [suiteKey]);
 
   const fetchSuiteDetails = async () => {
+    if (!suiteKey) {
+      setError('No suite key provided');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    setError(null);
     try {
       // Fetch suite details
       const suiteRes = await fetch(`/api/superadmin/os/sales-bench?action=suite&suite_key=${suiteKey}`);
       const suiteData = await suiteRes.json();
-      if (suiteData.success) {
+      if (suiteData.success && suiteData.data) {
         setSuite(suiteData.data);
+      } else {
+        setError(suiteData.error || 'Failed to load suite');
+        setLoading(false);
+        return;
       }
 
       // Fetch run history
@@ -117,6 +129,7 @@ export default function SuiteDetailPage({ params }: { params: Promise<{ suiteKey
       }
     } catch (err) {
       console.error('Failed to fetch suite details:', err);
+      setError('Failed to connect to server');
     } finally {
       setLoading(false);
     }
@@ -179,12 +192,15 @@ export default function SuiteDetailPage({ params }: { params: Promise<{ suiteKey
     );
   }
 
-  if (!suite) {
+  if (error || !suite) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <XCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-          <p className="text-neutral-400 text-sm">Suite not found</p>
+          <p className="text-neutral-400 text-sm">{error || 'Suite not found'}</p>
+          {suiteKey && (
+            <p className="text-neutral-600 text-xs mt-1">Key: {suiteKey}</p>
+          )}
           <button
             onClick={() => router.push('/superadmin/sales-bench')}
             className="mt-4 text-violet-400 hover:underline text-sm"
@@ -217,7 +233,7 @@ export default function SuiteDetailPage({ params }: { params: Promise<{ suiteKey
             <div>
               <h1 className="text-2xl font-bold">{suite.name}</h1>
               <p className="text-neutral-500 text-sm mt-1">
-                {suite.vertical} → {suite.sub_vertical} → {suite.region_code}
+                {suite.vertical} → {suite.sub_vertical} → {suite.region || 'UAE'}
               </p>
               {suite.description && (
                 <p className="text-neutral-400 text-sm mt-2 max-w-2xl">{suite.description}</p>
