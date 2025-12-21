@@ -142,14 +142,21 @@ async function fetchReportData(suiteKey: string): Promise<ReportData | null> {
         for (const r of results) {
           if (r.crs_scores) {
             // Scores from OS are 1-5 scale (from siva-scorer.js)
-            const q = r.crs_scores.qualification;
-            const nd = r.crs_scores.needs_discovery;
-            const va = r.crs_scores.value_articulation;
-            const oh = r.crs_scores.objection_handling;
-            const pa = r.crs_scores.process_adherence;
-            const c = r.crs_scores.compliance;
-            const rb = r.crs_scores.relationship_building;
-            const ns = r.crs_scores.next_step_secured;
+            // Parse to numbers - pg driver may return NUMERIC as strings
+            const parseScore = (v: unknown): number | null => {
+              if (v == null) return null;
+              const num = parseFloat(String(v));
+              return isNaN(num) ? null : num;
+            };
+
+            const q = parseScore(r.crs_scores.qualification);
+            const nd = parseScore(r.crs_scores.needs_discovery);
+            const va = parseScore(r.crs_scores.value_articulation);
+            const oh = parseScore(r.crs_scores.objection_handling);
+            const pa = parseScore(r.crs_scores.process_adherence);
+            const c = parseScore(r.crs_scores.compliance);
+            const rb = parseScore(r.crs_scores.relationship_building);
+            const ns = parseScore(r.crs_scores.next_step_secured);
 
             // Only count if at least one dimension has a valid score
             if (q != null || nd != null || va != null || oh != null) {

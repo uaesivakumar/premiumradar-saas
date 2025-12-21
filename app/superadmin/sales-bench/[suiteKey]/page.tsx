@@ -425,9 +425,11 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
                           </span>
                         </td>
                         <td className="px-3 py-2 text-center text-violet-400">
-                          {result.crs_scores?.weighted
-                            ? `${(result.crs_scores.weighted * 100).toFixed(0)}%`
-                            : '-'}
+                          {(() => {
+                            const w = result.crs_scores?.weighted;
+                            const val = w != null ? parseFloat(String(w)) : null;
+                            return val != null && !isNaN(val) ? `${(val * 100).toFixed(0)}%` : '-';
+                          })()}
                         </td>
                         <td className="px-3 py-2 text-center">
                           {result.is_correct ? (
@@ -651,12 +653,15 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
                       { key: 'relationship_building', label: 'Relationship' },
                       { key: 'next_step_secured', label: 'Next Step' },
                     ].map(({ key, label }) => {
-                      const score = selectedScenario.crs_scores?.[key as keyof typeof selectedScenario.crs_scores];
+                      const rawScore = selectedScenario.crs_scores?.[key as keyof typeof selectedScenario.crs_scores];
+                      // Handle both number and string values (pg driver returns NUMERIC as strings)
+                      const score = rawScore != null ? parseFloat(String(rawScore)) : null;
+                      const isValid = score != null && !isNaN(score);
                       return (
                         <div key={key} className="text-center">
                           <p className="text-xs text-neutral-500">{label}</p>
                           <p className="text-lg font-medium text-blue-400">
-                            {typeof score === 'number' ? score.toFixed(0) : '-'}
+                            {isValid ? score.toFixed(1) : '-'}
                           </p>
                         </div>
                       );
@@ -665,9 +670,11 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
                   <div className="mt-3 pt-3 border-t border-neutral-700 flex justify-between items-center">
                     <span className="text-neutral-400">Weighted CRS</span>
                     <span className="text-xl font-bold text-violet-400">
-                      {selectedScenario.crs_scores.weighted
-                        ? `${(selectedScenario.crs_scores.weighted * 100).toFixed(1)}%`
-                        : '-'}
+                      {(() => {
+                        const w = selectedScenario.crs_scores.weighted;
+                        const val = w != null ? parseFloat(String(w)) : null;
+                        return val != null && !isNaN(val) ? `${(val * 100).toFixed(1)}%` : '-';
+                      })()}
                     </span>
                   </div>
                 </div>
