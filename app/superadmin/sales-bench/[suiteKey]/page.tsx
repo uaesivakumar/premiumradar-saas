@@ -18,9 +18,18 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Fingerprint,
+  Link2,
+  AlertTriangle,
+  Hash,
+  Wrench,
+  Database,
+  ShieldCheck,
+  Copy,
 } from 'lucide-react';
 
 interface ScenarioResult {
+  id: string;  // result_id for trace lookup
   execution_order: number;
   scenario_id: string;
   company?: { name?: string; employees?: number; employee_count?: number; industry?: string };
@@ -43,6 +52,102 @@ interface ScenarioResult {
   };
   siva_reason?: string;
   latency_ms?: number;
+  // Trace fields (populated after Phase 1 Trust Layer)
+  interaction_id?: string;
+  envelope_sha256?: string;
+}
+
+interface TraceData {
+  interaction_id: string;
+  result_id: string;
+  scenario_id: string;
+  run_id: string;
+  suite_key: string;
+  run_number: number;
+  execution_order: number;
+  decision: {
+    path_type: string;
+    outcome: string;
+    expected_outcome: string;
+    outcome_correct: boolean;
+  };
+  envelope: {
+    sha256: string;
+    version: string;
+  };
+  authority: {
+    persona_id: string | null;
+    persona_key: string | null;
+    persona_name: string | null;
+    persona_version: string;
+    policy_version: string;
+  };
+  routing: {
+    model_slug: string;
+    model_provider: string;
+    decision: {
+      model_selected: string;
+      reason: string;
+      alternatives_considered: string[];
+      routing_score: number;
+    };
+  };
+  tools: {
+    allowed: string[];
+    used: {
+      tool_name: string;
+      input_hash: string;
+      output_hash: string;
+      duration_ms: number;
+      success: boolean;
+      error?: string;
+    }[];
+    call_count: number;
+  };
+  policy_gates: {
+    gates_hit: {
+      gate_name: string;
+      triggered: boolean;
+      reason: string;
+      action_taken: string;
+    }[];
+    gates_count: number;
+  };
+  evidence: {
+    sources: {
+      source: string;
+      content_hash: string;
+      ttl_seconds: number | null;
+      fetched_at: string;
+    }[];
+    source_count: number;
+  };
+  performance: {
+    latency_ms: number;
+    tokens_in: number;
+    tokens_out: number;
+    cost_estimate: number;
+    cost_actual: number | null;
+    cache_hit: boolean;
+  };
+  risk: {
+    score: number;
+    escalation_triggered: boolean;
+  };
+  replay: {
+    is_replay: boolean;
+    original_interaction_id: string | null;
+    status: string | null;
+    deviation_reason: string | null;
+    replay_url: string;
+  };
+  integrity: {
+    signature: string;
+    verification_url: string;
+  };
+  timestamps: {
+    executed_at: string;
+  };
 }
 
 interface SuiteDetails {
@@ -85,6 +190,11 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
   const [selectedScenario, setSelectedScenario] = useState<ScenarioResult | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>('scenarios');
   const [error, setError] = useState<string | null>(null);
+  // Trace Panel state (Phase 1: Trust Layer)
+  const [modalTab, setModalTab] = useState<'overview' | 'trace' | 'tools'>('overview');
+  const [traceData, setTraceData] = useState<TraceData | null>(null);
+  const [traceLoading, setTraceLoading] = useState(false);
+  const [traceError, setTraceError] = useState<string | null>(null);
 
   const suiteKey = params.suiteKey;
 
@@ -144,6 +254,34 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
     } catch (err) {
       console.error('Failed to fetch run results:', err);
     }
+  };
+
+  // Fetch trace/provenance data for a scenario result (Phase 1: Trust Layer)
+  const fetchTraceData = async (resultId: string, runId: string) => {
+    setTraceLoading(true);
+    setTraceError(null);
+    setTraceData(null);
+    try {
+      const res = await fetch(
+        `/api/superadmin/os/sales-bench?action=trace&suite_key=${suiteKey}&run_id=${runId}&result_id=${resultId}`
+      );
+      const data = await res.json();
+      if (data.success && data.data) {
+        setTraceData(data.data);
+      } else {
+        setTraceError(data.error || 'Failed to load trace data');
+      }
+    } catch (err) {
+      console.error('Failed to fetch trace data:', err);
+      setTraceError('Failed to connect to server');
+    } finally {
+      setTraceLoading(false);
+    }
+  };
+
+  // Copy to clipboard helper
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
   };
 
   const runValidation = async () => {
@@ -545,9 +683,9 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
       {/* Scenario Detail Modal */}
       {selectedScenario && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="sticky top-0 bg-neutral-900 border-b border-neutral-800 p-4 flex items-center justify-between">
+            <div className="flex-shrink-0 bg-neutral-900 border-b border-neutral-800 p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className={`px-2 py-1 rounded text-xs font-medium ${
                   selectedScenario.path_type === 'GOLDEN'
@@ -561,15 +699,71 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
                 </h3>
               </div>
               <button
-                onClick={() => setSelectedScenario(null)}
+                onClick={() => {
+                  setSelectedScenario(null);
+                  setModalTab('overview');
+                  setTraceData(null);
+                }}
                 className="text-neutral-400 hover:text-white p-1"
               >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-4 space-y-4">
+            {/* Tab Bar */}
+            <div className="flex-shrink-0 bg-neutral-900 border-b border-neutral-800 px-4">
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setModalTab('overview')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    modalTab === 'overview'
+                      ? 'text-violet-400 border-violet-400'
+                      : 'text-neutral-400 border-transparent hover:text-white'
+                  }`}
+                >
+                  Overview
+                </button>
+                <button
+                  onClick={() => {
+                    setModalTab('trace');
+                    if (!traceData && selectedScenario.id && selectedRun) {
+                      fetchTraceData(selectedScenario.id, selectedRun.id);
+                    }
+                  }}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                    modalTab === 'trace'
+                      ? 'text-violet-400 border-violet-400'
+                      : 'text-neutral-400 border-transparent hover:text-white'
+                  }`}
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  Trace
+                </button>
+                <button
+                  onClick={() => {
+                    setModalTab('tools');
+                    if (!traceData && selectedScenario.id && selectedRun) {
+                      fetchTraceData(selectedScenario.id, selectedRun.id);
+                    }
+                  }}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                    modalTab === 'tools'
+                      ? 'text-violet-400 border-violet-400'
+                      : 'text-neutral-400 border-transparent hover:text-white'
+                  }`}
+                >
+                  <Wrench className="w-4 h-4" />
+                  Tools
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+              {/* === OVERVIEW TAB === */}
+              {modalTab === 'overview' && (
+                <>
               {/* Company & Contact */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-neutral-800/50 rounded p-3">
@@ -679,12 +873,367 @@ export default function SuiteDetailPage({ params }: { params: { suiteKey: string
                   </div>
                 </div>
               )}
+                </>
+              )}
+
+              {/* === TRACE TAB === */}
+              {modalTab === 'trace' && (
+                <div className="space-y-4">
+                  {traceLoading && (
+                    <div className="flex items-center justify-center py-8">
+                      <RefreshCw className="w-6 h-6 text-violet-400 animate-spin" />
+                      <span className="ml-2 text-neutral-400">Loading trace data...</span>
+                    </div>
+                  )}
+
+                  {traceError && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded p-4">
+                      <div className="flex items-center gap-2 text-red-400">
+                        <AlertTriangle className="w-5 h-5" />
+                        <span>{traceError}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!traceLoading && !traceError && traceData && (
+                    <>
+                      {/* Interaction Identity */}
+                      <div className="bg-violet-500/10 border border-violet-500/20 rounded p-4">
+                        <h4 className="text-sm text-violet-400 font-medium mb-3 flex items-center gap-2">
+                          <Fingerprint className="w-4 h-4" />
+                          INTERACTION IDENTITY
+                        </h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Interaction ID</span>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs text-white bg-neutral-800 px-2 py-1 rounded font-mono">
+                                {traceData.interaction_id?.slice(0, 8)}...
+                              </code>
+                              <button
+                                onClick={() => copyToClipboard(traceData.interaction_id)}
+                                className="text-neutral-500 hover:text-white"
+                                title="Copy full ID"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Run #</span>
+                            <span className="text-white">{traceData.run_number}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Executed At</span>
+                            <span className="text-white text-sm">
+                              {new Date(traceData.timestamps.executed_at).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Envelope Provenance */}
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded p-4">
+                        <h4 className="text-sm text-amber-400 font-medium mb-3 flex items-center gap-2">
+                          <Hash className="w-4 h-4" />
+                          ENVELOPE PROVENANCE
+                        </h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">SHA256</span>
+                            <div className="flex items-center gap-2">
+                              <code className="text-xs text-white bg-neutral-800 px-2 py-1 rounded font-mono">
+                                {traceData.envelope.sha256?.slice(0, 16)}...
+                              </code>
+                              <button
+                                onClick={() => copyToClipboard(traceData.envelope.sha256)}
+                                className="text-neutral-500 hover:text-white"
+                                title="Copy full hash"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Version</span>
+                            <span className="text-white">{traceData.envelope.version}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Authority Chain */}
+                      <div className="bg-blue-500/10 border border-blue-500/20 rounded p-4">
+                        <h4 className="text-sm text-blue-400 font-medium mb-3 flex items-center gap-2">
+                          <Shield className="w-4 h-4" />
+                          AUTHORITY CHAIN
+                        </h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Persona</span>
+                            <span className="text-white">
+                              {traceData.authority.persona_name || traceData.authority.persona_key || 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Persona Version</span>
+                            <span className="text-white">{traceData.authority.persona_version}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Policy Version</span>
+                            <span className="text-white">{traceData.authority.policy_version}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Model Routing */}
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded p-4">
+                        <h4 className="text-sm text-emerald-400 font-medium mb-3 flex items-center gap-2">
+                          <Zap className="w-4 h-4" />
+                          MODEL ROUTING
+                        </h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Model</span>
+                            <span className="text-white font-mono">{traceData.routing.model_slug}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Provider</span>
+                            <span className="text-white">{traceData.routing.model_provider}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-neutral-400 text-sm">Routing Score</span>
+                            <span className="text-white">{traceData.routing.decision?.routing_score?.toFixed(2) || 'N/A'}</span>
+                          </div>
+                          {traceData.routing.decision?.reason && (
+                            <div className="mt-2 pt-2 border-t border-emerald-500/20">
+                              <span className="text-neutral-400 text-sm block mb-1">Reason</span>
+                              <span className="text-white text-sm">{traceData.routing.decision.reason}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Policy Gates */}
+                      {traceData.policy_gates.gates_count > 0 && (
+                        <div className="bg-orange-500/10 border border-orange-500/20 rounded p-4">
+                          <h4 className="text-sm text-orange-400 font-medium mb-3 flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4" />
+                            POLICY GATES ({traceData.policy_gates.gates_count})
+                          </h4>
+                          <div className="space-y-2">
+                            {traceData.policy_gates.gates_hit.map((gate, idx) => (
+                              <div key={idx} className="bg-neutral-800/50 rounded p-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-white font-mono text-sm">{gate.gate_name}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded ${
+                                    gate.action_taken === 'PASS' ? 'bg-emerald-500/20 text-emerald-400' :
+                                    gate.action_taken === 'BLOCK' ? 'bg-red-500/20 text-red-400' :
+                                    'bg-neutral-500/20 text-neutral-400'
+                                  }`}>
+                                    {gate.action_taken}
+                                  </span>
+                                </div>
+                                <p className="text-neutral-400 text-xs mt-1">{gate.reason}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Evidence Sources */}
+                      {traceData.evidence.source_count > 0 && (
+                        <div className="bg-cyan-500/10 border border-cyan-500/20 rounded p-4">
+                          <h4 className="text-sm text-cyan-400 font-medium mb-3 flex items-center gap-2">
+                            <Database className="w-4 h-4" />
+                            EVIDENCE SOURCES ({traceData.evidence.source_count})
+                          </h4>
+                          <div className="space-y-2">
+                            {traceData.evidence.sources.map((source, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-sm">
+                                <span className="text-white font-mono">{source.source}</span>
+                                <span className="text-neutral-400 font-mono text-xs">
+                                  {source.content_hash?.slice(0, 8)}...
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Risk & Integrity */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-neutral-800/50 rounded p-3">
+                          <h4 className="text-xs text-neutral-500 mb-2">RISK SCORE</h4>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xl font-bold ${
+                              traceData.risk.score > 0.7 ? 'text-red-400' :
+                              traceData.risk.score > 0.4 ? 'text-amber-400' :
+                              'text-emerald-400'
+                            }`}>
+                              {(traceData.risk.score * 100).toFixed(0)}%
+                            </span>
+                            {traceData.risk.escalation_triggered && (
+                              <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded">
+                                ESCALATED
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="bg-neutral-800/50 rounded p-3">
+                          <h4 className="text-xs text-neutral-500 mb-2">SIGNATURE</h4>
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                            <code className="text-xs text-white bg-neutral-800 px-2 py-1 rounded font-mono">
+                              {traceData.integrity.signature?.slice(0, 12)}...
+                            </code>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Replay Link */}
+                      <div className="bg-neutral-800/50 rounded p-3">
+                        <h4 className="text-xs text-neutral-500 mb-2">REPLAY</h4>
+                        <div className="flex items-center gap-2">
+                          <Link2 className="w-4 h-4 text-violet-400" />
+                          <code className="text-xs text-violet-400 font-mono">
+                            {traceData.replay.replay_url}
+                          </code>
+                        </div>
+                        <p className="text-xs text-neutral-500 mt-2">
+                          Append-only trace. Cannot be modified after insert.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {!traceLoading && !traceError && !traceData && (
+                    <div className="text-center py-8 text-neutral-500">
+                      No trace data available for this scenario.
+                      <br />
+                      <span className="text-xs">Run a new validation to generate trace data.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* === TOOLS TAB === */}
+              {modalTab === 'tools' && (
+                <div className="space-y-4">
+                  {traceLoading && (
+                    <div className="flex items-center justify-center py-8">
+                      <RefreshCw className="w-6 h-6 text-violet-400 animate-spin" />
+                      <span className="ml-2 text-neutral-400">Loading tool data...</span>
+                    </div>
+                  )}
+
+                  {!traceLoading && traceData && (
+                    <>
+                      {/* Tools Allowed */}
+                      <div className="bg-blue-500/10 border border-blue-500/20 rounded p-4">
+                        <h4 className="text-sm text-blue-400 font-medium mb-3">TOOLS ALLOWED</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {traceData.tools.allowed.map((tool, idx) => (
+                            <span key={idx} className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded font-mono">
+                              {tool}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Tools Used */}
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded p-4">
+                        <h4 className="text-sm text-emerald-400 font-medium mb-3">
+                          TOOLS USED ({traceData.tools.call_count})
+                        </h4>
+                        {traceData.tools.used.length === 0 ? (
+                          <p className="text-neutral-500 text-sm">No tool calls recorded.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {traceData.tools.used.map((tool, idx) => (
+                              <div key={idx} className="bg-neutral-800/50 rounded p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-white font-mono text-sm">{tool.tool_name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-neutral-400">{tool.duration_ms}ms</span>
+                                    {tool.success ? (
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                    ) : (
+                                      <XCircle className="w-4 h-4 text-red-400" />
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                  <div>
+                                    <span className="text-neutral-500">Input Hash</span>
+                                    <code className="block text-neutral-400 font-mono">{tool.input_hash?.slice(0, 16)}...</code>
+                                  </div>
+                                  <div>
+                                    <span className="text-neutral-500">Output Hash</span>
+                                    <code className="block text-neutral-400 font-mono">{tool.output_hash?.slice(0, 16)}...</code>
+                                  </div>
+                                </div>
+                                {tool.error && (
+                                  <div className="mt-2 text-xs text-red-400">
+                                    Error: {tool.error}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Performance */}
+                      <div className="bg-neutral-800/50 rounded p-4">
+                        <h4 className="text-xs text-neutral-500 mb-3">PERFORMANCE</h4>
+                        <div className="grid grid-cols-4 gap-4">
+                          <div className="text-center">
+                            <p className="text-xs text-neutral-500">Latency</p>
+                            <p className="text-lg font-medium text-white">{traceData.performance.latency_ms}ms</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-neutral-500">Tokens In</p>
+                            <p className="text-lg font-medium text-white">{traceData.performance.tokens_in}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-neutral-500">Tokens Out</p>
+                            <p className="text-lg font-medium text-white">{traceData.performance.tokens_out}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-neutral-500">Cost</p>
+                            <p className="text-lg font-medium text-white">
+                              ${traceData.performance.cost_estimate?.toFixed(4) || '0.0000'}
+                            </p>
+                          </div>
+                        </div>
+                        {traceData.performance.cache_hit && (
+                          <div className="mt-2 text-xs text-emerald-400 text-center">
+                            Cache Hit
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {!traceLoading && !traceData && (
+                    <div className="text-center py-8 text-neutral-500">
+                      No tool data available.
+                      <br />
+                      <span className="text-xs">Click the Trace tab to load data.</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
-            <div className="border-t border-neutral-800 p-4 flex justify-end">
+            <div className="flex-shrink-0 border-t border-neutral-800 p-4 flex justify-end">
               <button
-                onClick={() => setSelectedScenario(null)}
+                onClick={() => {
+                  setSelectedScenario(null);
+                  setModalTab('overview');
+                  setTraceData(null);
+                }}
                 className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
               >
                 Close

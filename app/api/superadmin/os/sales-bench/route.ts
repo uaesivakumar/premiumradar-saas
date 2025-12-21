@@ -222,6 +222,52 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(result);
       }
 
+      case 'trace': {
+        // Get trace/provenance data for a specific scenario result
+        // Phase 1: Trust Layer - Full audit trail
+        if (!suiteKey) {
+          return NextResponse.json({ error: 'suite_key required' }, { status: 400 });
+        }
+        const runId = searchParams.get('run_id');
+        const resultId = searchParams.get('result_id');
+        if (!runId || !resultId) {
+          return NextResponse.json({ error: 'run_id and result_id required' }, { status: 400 });
+        }
+        // Fetch trace data from OS
+        const osBaseUrl = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
+        const traceRes = await fetch(
+          `${osBaseUrl}/api/os/sales-bench/suites/${suiteKey}/runs/${runId}/results/${resultId}/trace`,
+          {
+            headers: {
+              'x-pr-os-token': process.env.PR_OS_TOKEN || '',
+              'X-Request-Source': 'saas-superadmin',
+            },
+          }
+        );
+        const traceData = await traceRes.json();
+        return NextResponse.json(traceData);
+      }
+
+      case 'verify': {
+        // Verify signature integrity of an interaction
+        const interactionId = searchParams.get('interaction_id');
+        if (!interactionId) {
+          return NextResponse.json({ error: 'interaction_id required' }, { status: 400 });
+        }
+        const osBaseUrl = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
+        const verifyRes = await fetch(
+          `${osBaseUrl}/api/os/sales-bench/verify/${interactionId}`,
+          {
+            headers: {
+              'x-pr-os-token': process.env.PR_OS_TOKEN || '',
+              'X-Request-Source': 'saas-superadmin',
+            },
+          }
+        );
+        const verifyData = await verifyRes.json();
+        return NextResponse.json(verifyData);
+      }
+
       default: {
         // Default: list all suites
         const vertical = searchParams.get('vertical') || undefined;
