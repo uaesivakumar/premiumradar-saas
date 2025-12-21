@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -74,8 +74,7 @@ interface RunSummary {
   kill_count?: number;
 }
 
-export default function SuiteDetailPage({ params }: { params: Promise<{ suiteKey: string }> }) {
-  const resolvedParams = use(params);
+export default function SuiteDetailPage({ params }: { params: { suiteKey: string } }) {
   const router = useRouter();
   const [suite, setSuite] = useState<SuiteDetails | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -87,7 +86,7 @@ export default function SuiteDetailPage({ params }: { params: Promise<{ suiteKey
   const [expandedSection, setExpandedSection] = useState<string | null>('scenarios');
   const [error, setError] = useState<string | null>(null);
 
-  const suiteKey = resolvedParams?.suiteKey;
+  const suiteKey = params.suiteKey;
 
   useEffect(() => {
     fetchSuiteDetails();
