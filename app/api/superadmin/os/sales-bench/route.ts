@@ -44,8 +44,110 @@ export async function GET(request: NextRequest) {
 
     switch (action) {
       case 'dashboard': {
-        const result = await salesBench.getDashboard();
-        return NextResponse.json(result);
+        // Build dashboard data from suites list with run history
+        const suitesResult = await salesBench.listSuites({});
+        if (!suitesResult.success) {
+          return NextResponse.json(suitesResult);
+        }
+
+        const suites = suitesResult.data || [];
+        const osBaseUrl = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
+        const prOsToken = process.env.PR_OS_TOKEN || '';
+
+        // Fetch run history for each suite (in parallel, limited)
+        const suiteSummaries = await Promise.all(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          suites.slice(0, 20).map(async (suite: any) => {
+            try {
+              const historyRes = await fetch(
+                `${osBaseUrl}/api/os/sales-bench/suites/${suite.key}/history?limit=2`,
+                { headers: { 'x-pr-os-token': prOsToken } }
+              );
+              const historyData = await historyRes.json();
+              const runs = historyData.data || [];
+              const completedRuns = runs.filter((r: { status: string }) => r.status === 'COMPLETED');
+              const latestRun = completedRuns[0];
+              const previousRun = completedRuns[1];
+
+              return {
+                key: suite.key,
+                name: suite.name,
+                type: suite.stage || 'PRE_ENTRY',
+                vertical: suite.vertical,
+                sub_vertical: suite.sub_vertical,
+                region: suite.region_code,
+                scenario_count: suite.scenario_count,
+                status: suite.status,
+                latest_run: latestRun ? {
+                  run_number: latestRun.run_number,
+                  golden_pass_rate: parseFloat(latestRun.golden_pass_rate) || 0,
+                  kill_containment_rate: parseFloat(latestRun.kill_containment_rate) || 0,
+                  cohens_d: parseFloat(latestRun.cohens_d) || 0,
+                  date: latestRun.started_at,
+                } : undefined,
+                previous_run: previousRun ? {
+                  golden_pass_rate: parseFloat(previousRun.golden_pass_rate) || 0,
+                  kill_containment_rate: parseFloat(previousRun.kill_containment_rate) || 0,
+                } : undefined,
+              };
+            } catch {
+              return {
+                key: suite.key,
+                name: suite.name,
+                type: suite.stage || 'PRE_ENTRY',
+                vertical: suite.vertical,
+                sub_vertical: suite.sub_vertical,
+                region: suite.region_code,
+                scenario_count: suite.scenario_count,
+                status: suite.status,
+              };
+            }
+          })
+        );
+
+        // Calculate stats
+        const suitesWithRuns = suiteSummaries.filter(s => s.latest_run);
+        const totalRuns = suitesWithRuns.reduce((sum, s) => sum + (s.latest_run?.run_number || 0), 0);
+        const avgGolden = suitesWithRuns.length > 0
+          ? suitesWithRuns.reduce((sum, s) => sum + (s.latest_run?.golden_pass_rate || 0), 0) / suitesWithRuns.length
+          : 0;
+        const avgKill = suitesWithRuns.length > 0
+          ? suitesWithRuns.reduce((sum, s) => sum + (s.latest_run?.kill_containment_rate || 0), 0) / suitesWithRuns.length
+          : 0;
+
+        // Find best performer
+        const bestSuite = suitesWithRuns.sort((a, b) => {
+          const scoreA = (a.latest_run?.golden_pass_rate || 0) + (a.latest_run?.kill_containment_rate || 0);
+          const scoreB = (b.latest_run?.golden_pass_rate || 0) + (b.latest_run?.kill_containment_rate || 0);
+          return scoreB - scoreA;
+        })[0];
+
+        // Generate insight
+        let insight = '';
+        if (avgGolden >= 95 && avgKill >= 95) {
+          insight = 'SIVA is performing excellently across all validation suites. Ready for enterprise demos.';
+        } else if (avgGolden >= 80 && avgKill >= 80) {
+          insight = 'SIVA shows strong performance. Minor tuning recommended before GA approval.';
+        } else if (avgGolden < 70 || avgKill < 70) {
+          insight = 'Performance needs attention. Review failing scenarios and adjust SIVA configuration.';
+        } else {
+          insight = `Average Golden: ${avgGolden.toFixed(0)}%, Kill: ${avgKill.toFixed(0)}%. Trending ${avgGolden > 80 ? 'positively' : 'toward target'}.`;
+        }
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            suites: suiteSummaries,
+            stats: {
+              total_suites: suites.length,
+              total_runs: totalRuns,
+              avg_golden_pass: avgGolden,
+              avg_kill_containment: avgKill,
+              best_performer: bestSuite?.name || '-',
+              insight,
+            },
+          },
+        });
       }
 
       case 'status': {
