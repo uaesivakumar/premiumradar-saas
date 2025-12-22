@@ -167,6 +167,7 @@ export default function VerticalsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'identity' | 'targeting' | 'timing' | 'outreach' | 'scoring' | 'advanced'>('identity');
+  const [showCreateVertical, setShowCreateVertical] = useState(false);
 
   // Load verticals from API
   useEffect(() => {
@@ -325,7 +326,10 @@ export default function VerticalsPage() {
           <h1 className="text-lg font-medium text-white">Verticals & Personas</h1>
           <p className="text-neutral-500 text-sm mt-0.5">Configure verticals and SIVA personas</p>
         </div>
-        <button className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors">
+        <button
+          onClick={() => setShowCreateVertical(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
+        >
           <Plus className="w-3.5 h-3.5" />
           Add Vertical
         </button>
@@ -550,6 +554,143 @@ export default function VerticalsPage() {
               <p className="text-xs text-neutral-600">Choose from the left to edit persona config</p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Create Vertical Modal */}
+      {showCreateVertical && (
+        <CreateVerticalModal
+          onClose={() => setShowCreateVertical(false)}
+          onCreate={async () => {
+            // Reload the page to fetch new data
+            window.location.reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Create Vertical Modal Component
+function CreateVerticalModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: () => Promise<void>;
+}) {
+  const [key, setKey] = useState('');
+  const [name, setName] = useState('');
+  const [entityType, setEntityType] = useState('company');
+  const [regions, setRegions] = useState('UAE');
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCreate = async () => {
+    if (!key.trim() || !name.trim()) {
+      setError('Key and Name are required');
+      return;
+    }
+
+    setIsCreating(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/superadmin/controlplane/verticals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: key.toLowerCase().replace(/\s+/g, '_'),
+          name,
+          entity_type: entityType,
+          region_scope: regions.split(',').map((r) => r.trim()),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || result.error || 'Failed to create vertical');
+      }
+
+      await onCreate();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create vertical');
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
+        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-white">Create Vertical</h2>
+          <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Key *</label>
+            <input
+              type="text"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="insurance"
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <p className="text-[10px] text-neutral-600 mt-1">Lowercase snake_case (e.g., real_estate)</p>
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Name *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Insurance"
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Entity Type *</label>
+            <select
+              value={entityType}
+              onChange={(e) => setEntityType(e.target.value)}
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="company">Company</option>
+              <option value="individual">Individual</option>
+              <option value="deal">Deal</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Regions</label>
+            <input
+              type="text"
+              value={regions}
+              onChange={(e) => setRegions(e.target.value)}
+              placeholder="UAE, US"
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <p className="text-[10px] text-neutral-600 mt-1">Comma-separated</p>
+          </div>
+          {error && (
+            <div className="p-2 bg-red-500/10 border border-red-500/20 rounded">
+              <p className="text-xs text-red-400 flex items-center gap-2">
+                <AlertCircle className="w-3 h-3" />
+                {error}
+              </p>
+            </div>
+          )}
+          <button
+            onClick={handleCreate}
+            disabled={!key.trim() || !name.trim() || isCreating}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors disabled:opacity-50"
+          >
+            {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
+            Create Vertical
+          </button>
         </div>
       </div>
     </div>
