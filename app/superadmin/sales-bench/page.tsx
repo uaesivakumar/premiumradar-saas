@@ -255,6 +255,53 @@ function SalesBenchDashboardInner() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('founder');
 
+  // Filter State - for multi-vertical support
+  const [filterVertical, setFilterVertical] = useState<string>('all');
+  const [filterSubVertical, setFilterSubVertical] = useState<string>('all');
+
+  // Derived: unique verticals and sub-verticals from suites
+  const verticals = [...new Set(suites.map(s => s.vertical).filter(Boolean))];
+  const subVerticals = [...new Set(
+    suites
+      .filter(s => filterVertical === 'all' || s.vertical === filterVertical)
+      .map(s => s.sub_vertical)
+      .filter(Boolean)
+  )];
+
+  // Filtered suites based on selected filters
+  const filteredSuites = suites.filter(s => {
+    if (filterVertical !== 'all' && s.vertical !== filterVertical) return false;
+    if (filterSubVertical !== 'all' && s.sub_vertical !== filterSubVertical) return false;
+    return true;
+  });
+
+  // Recalculate stats for filtered suites
+  const filteredStats = (() => {
+    if (!stats) return null;
+    const suitesWithRuns = filteredSuites.filter(s => s.latest_run?.golden_pass_rate != null);
+    const totalRuns = suitesWithRuns.length;
+    const avgGolden = suitesWithRuns.length > 0
+      ? suitesWithRuns.reduce((sum, s) => sum + (s.latest_run?.golden_pass_rate || 0), 0) / suitesWithRuns.length
+      : 0;
+    const avgKill = suitesWithRuns.length > 0
+      ? suitesWithRuns.reduce((sum, s) => sum + (s.latest_run?.kill_containment_rate || 0), 0) / suitesWithRuns.length
+      : 0;
+    const bestSuite = suitesWithRuns.sort((a, b) => {
+      const scoreA = (a.latest_run?.golden_pass_rate || 0) + (a.latest_run?.kill_containment_rate || 0);
+      const scoreB = (b.latest_run?.golden_pass_rate || 0) + (b.latest_run?.kill_containment_rate || 0);
+      return scoreB - scoreA;
+    })[0];
+
+    return {
+      ...stats,
+      total_suites: filteredSuites.length,
+      total_runs: totalRuns,
+      avg_golden_pass: avgGolden,
+      avg_kill_containment: avgKill,
+      best_performer: bestSuite?.name || '-',
+    };
+  })();
+
   // Parity Check State
   const [parityStatus, setParityStatus] = useState<ParityStatus | null>(null);
   const [parityResult, setParityResult] = useState<ParityResult | null>(null);
@@ -433,6 +480,33 @@ function SalesBenchDashboardInner() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Vertical Filter */}
+          <select
+            value={filterVertical}
+            onChange={(e) => {
+              setFilterVertical(e.target.value);
+              setFilterSubVertical('all'); // Reset sub-vertical when vertical changes
+            }}
+            className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-200 focus:outline-none focus:border-violet-500"
+          >
+            <option value="all">All Verticals</option>
+            {verticals.map(v => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+
+          {/* Sub-Vertical Filter */}
+          <select
+            value={filterSubVertical}
+            onChange={(e) => setFilterSubVertical(e.target.value)}
+            className="px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-neutral-200 focus:outline-none focus:border-violet-500"
+          >
+            <option value="all">All Sub-Verticals</option>
+            {subVerticals.map(sv => (
+              <option key={sv} value={sv}>{sv}</option>
+            ))}
+          </select>
+
           <button
             onClick={handleViewToggle}
             className="flex items-center gap-2 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm transition-colors"
@@ -461,7 +535,7 @@ function SalesBenchDashboardInner() {
       </div>
 
       {/* Founder View: Trust Summary */}
-      {viewMode === 'founder' && stats && (
+      {viewMode === 'founder' && filteredStats && (
         <>
           {/* Governance Metrics (Read-Only) */}
           <div className="grid grid-cols-4 gap-4 mb-6">
@@ -472,8 +546,8 @@ function SalesBenchDashboardInner() {
                   GOLDEN PATH COMPLIANCE
                   <Info className="w-3 h-3 opacity-50" />
                 </div>
-                <p className={`text-3xl font-bold ${getComplianceColor(stats.avg_golden_pass ?? 0)}`}>
-                  {(stats.avg_golden_pass ?? 0).toFixed(0)}%
+                <p className={`text-3xl font-bold ${getComplianceColor(filteredStats.avg_golden_pass ?? 0)}`}>
+                  {(filteredStats.avg_golden_pass ?? 0).toFixed(0)}%
                 </p>
                 <p className="text-xs text-neutral-600 mt-1">Observational metric only</p>
               </div>
@@ -485,8 +559,8 @@ function SalesBenchDashboardInner() {
                   POLICY CONTAINMENT RATE
                   <Info className="w-3 h-3 opacity-50" />
                 </div>
-                <p className={`text-3xl font-bold ${getComplianceColor(stats.avg_kill_containment ?? 0)}`}>
-                  {(stats.avg_kill_containment ?? 0).toFixed(0)}%
+                <p className={`text-3xl font-bold ${getComplianceColor(filteredStats.avg_kill_containment ?? 0)}`}>
+                  {(filteredStats.avg_kill_containment ?? 0).toFixed(0)}%
                 </p>
                 <p className="text-xs text-neutral-600 mt-1">Observational metric only</p>
               </div>
@@ -497,9 +571,9 @@ function SalesBenchDashboardInner() {
                 VALIDATION RUNS
               </div>
               <p className="text-3xl font-bold text-white">
-                {stats.total_runs}
+                {filteredStats.total_runs}
               </p>
-              <p className="text-xs text-neutral-600 mt-1">Across {stats.total_suites} suites</p>
+              <p className="text-xs text-neutral-600 mt-1">Across {filteredStats.total_suites} suites</p>
             </div>
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
               <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
@@ -507,7 +581,7 @@ function SalesBenchDashboardInner() {
                 REFERENCE SUITE
               </div>
               <p className="text-lg font-bold text-neutral-200 truncate">
-                {stats.best_performer || '-'}
+                {filteredStats.best_performer || '-'}
               </p>
               <p className="text-xs text-neutral-600 mt-1">Baseline for comparison</p>
             </div>
@@ -680,7 +754,7 @@ function SalesBenchDashboardInner() {
       )}
 
       {/* Operator View: Raw Metrics */}
-      {viewMode === 'operator' && stats && (
+      {viewMode === 'operator' && filteredStats && (
         <div className="grid grid-cols-4 gap-4 mb-6">
           <MetricTooltip>
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
@@ -689,7 +763,7 @@ function SalesBenchDashboardInner() {
                 GOLDEN PATH COMPLIANCE
               </div>
               <p className="text-3xl font-bold text-neutral-200">
-                {(stats.avg_golden_pass ?? 0).toFixed(1)}%
+                {(filteredStats.avg_golden_pass ?? 0).toFixed(1)}%
               </p>
             </div>
           </MetricTooltip>
@@ -700,7 +774,7 @@ function SalesBenchDashboardInner() {
                 POLICY CONTAINMENT RATE
               </div>
               <p className="text-3xl font-bold text-neutral-200">
-                {(stats.avg_kill_containment ?? 0).toFixed(1)}%
+                {(filteredStats.avg_kill_containment ?? 0).toFixed(1)}%
               </p>
             </div>
           </MetricTooltip>
@@ -709,14 +783,14 @@ function SalesBenchDashboardInner() {
               <FlaskConical className="w-3 h-3" />
               VALIDATION RUNS
             </div>
-            <p className="text-3xl font-bold text-white">{stats.total_runs}</p>
+            <p className="text-3xl font-bold text-white">{filteredStats.total_runs}</p>
           </div>
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
             <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
               <FileCheck className="w-3 h-3" />
               REFERENCE SUITE
             </div>
-            <p className="text-lg font-bold text-neutral-200 truncate">{stats.best_performer || '-'}</p>
+            <p className="text-lg font-bold text-neutral-200 truncate">{filteredStats.best_performer || '-'}</p>
           </div>
         </div>
       )}
@@ -728,9 +802,9 @@ function SalesBenchDashboardInner() {
           <span className="text-xs text-neutral-500">Frozen suites — Metrics are observational</span>
         </div>
 
-        {suites.length === 0 ? (
+        {filteredSuites.length === 0 ? (
           <div className="p-8 text-center text-neutral-500">
-            No validation suites found.
+            {suites.length === 0 ? 'No validation suites found.' : 'No suites match the selected filters.'}
           </div>
         ) : (
           <table className="w-full">
@@ -758,7 +832,7 @@ function SalesBenchDashboardInner() {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/50">
-              {suites.map((suite) => {
+              {filteredSuites.map((suite) => {
                 const typeInfo = formatType(suite.type);
 
                 return (

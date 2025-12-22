@@ -1,0 +1,341 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PremiumRadar Session State v2.1",
+  "description": "Schema with Feature Wiring Contracts and corrected drift calculation",
+  "type": "object",
+  "required": ["session_id", "started_at", "sprint", "goal", "service", "todos", "integration", "feature_contracts", "environment"],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ended_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "sprint": {
+      "type": "string",
+      "pattern": "^S\\d+$"
+    },
+    "goal": {
+      "type": "string",
+      "description": "IMMUTABLE after creation"
+    },
+    "service": {
+      "type": "string",
+      "enum": ["SaaS", "OS", "Shared"]
+    },
+    "repository": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+
+    "environment": {
+      "type": "object",
+      "required": ["staging_base_url", "staging_service_name", "os_service_name"],
+      "description": "Environment identifiers - NO SECRETS",
+      "properties": {
+        "staging_base_url": {
+          "type": "string",
+          "description": "Base URL for staging (e.g., https://upr.sivakumar.ai)"
+        },
+        "staging_service_name": {
+          "type": "string",
+          "description": "Cloud Run service name for staging"
+        },
+        "os_service_name": {
+          "type": "string",
+          "description": "Cloud Run service name for OS"
+        },
+        "health_endpoint": {
+          "type": "string",
+          "default": "/api/health"
+        },
+        "diag_endpoint": {
+          "type": "string",
+          "default": "/__diag"
+        },
+        "notion_available": {
+          "type": "boolean",
+          "description": "Whether Notion API is accessible"
+        },
+        "notion_error": {
+          "type": ["string", "null"],
+          "description": "Reason if Notion unavailable"
+        }
+      }
+    },
+
+    "todos": {
+      "type": "object",
+      "required": ["original_count", "current_count", "scope_ratio"],
+      "properties": {
+        "original_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "IMMUTABLE - Initial todo count"
+        },
+        "current_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "completed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "added_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Todos added after start"
+        },
+        "scope_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "description": "CORRECTED: current_count / original_count"
+        },
+        "scope_added_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "description": "added_count / original_count"
+        },
+        "drift_status": {
+          "type": "string",
+          "enum": ["on_track", "warn", "pause", "blocked"],
+          "description": "Based on scope_ratio thresholds"
+        },
+        "drift_acknowledged": {
+          "type": "boolean",
+          "default": false
+        },
+        "original_todos": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IMMUTABLE - Original todo list"
+        }
+      }
+    },
+
+    "feature_contracts": {
+      "type": "array",
+      "description": "MANDATORY - Feature Wiring Contracts generated at /start",
+      "items": {
+        "type": "object",
+        "required": ["feature_id", "feature_name", "ui_entrypoint", "api_endpoints", "staging_verification_steps"],
+        "properties": {
+          "feature_id": {
+            "type": "string",
+            "description": "Unique ID (e.g., S48-F1)"
+          },
+          "feature_name": {
+            "type": "string"
+          },
+          "ui_entrypoint": {
+            "type": "object",
+            "required": ["type", "path"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["page", "route", "component", "api_only", "background"]
+              },
+              "path": {
+                "type": "string",
+                "description": "File path or URL path"
+              },
+              "renders_at": {
+                "type": "string",
+                "description": "URL where this renders (for pages)"
+              }
+            }
+          },
+          "api_endpoints": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["method", "path"],
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+                },
+                "path": {
+                  "type": "string",
+                  "description": "API path (e.g., /api/user/preferences)"
+                },
+                "required_request_fields": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Minimal required fields in request body"
+                },
+                "expected_response_shape": {
+                  "type": "object",
+                  "description": "Minimal expected response structure",
+                  "properties": {
+                    "success_status": { "type": "integer" },
+                    "required_fields": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "test_ids": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": { "type": "string" },
+                "test_name": { "type": "string" }
+              }
+            },
+            "description": "Explicit test files and test names"
+          },
+          "staging_verification_steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "target", "expected"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["http_status", "json_field", "health_check", "smoke_test"]
+                },
+                "target": {
+                  "type": "string",
+                  "description": "URL or endpoint to check"
+                },
+                "method": {
+                  "type": "string",
+                  "default": "GET"
+                },
+                "body": {
+                  "type": "object",
+                  "description": "Request body if needed"
+                },
+                "expected": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "integer" },
+                    "contains_field": { "type": "string" },
+                    "field_value": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "verification_status": {
+            "type": "object",
+            "properties": {
+              "ui_renders": { "type": ["boolean", "null"] },
+              "api_responds": { "type": ["boolean", "null"] },
+              "tests_pass": { "type": ["boolean", "null"] },
+              "staging_verified": { "type": ["boolean", "null"] },
+              "last_verified_at": { "type": ["string", "null"] },
+              "failure_reason": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at_tool_call", "timestamp", "scope_ratio", "drift_status"],
+        "properties": {
+          "at_tool_call": { "type": "integer" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "scope_ratio": { "type": "number" },
+          "drift_status": { "type": "string" },
+          "completed_count": { "type": "integer" },
+          "current_count": { "type": "integer" }
+        }
+      }
+    },
+
+    "integration": {
+      "type": "object",
+      "required": ["required", "verified", "contracts_defined"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "verified": { "type": "boolean" },
+        "verified_at": { "type": ["string", "null"] },
+        "contracts_defined": {
+          "type": "boolean",
+          "description": "True only if feature_contracts is non-empty"
+        },
+        "contracts_verified_count": { "type": "integer" },
+        "contracts_failed_count": { "type": "integer" },
+        "bypassed": { "type": "boolean", "default": false },
+        "bypass_reason": { "type": ["string", "null"] }
+      }
+    },
+
+    "locks": {
+      "type": "object",
+      "description": "Single-writer file locks",
+      "properties": {
+        "active_locks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "file_path": { "type": "string" },
+              "locked_by": { "type": "string", "description": "Agent ID" },
+              "locked_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "max_concurrent_writers": {
+          "type": "integer",
+          "default": 1,
+          "description": "Enforced: only 1 implementation agent at a time"
+        },
+        "current_writer": {
+          "type": ["string", "null"],
+          "description": "Agent ID of current implementation agent"
+        }
+      }
+    },
+
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "scope_id": { "type": "string" },
+        "staging_deploy_approved": { "type": "boolean", "default": true },
+        "prod_deploy_approved": { "type": "boolean", "default": false },
+        "prod_deploy_approved_at": { "type": ["string", "null"] }
+      }
+    },
+
+    "sub_agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "type": { "type": "string" },
+          "status": { "type": "string" },
+          "is_writer": { "type": "boolean", "description": "True if this is an implementation agent" }
+        }
+      }
+    },
+
+    "certification": {
+      "type": "object",
+      "properties": {
+        "passed": { "type": "boolean" },
+        "certified_at": { "type": "string" },
+        "all_contracts_verified": { "type": "boolean" }
+      }
+    }
+  }
+}

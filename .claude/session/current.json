@@ -1,0 +1,399 @@
+{
+  "session_id": "pilot-001-saas-deal-eval",
+  "started_at": "2025-12-21T00:00:00Z",
+  "sprint": "PILOT-001",
+  "goal": "Validate sub-agent execution architecture with saas_deal_evaluation vertical",
+  "service": "OS",
+  "repository": "/Users/skc/Projects/UPR/premiumradar-saas",
+  "branch": "feat/pilot-saas-deal-evaluation",
+
+  "pilot": {
+    "vertical": "saas_deal_evaluation",
+    "sub_vertical": "cfo_deal_review",
+    "region": "US",
+    "persona": "skeptical_cfo",
+    "entity_type": "deal",
+    "expected_outcomes": ["APPROVE", "NEEDS_REVIEW", "REJECT"]
+  },
+
+  "environment": {
+    "staging_base_url": "https://upr.sivakumar.ai",
+    "staging_service_name": "premiumradar-saas-staging",
+    "os_service_name": "upr-os-service",
+    "os_base_url": "https://upr-os-service-191599223867.us-central1.run.app",
+    "health_endpoint": "/api/health",
+    "diag_endpoint": "/__diag",
+    "notion_available": true,
+    "notion_error": null
+  },
+
+  "todos": {
+    "original_count": 13,
+    "current_count": 13,
+    "completed_count": 2,
+    "added_count": 0,
+    "scope_ratio": 1.0,
+    "scope_added_ratio": 0.0,
+    "drift_status": "on_track",
+    "drift_acknowledged": false,
+    "original_todos": [
+      "Initialize pilot session state",
+      "Explore Super Admin and OS table structure",
+      "Generate Feature Wiring Contract",
+      "Display contract for founder review",
+      "Implement vertical creation in Super Admin",
+      "Implement OS persistence layer",
+      "Implement runtime vertical resolution",
+      "Implement persona policy application",
+      "Implement SIVA decision endpoint",
+      "Add deterministic output tests",
+      "Run /integrator",
+      "Run /qa",
+      "Generate pilot report"
+    ]
+  },
+
+  "feature_contracts": [
+    {
+      "feature_id": "PILOT-F1",
+      "feature_name": "Super Admin Vertical Create/Edit Flow",
+      "ui_entrypoint": {
+        "type": "page",
+        "path": "app/dashboard/admin/config/verticals/page.tsx",
+        "renders_at": "/dashboard/admin/config/verticals"
+      },
+      "api_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/admin/vertical-config",
+          "required_request_fields": ["vertical", "subVertical", "regionCountry", "config"],
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "data"]
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/admin/vertical-config",
+          "required_request_fields": [],
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "data"]
+          }
+        }
+      ],
+      "test_ids": [
+        {
+          "file": "tests/api/vertical-config.test.ts",
+          "test_name": "should create saas_deal_evaluation vertical config"
+        },
+        {
+          "file": "tests/api/vertical-config.test.ts",
+          "test_name": "should reject duplicate vertical config"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "http_status",
+          "target": "/api/admin/vertical-config?vertical=saas_deal_evaluation&subVertical=cfo_deal_review&region=US",
+          "method": "GET",
+          "expected": { "status": 200 }
+        }
+      ],
+      "verification_status": null
+    },
+    {
+      "feature_id": "PILOT-F2",
+      "feature_name": "OS Persistence Layer for saas_deal_evaluation",
+      "ui_entrypoint": {
+        "type": "api_only",
+        "path": "server/db.js"
+      },
+      "api_endpoints": [],
+      "database_tables": [
+        {
+          "table": "os_verticals",
+          "operation": "INSERT",
+          "required_columns": ["id", "key", "name", "entity_type", "is_active"]
+        },
+        {
+          "table": "os_sub_verticals",
+          "operation": "INSERT",
+          "required_columns": ["id", "vertical_id", "key", "name", "is_active"]
+        },
+        {
+          "table": "os_personas",
+          "operation": "INSERT",
+          "required_columns": ["id", "sub_vertical_id", "key", "name", "is_active"]
+        },
+        {
+          "table": "os_persona_policies",
+          "operation": "INSERT",
+          "required_columns": ["persona_id", "decision_thresholds", "edge_case_rules"]
+        }
+      ],
+      "test_ids": [
+        {
+          "file": "tests/db/os-persistence.test.ts",
+          "test_name": "should persist saas_deal_evaluation vertical"
+        },
+        {
+          "file": "tests/db/os-persistence.test.ts",
+          "test_name": "should persist cfo_deal_review sub-vertical"
+        },
+        {
+          "file": "tests/db/os-persistence.test.ts",
+          "test_name": "should persist skeptical_cfo persona with policy"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "sql_query",
+          "query": "SELECT * FROM os_verticals WHERE key = 'saas_deal_evaluation'",
+          "expected": { "row_count": 1 }
+        }
+      ],
+      "verification_status": null
+    },
+    {
+      "feature_id": "PILOT-F3",
+      "feature_name": "Runtime Vertical Resolution",
+      "ui_entrypoint": {
+        "type": "api_only",
+        "path": "routes/os/vertical-resolver.js"
+      },
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/os/resolve-vertical",
+          "required_request_fields": [],
+          "query_params": ["vertical", "subVertical", "region"],
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "vertical_id", "sub_vertical_id", "persona_id", "config"]
+          }
+        }
+      ],
+      "test_ids": [
+        {
+          "file": "tests/api/vertical-resolver.test.ts",
+          "test_name": "should resolve saas_deal_evaluation to correct persona"
+        },
+        {
+          "file": "tests/api/vertical-resolver.test.ts",
+          "test_name": "should return VERTICAL_NOT_CONFIGURED for unknown vertical"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "http_status",
+          "target": "/api/os/resolve-vertical?vertical=saas_deal_evaluation&subVertical=cfo_deal_review&region=US",
+          "method": "GET",
+          "expected": { "status": 200 }
+        },
+        {
+          "type": "json_field",
+          "target": "/api/os/resolve-vertical?vertical=saas_deal_evaluation&subVertical=cfo_deal_review&region=US",
+          "method": "GET",
+          "expected": { "contains_field": "persona_id" }
+        }
+      ],
+      "verification_status": null
+    },
+    {
+      "feature_id": "PILOT-F4",
+      "feature_name": "Persona Policy Application",
+      "ui_entrypoint": {
+        "type": "api_only",
+        "path": "routes/os/persona-policy.js"
+      },
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/os/persona-policy",
+          "query_params": ["persona_id"],
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "persona", "policy"]
+          }
+        }
+      ],
+      "policy_schema": {
+        "skeptical_cfo": {
+          "decision_thresholds": {
+            "approve_min_score": 0.85,
+            "reject_max_score": 0.40,
+            "needs_review_range": [0.40, 0.85]
+          },
+          "edge_case_rules": {
+            "margin_below_20_percent": "REJECT",
+            "customer_concentration_above_40_percent": "NEEDS_REVIEW",
+            "negative_cash_flow_trend": "REJECT",
+            "no_financial_data": "NEEDS_REVIEW"
+          },
+          "evaluation_weights": {
+            "financial_health": 0.35,
+            "market_position": 0.20,
+            "deal_terms": 0.25,
+            "risk_factors": 0.20
+          }
+        }
+      },
+      "test_ids": [
+        {
+          "file": "tests/api/persona-policy.test.ts",
+          "test_name": "should load skeptical_cfo policy"
+        },
+        {
+          "file": "tests/api/persona-policy.test.ts",
+          "test_name": "should apply margin_below_20_percent edge case"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "json_field",
+          "target": "/api/os/persona-policy",
+          "method": "GET",
+          "expected": { "contains_field": "decision_thresholds" }
+        }
+      ],
+      "verification_status": null
+    },
+    {
+      "feature_id": "PILOT-F5",
+      "feature_name": "SIVA Decision Endpoint for Deal Evaluation",
+      "ui_entrypoint": {
+        "type": "api_only",
+        "path": "routes/os/siva-decision.js"
+      },
+      "api_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/os/siva/evaluate-deal",
+          "required_request_fields": ["deal_id", "vertical", "subVertical", "region", "deal_data"],
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "decision", "score", "reasoning", "edge_cases_triggered"]
+          }
+        }
+      ],
+      "decision_outputs": ["APPROVE", "NEEDS_REVIEW", "REJECT"],
+      "test_ids": [
+        {
+          "file": "tests/api/siva-decision.test.ts",
+          "test_name": "should return APPROVE for high-margin healthy deal"
+        },
+        {
+          "file": "tests/api/siva-decision.test.ts",
+          "test_name": "should return REJECT for margin below 20 percent"
+        },
+        {
+          "file": "tests/api/siva-decision.test.ts",
+          "test_name": "should return NEEDS_REVIEW for customer concentration above 40 percent"
+        },
+        {
+          "file": "tests/api/siva-decision.test.ts",
+          "test_name": "should be deterministic for same input"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "http_status",
+          "target": "/api/os/siva/evaluate-deal",
+          "method": "POST",
+          "body": {
+            "deal_id": "test-001",
+            "vertical": "saas_deal_evaluation",
+            "subVertical": "cfo_deal_review",
+            "region": "US",
+            "deal_data": {
+              "arr": 500000,
+              "gross_margin": 0.75,
+              "customer_count": 10,
+              "largest_customer_revenue_share": 0.15,
+              "cash_flow_trend": "positive"
+            }
+          },
+          "expected": { "status": 200 }
+        },
+        {
+          "type": "json_field",
+          "target": "/api/os/siva/evaluate-deal",
+          "method": "POST",
+          "body": {
+            "deal_id": "test-reject-001",
+            "vertical": "saas_deal_evaluation",
+            "subVertical": "cfo_deal_review",
+            "region": "US",
+            "deal_data": {
+              "arr": 100000,
+              "gross_margin": 0.15,
+              "customer_count": 3,
+              "largest_customer_revenue_share": 0.50,
+              "cash_flow_trend": "negative"
+            }
+          },
+          "expected": { "contains_field": "decision", "field_value": "REJECT" }
+        }
+      ],
+      "verification_status": null
+    },
+    {
+      "feature_id": "PILOT-F6",
+      "feature_name": "Deterministic Output Validation",
+      "ui_entrypoint": {
+        "type": "background",
+        "path": "tests/determinism/siva-determinism.test.ts"
+      },
+      "api_endpoints": [],
+      "test_ids": [
+        {
+          "file": "tests/determinism/siva-determinism.test.ts",
+          "test_name": "should produce identical output for 10 consecutive calls with same input"
+        },
+        {
+          "file": "tests/determinism/siva-determinism.test.ts",
+          "test_name": "should apply edge case rules consistently"
+        },
+        {
+          "file": "tests/determinism/siva-determinism.test.ts",
+          "test_name": "should not reference banking-specific logic"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "determinism_check",
+          "target": "/api/os/siva/evaluate-deal",
+          "iterations": 5,
+          "expected": { "all_identical": true }
+        }
+      ],
+      "verification_status": null
+    }
+  ],
+
+  "checkpoints": [],
+
+  "integration": {
+    "required": true,
+    "verified": false,
+    "contracts_defined": true,
+    "contracts_verified_count": 0,
+    "contracts_failed_count": 0,
+    "bypassed": false
+  },
+
+  "locks": {
+    "active_locks": [],
+    "max_concurrent_writers": 1,
+    "current_writer": null
+  },
+
+  "permissions": {
+    "scope_id": "pilot-001-permit",
+    "staging_deploy_approved": true,
+    "prod_deploy_approved": false
+  },
+
+  "sub_agents": []
+}
