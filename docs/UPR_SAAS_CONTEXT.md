@@ -927,7 +927,50 @@ Changes require:
 
 **No incremental "small tweaks".**
 
-### 15.12 Database Tables (Reference)
+### 15.12 Migration Status (Completed 2025-12-22)
+
+**Control Plane v2.0 Migration: COMPLETE**
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 0 | Safety Locks (freeze vertical expansion) | ✅ Complete |
+| Phase 1.1 | Deprecate entity_type/region_scope on os_verticals | ✅ Complete |
+| Phase 1.2 | Add primary_entity_type to os_sub_verticals | ✅ Complete |
+| Phase 1.3 | Add scope/region_code to os_personas | ✅ Complete |
+| Phase 1.4 | Add policy lifecycle status to os_persona_policies | ✅ Complete |
+| Phase 2 | API enforcement layer updates | ✅ Complete |
+| Phase 3 | Runtime hardening (kill silent failures) | ✅ Complete |
+| Phase 4 | SIVA routing de-hardcoding (deprecation notices) | ✅ Complete |
+| Phase 5 | Workspace binding validation | ✅ Complete |
+
+**Key Implementation Details:**
+
+1. **Database Schema:**
+   - `os_sub_verticals.primary_entity_type` - REQUIRED, immutable, CHECK constraint
+   - `os_sub_verticals.related_entity_types` - JSONB array
+   - `os_personas.scope` - LOCAL/REGIONAL/GLOBAL (default: GLOBAL)
+   - `os_personas.region_code` - required for LOCAL/REGIONAL scope
+   - `os_persona_policies.status` - DRAFT/STAGED/ACTIVE/DEPRECATED
+   - `os_persona_policies.activated_at` - timestamp when activated
+
+2. **API Enforcement:**
+   - POST sub-verticals requires `primary_entity_type`
+   - PATCH sub-verticals blocks changes to `primary_entity_type` (immutable)
+   - POST personas validates scope/region_code combinations
+   - PUT workspace bindings validates all 5 layers are active
+
+3. **Runtime Resolution:**
+   - Persona resolution follows LOCAL → REGIONAL → GLOBAL inheritance
+   - Policy MUST be ACTIVE status (hard fail, no silent degradation)
+   - All errors return explicit error codes (VERTICAL_NOT_CONFIGURED, etc.)
+
+4. **Migration File:** `prisma/migrations/controlplane_v2_phase1.sql`
+
+**Git Commits:**
+- `feat(controlplane): Implement Control Plane v2.0 migration (Phases 0-3)`
+- `feat(controlplane): Complete Control Plane v2.0 migration (Phases 4-5)`
+
+### 15.13 Database Tables (Reference)
 
 | Table | Purpose |
 |-------|---------|
@@ -938,7 +981,7 @@ Changes require:
 | `os_workspace_bindings` | Tenant → vertical/sub-vertical/persona bindings |
 | `os_controlplane_audit` | Immutable audit log of all changes |
 
-### 15.13 API Endpoints (Super Admin Only)
+### 15.14 API Endpoints (Super Admin Only)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
