@@ -6,10 +6,19 @@
  *
  * Contract Rules:
  * - key: required, lowercase snake_case
- * - entity_type: must be 'deal' | 'company' | 'individual'
- * - region_scope: must be array with at least one region
+ * - entity_type: DEPRECATED (moving to sub-vertical in v2.0)
+ * - region_scope: DEPRECATED (moving to persona in v2.0)
  * - All writes logged to os_controlplane_audit
+ *
+ * MIGRATION LOCK (Control Plane v2.0):
+ * - New vertical creation is FROZEN during migration
+ * - Only existing verticals can be edited (name, is_active)
+ * - This lock will be removed after v2.0 migration completes
  */
+
+// PHASE 0: Migration safety lock - prevents schema drift during v2.0 migration
+const VERTICAL_CREATION_LOCKED = true;
+const VERTICAL_CREATION_LOCK_REASON = 'Control Plane v2.0 migration in progress. New vertical creation is temporarily disabled. Contact admin to unlock.';
 
 import { NextRequest } from 'next/server';
 import { query, insert } from '@/lib/db/client';
@@ -63,6 +72,8 @@ export async function GET() {
 /**
  * POST /api/superadmin/verticals
  * Create new vertical
+ *
+ * LOCKED: Control Plane v2.0 migration in progress
  */
 export async function POST(request: NextRequest) {
   const sessionResult = await validateSuperAdminSession();
@@ -71,6 +82,23 @@ export async function POST(request: NextRequest) {
   }
 
   const actorUser = sessionResult.session?.email || 'unknown';
+
+  // PHASE 0: Migration safety lock
+  if (VERTICAL_CREATION_LOCKED) {
+    await logControlPlaneAudit({
+      actorUser,
+      action: 'create_vertical',
+      targetType: 'vertical',
+      requestJson: { locked: true },
+      success: false,
+      errorMessage: VERTICAL_CREATION_LOCK_REASON,
+    });
+    return Response.json({
+      success: false,
+      error: 'MIGRATION_LOCKED',
+      message: VERTICAL_CREATION_LOCK_REASON,
+    }, { status: 423 }); // 423 Locked
+  }
 
   try {
     const body = await request.json();

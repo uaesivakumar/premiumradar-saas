@@ -571,6 +571,9 @@ export default function VerticalsPage() {
   );
 }
 
+// PHASE 0: Migration lock status
+const VERTICAL_CREATION_LOCKED = true;
+
 // Create Vertical Modal Component
 function CreateVerticalModal({
   onClose,
@@ -585,6 +588,49 @@ function CreateVerticalModal({
   const [regions, setRegions] = useState('UAE');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // PHASE 0: Show lock message during migration
+  if (VERTICAL_CREATION_LOCKED) {
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-neutral-900 border border-amber-800/50 rounded-xl w-full max-w-md">
+          <div className="p-4 border-b border-amber-800/50 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-amber-400 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Migration in Progress
+            </h2>
+            <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <p className="text-sm text-amber-300">
+                <strong>Control Plane v2.0 Migration</strong>
+              </p>
+              <p className="text-xs text-amber-300/80 mt-1">
+                New vertical creation is temporarily disabled while we upgrade the system architecture.
+              </p>
+            </div>
+            <div className="text-xs text-neutral-500 space-y-1">
+              <p>During migration:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-neutral-600">
+                <li>Existing verticals can be edited</li>
+                <li>Sub-verticals and personas can be managed</li>
+                <li>New vertical creation is blocked</li>
+              </ul>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-full px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
+            >
+              Understood
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleCreate = async () => {
     if (!key.trim() || !name.trim()) {
