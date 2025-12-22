@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, ReactNode, ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FlaskConical,
@@ -13,7 +13,64 @@ import {
   Shield,
   Target,
   Clock,
+  AlertTriangle,
 } from 'lucide-react';
+
+// Error Boundary to catch and display errors
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Sales-Bench Error:', error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-black flex items-center justify-center p-6">
+          <div className="max-w-lg bg-red-500/10 border border-red-500/30 rounded-lg p-6">
+            <div className="flex items-center gap-2 text-red-400 mb-4">
+              <AlertTriangle className="w-5 h-5" />
+              <h2 className="font-medium">Sales-Bench Error</h2>
+            </div>
+            <p className="text-neutral-300 text-sm mb-4">
+              {this.state.error?.message || 'An unknown error occurred'}
+            </p>
+            <pre className="bg-black/50 p-3 rounded text-xs text-neutral-400 overflow-auto max-h-40">
+              {this.state.error?.stack || 'No stack trace available'}
+            </pre>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 interface SuiteSummary {
   key: string;
@@ -46,7 +103,7 @@ interface DashboardStats {
   insight: string;
 }
 
-export default function SalesBenchDashboard() {
+function SalesBenchDashboardInner() {
   const router = useRouter();
   const [suites, setSuites] = useState<SuiteSummary[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -319,5 +376,14 @@ export default function SalesBenchDashboard() {
         Click any suite to view detailed results, run validation, or download reports.
       </div>
     </div>
+  );
+}
+
+// Wrap with ErrorBoundary to catch and display errors
+export default function SalesBenchDashboard() {
+  return (
+    <ErrorBoundary>
+      <SalesBenchDashboardInner />
+    </ErrorBoundary>
   );
 }
