@@ -57,12 +57,19 @@ export default function SalesBenchDashboard() {
     try {
       const res = await fetch('/api/superadmin/os/sales-bench?action=dashboard');
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.data) {
         setSuites(data.data.suites || []);
         setStats(data.data.stats || null);
+      } else {
+        // API error or unauthorized - show empty state
+        console.warn('Sales-Bench API response:', data.error || 'Unknown error');
+        setSuites([]);
+        setStats(null);
       }
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
+      setSuites([]);
+      setStats(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -143,8 +150,8 @@ export default function SalesBenchDashboard() {
               <Zap className="w-3 h-3" />
               GOLDEN PASS RATE
             </div>
-            <p className={`text-3xl font-bold ${getScoreColor(stats.avg_golden_pass)}`}>
-              {stats.avg_golden_pass.toFixed(0)}%
+            <p className={`text-3xl font-bold ${getScoreColor(stats.avg_golden_pass ?? 0)}`}>
+              {(stats.avg_golden_pass ?? 0).toFixed(0)}%
             </p>
             <p className="text-xs text-neutral-600 mt-1">Qualified leads engaged</p>
           </div>
@@ -153,8 +160,8 @@ export default function SalesBenchDashboard() {
               <Shield className="w-3 h-3" />
               KILL CONTAINMENT
             </div>
-            <p className={`text-3xl font-bold ${getScoreColor(stats.avg_kill_containment)}`}>
-              {stats.avg_kill_containment.toFixed(0)}%
+            <p className={`text-3xl font-bold ${getScoreColor(stats.avg_kill_containment ?? 0)}`}>
+              {(stats.avg_kill_containment ?? 0).toFixed(0)}%
             </p>
             <p className="text-xs text-neutral-600 mt-1">Bad leads blocked</p>
           </div>
