@@ -403,6 +403,45 @@ export async function POST(request: NextRequest) {
         const result = await salesBench.runParityCertification({
           triggered_by: triggeredBy,
         });
+
+        // Transform OS response to expected UI format
+        // OS returns { success, certification: { certified, ... } }
+        // UI expects { success, data: { status: 'PARITY_VERIFIED' | 'PARITY_BROKEN', ... } }
+        const osResult = result as { success: boolean; certification?: unknown };
+        if (osResult.success && osResult.certification) {
+          const cert = osResult.certification as {
+            certification_id: string;
+            timestamp: string;
+            total_tests: number;
+            passed: number;
+            failed: number;
+            certified: boolean;
+            results: Array<{
+              test_case: string;
+              parity: string;
+              path_a?: { trace?: { code_commit_sha?: string } };
+            }>;
+            summary: string;
+          };
+
+          return NextResponse.json({
+            success: true,
+            data: {
+              certification_id: cert.certification_id,
+              status: cert.certified ? 'PARITY_VERIFIED' : 'PARITY_BROKEN',
+              total_tests: cert.total_tests,
+              passed: cert.passed,
+              failed: cert.failed,
+              test_cases: cert.results?.map(r => ({
+                case_name: r.test_case,
+                passed: r.parity === 'PASS',
+              })) || [],
+              timestamp: cert.timestamp,
+              commit_sha: cert.results?.[0]?.path_a?.trace?.code_commit_sha,
+            },
+          });
+        }
+
         return NextResponse.json(result);
       }
 
