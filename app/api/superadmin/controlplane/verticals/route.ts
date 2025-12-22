@@ -1,19 +1,18 @@
 /**
- * OS Verticals CRUD API
+ * OS Verticals CRUD API (Control Plane v2.0)
  *
- * GET  /api/superadmin/verticals - List all verticals
- * POST /api/superadmin/verticals - Create new vertical
+ * GET  /api/superadmin/controlplane/verticals - List all verticals
+ * POST /api/superadmin/controlplane/verticals - Create new vertical
  *
- * Contract Rules:
- * - key: required, lowercase snake_case
- * - entity_type: DEPRECATED (moving to sub-vertical in v2.0)
- * - region_scope: DEPRECATED (moving to persona in v2.0)
+ * v2.0 Contract Rules:
+ * - key: required, lowercase snake_case, immutable
+ * - name: required, display name
+ * - entity_type: REJECTED (moved to sub-vertical.primary_entity_type)
+ * - region_scope: REJECTED (moved to persona.scope + persona.region_code)
  * - All writes logged to os_controlplane_audit
  *
- * MIGRATION LOCK (Control Plane v2.0):
- * - New vertical creation is FROZEN during migration
- * - Only existing verticals can be edited (name, is_active)
- * - This lock will be removed after v2.0 migration completes
+ * 5-Layer Hierarchy (v2.0):
+ * Vertical → Sub-Vertical → Persona → Policy → Binding
  */
 
 // PHASE 0: Migration safety lock - prevents schema drift during v2.0 migration
@@ -36,8 +35,11 @@ interface OSVertical {
   id: string;
   key: string;
   name: string;
-  entity_type: string;
-  region_scope: string[];
+  // DEPRECATED in v2.0 - these columns exist in DB but are NOT used
+  // entity_type: moved to os_sub_verticals.primary_entity_type
+  // region_scope: moved to os_personas.scope + os_personas.region_code
+  entity_type?: string | null;
+  region_scope?: string[] | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -105,7 +107,42 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { key, name, entity_type, region_scope } = body;
 
-    // Validation: key
+    // v2.0 HARD REJECT: Deprecated fields must NOT be sent
+    if (entity_type !== undefined) {
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'create_vertical',
+        targetType: 'vertical',
+        requestJson: body,
+        success: false,
+        errorMessage: 'DEPRECATED_FIELD_REJECTED: entity_type moved to sub-vertical.primary_entity_type',
+      });
+      return Response.json({
+        success: false,
+        error: 'DEPRECATED_FIELD',
+        field: 'entity_type',
+        message: 'entity_type is deprecated in v2.0. Use sub-vertical.primary_entity_type instead.',
+      }, { status: 400 });
+    }
+
+    if (region_scope !== undefined) {
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'create_vertical',
+        targetType: 'vertical',
+        requestJson: body,
+        success: false,
+        errorMessage: 'DEPRECATED_FIELD_REJECTED: region_scope moved to persona.scope + persona.region_code',
+      });
+      return Response.json({
+        success: false,
+        error: 'DEPRECATED_FIELD',
+        field: 'region_scope',
+        message: 'region_scope is deprecated in v2.0. Use persona.scope and persona.region_code instead.',
+      }, { status: 400 });
+    }
+
+    // Validation: key (required, snake_case)
     const keyValidation = validateKey(key);
     if (!keyValidation.valid) {
       await logControlPlaneAudit({
@@ -119,8 +156,8 @@ export async function POST(request: NextRequest) {
       return validationError('key', keyValidation.error);
     }
 
-    // Validation: name
-    if (!name || typeof name !== 'string') {
+    // Validation: name (required)
+    if (!name || typeof name !== 'string' || !name.trim()) {
       await logControlPlaneAudit({
         actorUser,
         action: 'create_vertical',
@@ -130,33 +167,6 @@ export async function POST(request: NextRequest) {
         errorMessage: 'Name is required',
       });
       return validationError('name', 'Name is required');
-    }
-
-    // Validation: entity_type
-    const validEntityTypes = ['deal', 'company', 'individual'];
-    if (!entity_type || !validEntityTypes.includes(entity_type)) {
-      await logControlPlaneAudit({
-        actorUser,
-        action: 'create_vertical',
-        targetType: 'vertical',
-        requestJson: body,
-        success: false,
-        errorMessage: 'Invalid entity_type',
-      });
-      return validationError('entity_type', 'Must be one of: deal, company, individual');
-    }
-
-    // Validation: region_scope
-    if (!region_scope || !Array.isArray(region_scope) || region_scope.length === 0) {
-      await logControlPlaneAudit({
-        actorUser,
-        action: 'create_vertical',
-        targetType: 'vertical',
-        requestJson: body,
-        success: false,
-        errorMessage: 'region_scope must be non-empty array',
-      });
-      return validationError('region_scope', 'Must be non-empty array of regions');
     }
 
     // Check for duplicate key
@@ -177,12 +187,12 @@ export async function POST(request: NextRequest) {
       return conflictError('key');
     }
 
-    // Insert vertical
+    // Insert vertical (v2.0: only key, name - deprecated columns get NULL)
     const result = await insert<OSVertical>(
-      `INSERT INTO os_verticals (key, name, entity_type, region_scope, is_active)
-       VALUES ($1, $2, $3, $4, true)
-       RETURNING id, key, name, entity_type, region_scope, is_active, created_at, updated_at`,
-      [key, name, entity_type, JSON.stringify(region_scope)]
+      `INSERT INTO os_verticals (key, name, is_active)
+       VALUES ($1, $2, true)
+       RETURNING id, key, name, is_active, created_at, updated_at`,
+      [key, name.trim()]
     );
 
     // Audit log success
