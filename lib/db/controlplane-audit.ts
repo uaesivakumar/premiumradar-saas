@@ -20,6 +20,8 @@ export type AuditAction =
   | 'update_persona'
   | 'delete_persona'
   | 'update_policy'
+  | 'stage_policy'
+  | 'activate_policy'
   | 'create_binding'
   | 'update_binding'
   | 'delete_binding';

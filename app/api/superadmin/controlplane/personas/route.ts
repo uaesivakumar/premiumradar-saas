@@ -223,10 +223,11 @@ export async function POST(request: NextRequest) {
       [sub_vertical_id, key, name, mission || null, decision_lens || null, personaScope, region_code || null]
     );
 
-    // Create default policy for the persona (v2.0: includes status lifecycle)
-    await insert(
-      `INSERT INTO os_persona_policies (persona_id, policy_version, allowed_intents, forbidden_outputs, allowed_tools, status, activated_at)
-       VALUES ($1, 1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'ACTIVE', NOW())`,
+    // Create default policy for the persona (v2.0: starts as DRAFT for wizard flow)
+    const policy = await insert<{ id: string; policy_version: number; status: string }>(
+      `INSERT INTO os_persona_policies (persona_id, policy_version, allowed_intents, forbidden_outputs, allowed_tools, status)
+       VALUES ($1, 1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, 'DRAFT')
+       RETURNING id, policy_version, status`,
       [result.id]
     );
 
@@ -244,6 +245,11 @@ export async function POST(request: NextRequest) {
     return Response.json({
       success: true,
       data: result,
+      policy: {
+        id: policy.id,
+        status: policy.status,
+        policy_version: policy.policy_version,
+      },
     }, { status: 201 });
 
   } catch (error) {

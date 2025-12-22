@@ -45,8 +45,10 @@ interface OSVertical {
   id: string;
   key: string;
   name: string;
-  entity_type: 'deal' | 'company' | 'individual';
-  region_scope: string[];
+  // v2.0: entity_type and region_scope are DEPRECATED at vertical level
+  // They now live at sub_vertical level (primary_entity_type)
+  entity_type?: 'deal' | 'company' | 'individual';  // DEPRECATED
+  region_scope?: string[];  // DEPRECATED
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -58,6 +60,8 @@ interface OSSubVertical {
   key: string;
   name: string;
   default_agent: string;
+  primary_entity_type?: string;  // v2.0: Entity type now at sub-vertical level
+  related_entity_types?: string[];  // v2.0
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -71,6 +75,8 @@ interface OSPersona {
   name: string;
   mission: string | null;
   decision_lens: string | null;
+  scope?: string;  // v2.0: GLOBAL | REGIONAL | LOCAL
+  region_code?: string | null;  // v2.0
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -102,6 +108,36 @@ interface ResolvedConfig {
   sub_vertical: { id: string; key: string; name: string; default_agent: string };
   persona: { id: string; key: string; name: string; mission: string };
   policy: { id: string; version: number; allowed_intents: string[]; forbidden_outputs: string[] };
+}
+
+interface StackStatus {
+  vertical: {
+    id: string;
+    key: string;
+    name: string;
+    is_active: boolean;
+  };
+  sub_verticals: {
+    id: string;
+    key: string;
+    name: string;
+    is_active: boolean;
+    persona_count: number;
+    personas: {
+      id: string;
+      key: string;
+      name: string;
+      is_active: boolean;
+      policy_status: string | null;
+      has_binding: boolean;
+      status: 'READY' | 'NOT_READY';
+      not_ready_reason: string | null;
+    }[];
+    status: 'READY' | 'NOT_READY';
+    not_ready_reason: string | null;
+  }[];
+  stack_status: 'READY' | 'NOT_READY';
+  not_ready_reason: string | null;
 }
 
 // =============================================================================
@@ -199,6 +235,13 @@ async function updatePersonaPolicy(
   return data.data;
 }
 
+async function fetchStacks(): Promise<StackStatus[]> {
+  const res = await fetch('/api/superadmin/controlplane/stacks?include_status=1');
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Failed to fetch stacks');
+  return data.stacks;
+}
+
 // =============================================================================
 // MAIN COMPONENT
 // =============================================================================
@@ -208,6 +251,7 @@ export default function ControlPlanePage() {
   const [verticals, setVerticals] = useState<OSVertical[]>([]);
   const [subVerticals, setSubVerticals] = useState<Map<string, OSSubVertical[]>>(new Map());
   const [personas, setPersonas] = useState<OSPersona[]>([]);
+  const [stacks, setStacks] = useState<StackStatus[]>([]);
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -231,13 +275,15 @@ export default function ControlPlanePage() {
       setIsLoading(true);
       setError(null);
 
-      const [verticalsData, personasData] = await Promise.all([
+      const [verticalsData, personasData, stacksData] = await Promise.all([
         fetchVerticals(),
         fetchPersonas(),
+        fetchStacks(),
       ]);
 
       setVerticals(verticalsData);
       setPersonas(personasData);
+      setStacks(stacksData);
 
       // Load sub-verticals for each vertical
       const subVerticalsMap = new Map<string, OSSubVertical[]>();
@@ -304,6 +350,25 @@ export default function ControlPlanePage() {
 
   return (
     <div className="space-y-4">
+      {/* Control Plane v2.0 Status Strip */}
+      <div className="bg-violet-900/20 border border-violet-500/30 rounded-lg px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="px-2 py-0.5 bg-violet-600 text-white text-xs font-medium rounded">
+            Control Plane v2.0
+          </span>
+          <span className="text-violet-300 text-xs">
+            A stack is READY only if: Vertical + Sub-Vertical + Persona + ACTIVE Policy + Binding
+          </span>
+        </div>
+        <a
+          href="/superadmin/controlplane/wizard/new"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Create Vertical Stack
+        </a>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -337,13 +402,6 @@ export default function ControlPlanePage() {
             <Eye className="w-3.5 h-3.5" />
             View Runtime Config
           </button>
-          <button
-            onClick={() => setShowCreateVertical(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Vertical
-          </button>
         </div>
       </div>
 
@@ -361,30 +419,34 @@ export default function ControlPlanePage() {
                   No verticals configured
                 </div>
               ) : (
-                verticals.map((vertical) => (
-                  <VerticalItem
-                    key={vertical.id}
-                    vertical={vertical}
-                    subVerticals={subVerticals.get(vertical.id) || []}
-                    personas={personas.filter(
-                      (p) =>
-                        subVerticals
-                          .get(vertical.id)
-                          ?.some((sv) => sv.id === p.sub_vertical_id)
-                    )}
-                    isExpanded={expandedVertical === vertical.id}
-                    selectedPersonaId={selectedPersona?.id}
-                    onToggle={() =>
-                      setExpandedVertical(
-                        expandedVertical === vertical.id ? null : vertical.id
-                      )
-                    }
-                    onSelectPersona={handleSelectPersona}
-                    onEditVertical={() => setShowEditVertical(vertical)}
-                    onAddSubVertical={() => setShowCreateSubVertical(vertical.id)}
-                    onAddPersona={(subVerticalId) => setShowCreatePersona(subVerticalId)}
-                  />
-                ))
+                verticals.map((vertical) => {
+                  const stackStatus = stacks.find(s => s.vertical.id === vertical.id);
+                  return (
+                    <VerticalItem
+                      key={vertical.id}
+                      vertical={vertical}
+                      subVerticals={subVerticals.get(vertical.id) || []}
+                      personas={personas.filter(
+                        (p) =>
+                          subVerticals
+                            .get(vertical.id)
+                            ?.some((sv) => sv.id === p.sub_vertical_id)
+                      )}
+                      stackStatus={stackStatus}
+                      isExpanded={expandedVertical === vertical.id}
+                      selectedPersonaId={selectedPersona?.id}
+                      onToggle={() =>
+                        setExpandedVertical(
+                          expandedVertical === vertical.id ? null : vertical.id
+                        )
+                      }
+                      onSelectPersona={handleSelectPersona}
+                      onEditVertical={() => setShowEditVertical(vertical)}
+                      onAddSubVertical={() => setShowCreateSubVertical(vertical.id)}
+                      onAddPersona={(subVerticalId) => setShowCreatePersona(subVerticalId)}
+                    />
+                  );
+                })
               )}
             </div>
           </div>
@@ -430,44 +492,22 @@ export default function ControlPlanePage() {
         </div>
       </div>
 
-      {/* Create Vertical Modal */}
-      {showCreateVertical && (
-        <CreateVerticalModal
-          onClose={() => setShowCreateVertical(false)}
-          onCreate={async (payload) => {
-            await createVertical(payload);
-            // Rule 2: Re-fetch after create
-            await loadData();
-            setShowCreateVertical(false);
-          }}
-        />
-      )}
+      {/* Create Vertical Modal - DEPRECATED: Use wizard instead */}
+      {/* Wizard route: /superadmin/controlplane/wizard/new */}
 
-      {/* Create Sub-Vertical Modal */}
+      {/* Create Sub-Vertical Modal - DEPRECATED: Now shows wizard redirect */}
       {showCreateSubVertical && (
         <CreateSubVerticalModal
           verticalId={showCreateSubVertical}
           onClose={() => setShowCreateSubVertical(null)}
-          onCreate={async (payload) => {
-            await createSubVertical(payload);
-            // Rule 2: Re-fetch after create
-            await loadData();
-            setShowCreateSubVertical(null);
-          }}
         />
       )}
 
-      {/* Create Persona Modal */}
+      {/* Create Persona Modal - DEPRECATED: Now shows wizard redirect */}
       {showCreatePersona && (
         <CreatePersonaModal
           subVerticalId={showCreatePersona}
           onClose={() => setShowCreatePersona(null)}
-          onCreate={async (payload) => {
-            await createPersona(payload);
-            // Rule 2: Re-fetch after create
-            await loadData();
-            setShowCreatePersona(null);
-          }}
         />
       )}
 
@@ -517,6 +557,7 @@ function VerticalItem({
   vertical,
   subVerticals,
   personas,
+  stackStatus,
   isExpanded,
   selectedPersonaId,
   onToggle,
@@ -528,6 +569,7 @@ function VerticalItem({
   vertical: OSVertical;
   subVerticals: OSSubVertical[];
   personas: OSPersona[];
+  stackStatus?: StackStatus;
   isExpanded: boolean;
   selectedPersonaId?: string;
   onToggle: () => void;
@@ -536,6 +578,9 @@ function VerticalItem({
   onAddSubVertical: () => void;
   onAddPersona: (subVerticalId: string) => void;
 }) {
+  const isReady = stackStatus?.stack_status === 'READY';
+  const notReadyReason = stackStatus?.not_ready_reason;
+
   return (
     <div>
       <div className="flex items-center justify-between p-3 hover:bg-neutral-800/50 transition-colors group">
@@ -549,11 +594,34 @@ function VerticalItem({
           <div>
             <p className="text-sm font-medium text-white">{vertical.name}</p>
             <p className="text-[10px] text-neutral-600">
-              {vertical.entity_type} • {subVerticals.length} sub-verticals
+              {subVerticals.length} sub-verticals
             </p>
           </div>
         </button>
         <div className="flex items-center gap-2">
+          {/* Stack Readiness Badge */}
+          {stackStatus && (
+            <span
+              className={`px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 ${
+                isReady
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              }`}
+              title={notReadyReason || 'Stack is ready'}
+            >
+              {isReady ? (
+                <>
+                  <CheckCircle className="w-2.5 h-2.5" />
+                  READY
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  NOT READY
+                </>
+              )}
+            </span>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -581,37 +649,74 @@ function VerticalItem({
         </div>
       </div>
 
+      {/* Show not ready reason when expanded */}
+      {isExpanded && notReadyReason && (
+        <div className="mx-3 mb-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded text-[10px] text-amber-400 flex items-center gap-1.5">
+          <AlertTriangle className="w-3 h-3" />
+          {notReadyReason}
+        </div>
+      )}
+
       {isExpanded && (
         <div className="bg-neutral-800/30 px-3 pb-3">
           {subVerticals.map((sv) => {
             const subPersonas = personas.filter((p) => p.sub_vertical_id === sv.id);
+            const svStatus = stackStatus?.sub_verticals.find(s => s.id === sv.id);
             return (
               <div key={sv.id} className="mt-2">
                 <div className="flex items-center justify-between text-xs text-neutral-400 mb-1 px-2">
-                  <span>{sv.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span>{sv.name}</span>
+                    {svStatus && (
+                      <span
+                        className={`text-[9px] px-1 py-0.5 rounded ${
+                          svStatus.status === 'READY'
+                            ? 'bg-emerald-500/10 text-emerald-400'
+                            : 'bg-amber-500/10 text-amber-400'
+                        }`}
+                      >
+                        {svStatus.status}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] text-neutral-600">
                     {sv.default_agent}
                   </span>
                 </div>
-                {subPersonas.map((persona) => (
-                  <button
-                    key={persona.id}
-                    onClick={() => onSelectPersona(persona)}
-                    className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
-                      selectedPersonaId === persona.id
-                        ? 'bg-violet-500/10 border border-violet-500/30'
-                        : 'bg-neutral-800/50 hover:bg-neutral-800 border border-transparent'
-                    }`}
-                  >
-                    <div className="text-left">
-                      <p className="text-xs font-medium text-white">
-                        {persona.name}
-                      </p>
-                      <p className="text-[10px] text-neutral-600">{persona.key}</p>
-                    </div>
-                    <Users className="w-3 h-3 text-neutral-600" />
-                  </button>
-                ))}
+                {subPersonas.map((persona) => {
+                  const personaStatus = svStatus?.personas.find(p => p.id === persona.id);
+                  return (
+                    <button
+                      key={persona.id}
+                      onClick={() => onSelectPersona(persona)}
+                      className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
+                        selectedPersonaId === persona.id
+                          ? 'bg-violet-500/10 border border-violet-500/30'
+                          : 'bg-neutral-800/50 hover:bg-neutral-800 border border-transparent'
+                      }`}
+                    >
+                      <div className="text-left">
+                        <p className="text-xs font-medium text-white flex items-center gap-1.5">
+                          {persona.name}
+                          {personaStatus && (
+                            <span
+                              className={`text-[8px] px-1 py-0.5 rounded ${
+                                personaStatus.status === 'READY'
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : 'bg-amber-500/20 text-amber-400'
+                              }`}
+                              title={personaStatus.not_ready_reason || 'Ready'}
+                            >
+                              {personaStatus.policy_status || 'NO POLICY'}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-neutral-600">{persona.key}</p>
+                      </div>
+                      <Users className="w-3 h-3 text-neutral-600" />
+                    </button>
+                  );
+                })}
                 <button
                   onClick={() => onAddPersona(sv.id)}
                   className="w-full mt-1 p-1.5 text-[10px] text-neutral-600 hover:text-white hover:bg-neutral-800 rounded transition-colors flex items-center justify-center gap-1"
@@ -1096,205 +1201,53 @@ function RuntimeConfigModal({ onClose }: { onClose: () => void }) {
 // CREATE MODALS
 // =============================================================================
 
-function CreateVerticalModal({
-  onClose,
-  onCreate,
-}: {
-  onClose: () => void;
-  onCreate: (payload: {
-    key: string;
-    name: string;
-    entity_type: string;
-    region_scope: string[];
-  }) => Promise<void>;
-}) {
-  const [key, setKey] = useState('');
-  const [name, setName] = useState('');
-  const [entityType, setEntityType] = useState('company');
-  const [regions, setRegions] = useState('US');
-  const [isCreating, setIsCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleCreate = async () => {
-    setIsCreating(true);
-    setError(null);
-
-    try {
-      await onCreate({
-        key: key.toLowerCase().replace(/\s+/g, '_'),
-        name,
-        entity_type: entityType,
-        region_scope: regions.split(',').map((r) => r.trim()),
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create');
-      setIsCreating(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-white">Create Vertical</h2>
-          <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Key *</label>
-            <input
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="saas_sales"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-            <p className="text-[10px] text-neutral-600 mt-1">Lowercase snake_case</p>
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Name *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="SaaS Sales"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Entity Type *</label>
-            <select
-              value={entityType}
-              onChange={(e) => setEntityType(e.target.value)}
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            >
-              <option value="company">Company</option>
-              <option value="individual">Individual</option>
-              <option value="deal">Deal</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Regions</label>
-            <input
-              type="text"
-              value={regions}
-              onChange={(e) => setRegions(e.target.value)}
-              placeholder="US, UAE"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-            <p className="text-[10px] text-neutral-600 mt-1">Comma-separated</p>
-          </div>
-          {error && (
-            <p className="text-xs text-red-400">{error}</p>
-          )}
-          <button
-            onClick={handleCreate}
-            disabled={!key || !name || isCreating}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors disabled:opacity-50"
-          >
-            {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
-            Create Vertical
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// =============================================================================
+// DEPRECATED: CreateVerticalModal
+// Use the Vertical Stack Wizard instead: /superadmin/controlplane/wizard/new
+// =============================================================================
 
 function CreateSubVerticalModal({
   verticalId,
   onClose,
-  onCreate,
 }: {
   verticalId: string;
   onClose: () => void;
-  onCreate: (payload: {
+  onCreate?: (payload: {
     vertical_id: string;
     key: string;
     name: string;
     default_agent: string;
   }) => Promise<void>;
 }) {
-  const [key, setKey] = useState('');
-  const [name, setName] = useState('');
-  const [defaultAgent, setDefaultAgent] = useState('discovery');
-  const [isCreating, setIsCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleCreate = async () => {
-    setIsCreating(true);
-    setError(null);
-
-    try {
-      await onCreate({
-        vertical_id: verticalId,
-        key: key.toLowerCase().replace(/\s+/g, '_'),
-        name,
-        default_agent: defaultAgent,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create');
-      setIsCreating(false);
-    }
-  };
-
+  // v2.0: Show deprecation notice and redirect to wizard
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
         <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-white">Create Sub-Vertical</h2>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <h2 className="text-sm font-medium text-white">Deprecated</h2>
+          </div>
           <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Key *</label>
-            <input
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="deal_evaluation"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
+        <div className="p-6 text-center">
+          <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-6 h-6 text-amber-400" />
           </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Name *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Deal Evaluation"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Default Agent *</label>
-            <select
-              value={defaultAgent}
-              onChange={(e) => setDefaultAgent(e.target.value)}
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            >
-              <option value="discovery">Discovery</option>
-              <option value="deal-evaluation">Deal Evaluation</option>
-              <option value="ranking">Ranking</option>
-              <option value="scoring">Scoring</option>
-            </select>
-            <p className="text-[10px] text-amber-400 mt-1">
-              Changing this affects runtime behavior
-            </p>
-          </div>
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          <button
-            onClick={handleCreate}
-            disabled={!key || !name || isCreating}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors disabled:opacity-50"
+          <h3 className="text-white font-medium mb-2">Use the Vertical Stack Wizard</h3>
+          <p className="text-neutral-400 text-sm mb-4">
+            Control Plane v2.0 requires creating complete stacks through the wizard.
+            This ensures proper validation and policy activation.
+          </p>
+          <a
+            href="/superadmin/controlplane/wizard/new"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors"
           >
-            {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
-            Create Sub-Vertical
-          </button>
+            <Plus className="w-4 h-4" />
+            Open Wizard
+          </a>
         </div>
       </div>
     </div>
@@ -1304,11 +1257,10 @@ function CreateSubVerticalModal({
 function CreatePersonaModal({
   subVerticalId,
   onClose,
-  onCreate,
 }: {
   subVerticalId: string;
   onClose: () => void;
-  onCreate: (payload: {
+  onCreate?: (payload: {
     sub_vertical_id: string;
     key: string;
     name: string;
@@ -1316,90 +1268,35 @@ function CreatePersonaModal({
     decision_lens?: string;
   }) => Promise<void>;
 }) {
-  const [key, setKey] = useState('');
-  const [name, setName] = useState('');
-  const [mission, setMission] = useState('');
-  const [decisionLens, setDecisionLens] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleCreate = async () => {
-    setIsCreating(true);
-    setError(null);
-
-    try {
-      await onCreate({
-        sub_vertical_id: subVerticalId,
-        key: key.toLowerCase().replace(/\s+/g, '_'),
-        name,
-        mission: mission || undefined,
-        decision_lens: decisionLens || undefined,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create');
-      setIsCreating(false);
-    }
-  };
-
+  // v2.0: Show deprecation notice and redirect to wizard
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
         <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-white">Create Persona</h2>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <h2 className="text-sm font-medium text-white">Deprecated</h2>
+          </div>
           <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Key *</label>
-            <input
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="skeptical_cfo"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
+        <div className="p-6 text-center">
+          <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-6 h-6 text-amber-400" />
           </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Name *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Skeptical CFO"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Mission</label>
-            <textarea
-              value={mission}
-              onChange={(e) => setMission(e.target.value)}
-              placeholder="Protect the company from bad deals..."
-              rows={2}
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Decision Lens</label>
-            <textarea
-              value={decisionLens}
-              onChange={(e) => setDecisionLens(e.target.value)}
-              placeholder="Assume every deal is risky..."
-              rows={2}
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          <button
-            onClick={handleCreate}
-            disabled={!key || !name || isCreating}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors disabled:opacity-50"
+          <h3 className="text-white font-medium mb-2">Use the Vertical Stack Wizard</h3>
+          <p className="text-neutral-400 text-sm mb-4">
+            Control Plane v2.0 requires creating complete stacks through the wizard.
+            This ensures proper policy lifecycle (DRAFT → STAGED → ACTIVE) and workspace binding.
+          </p>
+          <a
+            href="/superadmin/controlplane/wizard/new"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors"
           >
-            {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
-            Create Persona
-          </button>
+            <Plus className="w-4 h-4" />
+            Open Wizard
+          </a>
         </div>
       </div>
     </div>
@@ -1811,14 +1708,14 @@ function EditVerticalModal({
   onSave: (payload: { name?: string; region_scope?: string[]; is_active?: boolean }) => Promise<void>;
 }) {
   const [name, setName] = useState(vertical.name);
-  const [regions, setRegions] = useState(vertical.region_scope.join(', '));
+  const [regions, setRegions] = useState((vertical.region_scope || []).join(', '));
   const [isActive, setIsActive] = useState(vertical.is_active);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const hasChanges =
     name !== vertical.name ||
-    regions !== vertical.region_scope.join(', ') ||
+    regions !== (vertical.region_scope || []).join(', ') ||
     isActive !== vertical.is_active;
 
   const handleSave = async () => {
@@ -1831,7 +1728,7 @@ function EditVerticalModal({
       if (name !== vertical.name) {
         payload.name = name;
       }
-      if (regions !== vertical.region_scope.join(', ')) {
+      if (regions !== (vertical.region_scope || []).join(', ')) {
         payload.region_scope = regions.split(',').map((r) => r.trim()).filter(Boolean);
       }
       if (isActive !== vertical.is_active) {
