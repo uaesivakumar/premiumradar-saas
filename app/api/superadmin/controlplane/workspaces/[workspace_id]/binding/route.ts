@@ -10,6 +10,13 @@
  * - persona_id
  *
  * This is what resolve-config uses at runtime.
+ *
+ * v2.0 VALIDATION (Control Plane Migration):
+ * - Vertical must be active
+ * - Sub-vertical must be active and belong to vertical
+ * - Persona must be active and belong to sub-vertical
+ * - Persona must have an ACTIVE policy (hard requirement)
+ * - All 5 layers must be valid or binding fails (no silent degradation)
  */
 
 import { NextRequest } from 'next/server';
@@ -130,9 +137,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return validationError('vertical_id', 'vertical_id is required');
     }
 
-    // Verify vertical exists
-    const vertical = await queryOne<{ id: string; key: string }>(
-      'SELECT id, key FROM os_verticals WHERE id = $1',
+    // v2.0: Verify vertical exists AND is active
+    const vertical = await queryOne<{ id: string; key: string; is_active: boolean }>(
+      'SELECT id, key, is_active FROM os_verticals WHERE id = $1',
       [vertical_id]
     );
 
@@ -148,6 +155,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return notFoundError('Vertical');
     }
 
+    // v2.0: Vertical must be active
+    if (!vertical.is_active) {
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'update_binding',
+        targetType: 'binding',
+        requestJson: { ...body, workspace_id },
+        success: false,
+        errorMessage: 'Cannot bind to inactive vertical',
+      });
+      return Response.json({
+        success: false,
+        error: 'VERTICAL_INACTIVE',
+        message: `Vertical '${vertical.key}' is inactive. Cannot create binding to inactive entities.`,
+      }, { status: 400 });
+    }
+
     // Validation: sub_vertical_id
     if (!sub_vertical_id) {
       await logControlPlaneAudit({
@@ -161,9 +185,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return validationError('sub_vertical_id', 'sub_vertical_id is required');
     }
 
-    // Verify sub-vertical exists and belongs to vertical
-    const subVertical = await queryOne<{ id: string; key: string }>(
-      'SELECT id, key FROM os_sub_verticals WHERE id = $1 AND vertical_id = $2',
+    // v2.0: Verify sub-vertical exists, belongs to vertical, AND is active
+    const subVertical = await queryOne<{ id: string; key: string; is_active: boolean }>(
+      'SELECT id, key, is_active FROM os_sub_verticals WHERE id = $1 AND vertical_id = $2',
       [sub_vertical_id, vertical_id]
     );
 
@@ -179,6 +203,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return notFoundError('Sub-Vertical');
     }
 
+    // v2.0: Sub-vertical must be active
+    if (!subVertical.is_active) {
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'update_binding',
+        targetType: 'binding',
+        requestJson: { ...body, workspace_id },
+        success: false,
+        errorMessage: 'Cannot bind to inactive sub-vertical',
+      });
+      return Response.json({
+        success: false,
+        error: 'SUB_VERTICAL_INACTIVE',
+        message: `Sub-Vertical '${subVertical.key}' is inactive. Cannot create binding to inactive entities.`,
+      }, { status: 400 });
+    }
+
     // Validation: persona_id
     if (!persona_id) {
       await logControlPlaneAudit({
@@ -192,9 +233,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return validationError('persona_id', 'persona_id is required');
     }
 
-    // Verify persona exists and belongs to sub-vertical
-    const persona = await queryOne<{ id: string; key: string }>(
-      'SELECT id, key FROM os_personas WHERE id = $1 AND sub_vertical_id = $2',
+    // v2.0: Verify persona exists, belongs to sub-vertical, AND is active
+    const persona = await queryOne<{ id: string; key: string; is_active: boolean }>(
+      'SELECT id, key, is_active FROM os_personas WHERE id = $1 AND sub_vertical_id = $2',
       [persona_id, sub_vertical_id]
     );
 
@@ -208,6 +249,47 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         errorMessage: 'Persona not found or does not belong to sub-vertical',
       });
       return notFoundError('Persona');
+    }
+
+    // v2.0: Persona must be active
+    if (!persona.is_active) {
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'update_binding',
+        targetType: 'binding',
+        requestJson: { ...body, workspace_id },
+        success: false,
+        errorMessage: 'Cannot bind to inactive persona',
+      });
+      return Response.json({
+        success: false,
+        error: 'PERSONA_INACTIVE',
+        message: `Persona '${persona.key}' is inactive. Cannot create binding to inactive entities.`,
+      }, { status: 400 });
+    }
+
+    // v2.0 CRITICAL: Verify persona has an ACTIVE policy
+    const activePolicy = await queryOne<{ id: string; policy_version: number; status: string }>(
+      `SELECT id, policy_version, status FROM os_persona_policies
+       WHERE persona_id = $1 AND status = 'ACTIVE'`,
+      [persona_id]
+    );
+
+    if (!activePolicy) {
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'update_binding',
+        targetType: 'binding',
+        requestJson: { ...body, workspace_id },
+        success: false,
+        errorMessage: 'Persona has no active policy - binding blocked',
+      });
+      return Response.json({
+        success: false,
+        error: 'NO_ACTIVE_POLICY',
+        message: `Persona '${persona.key}' has no ACTIVE policy. All personas must have an ACTIVE policy before they can be bound to workspaces.`,
+        hint: 'Activate a policy for this persona in the Control Plane, then retry binding.',
+      }, { status: 400 });
     }
 
     // Check if binding already exists

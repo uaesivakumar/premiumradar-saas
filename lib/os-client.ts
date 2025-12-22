@@ -519,19 +519,45 @@ class OSClient {
 
   /**
    * Map vertical/region to OS profile
+   *
+   * DEPRECATED (Control Plane v2.0):
+   * This hardcoded mapping is being replaced by dynamic resolution.
+   * The OS should resolve the persona/policy from the database using
+   * vertical_key and sub_vertical_key, not rely on hardcoded profiles.
+   *
+   * Future: Pass vertical_key and sub_vertical_key to OS, let OS resolve
+   * persona from database via /api/os/resolve-vertical internally.
+   *
+   * For now: Using sub_vertical_key as profile (which OS may still map internally)
    */
   private mapToProfile(verticalId?: string, regionCode?: string): string {
-    // Map vertical_id to OS profile
+    // Control Plane v2.0: This should be resolved dynamically from database
+    // The profile maps to a persona, which is now stored in os_personas table
+    // OS should call resolve-vertical internally to get the correct persona
+
+    // DEPRECATED: Hardcoded mapping kept for backward compatibility
+    // TODO: Remove this mapping when OS fully supports dynamic persona resolution
     const profileMap: Record<string, string> = {
       'banking': 'banking_employee',
       'employee-banking': 'banking_employee',
       'corporate-banking': 'banking_corporate',
+      'sme-banking': 'banking_sme',
       'insurance': 'insurance_individual',
       'recruitment': 'recruitment_hiring',
       'saas': 'saas_b2b',
     };
 
-    return profileMap[verticalId || ''] || 'default';
+    const profile = profileMap[verticalId || ''] || 'default';
+
+    // Log deprecation warning in dev
+    if (process.env.NODE_ENV === 'development' && verticalId) {
+      console.warn(
+        `[OS Client] DEPRECATED: Using hardcoded profile mapping for '${verticalId}' -> '${profile}'. ` +
+        `Control Plane v2.0 will resolve this dynamically from the database.`
+      );
+    }
+
+    return profile;
   }
 
   /**

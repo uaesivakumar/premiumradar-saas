@@ -421,15 +421,39 @@ function getSalesContext() {
   return useSalesContextStore.getState().context;
 }
 
+/**
+ * Get OS profile based on sub-vertical
+ *
+ * DEPRECATED (Control Plane v2.0):
+ * This hardcoded mapping is being replaced by dynamic resolution.
+ * The OS should resolve the persona/policy from the database using
+ * vertical_key and sub_vertical_key, not rely on hardcoded profiles.
+ *
+ * Future: OS will call /api/os/resolve-vertical internally to get
+ * the correct persona from the database.
+ */
 function getOSProfile(): string {
   const context = getSalesContext();
-  // Map sub-vertical to OS profile
+
+  // DEPRECATED: Hardcoded mapping kept for backward compatibility
+  // TODO: Remove this mapping when OS fully supports dynamic persona resolution
   const profileMap: Record<string, string> = {
     'employee-banking': 'banking_employee',
     'corporate-banking': 'banking_corporate',
     'sme-banking': 'banking_sme',
   };
-  return profileMap[context.subVertical] || 'banking_employee';
+
+  const profile = profileMap[context.subVertical] || 'banking_employee';
+
+  // Log deprecation warning in dev
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(
+      `[SIVA] DEPRECATED: Using hardcoded profile mapping for '${context.subVertical}' -> '${profile}'. ` +
+      `Control Plane v2.0 will resolve this dynamically from the database.`
+    );
+  }
+
+  return profile;
 }
 
 function formatRegions(regions: string[]): string {
