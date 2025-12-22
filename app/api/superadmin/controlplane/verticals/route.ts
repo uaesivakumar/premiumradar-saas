@@ -17,7 +17,8 @@
  */
 
 // PHASE 0: Migration safety lock - prevents schema drift during v2.0 migration
-const VERTICAL_CREATION_LOCKED = true;
+// UNLOCKED: 2025-12-22 - v2.0 schema frozen + wizard live
+const VERTICAL_CREATION_LOCKED = false;
 const VERTICAL_CREATION_LOCK_REASON = 'Control Plane v2.0 migration in progress. New vertical creation is temporarily disabled. Contact admin to unlock.';
 
 import { NextRequest } from 'next/server';

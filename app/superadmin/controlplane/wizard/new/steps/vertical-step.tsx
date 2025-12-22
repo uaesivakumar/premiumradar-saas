@@ -151,8 +151,8 @@ export function VerticalStep() {
               setKey(e.target.value.toLowerCase());
               validateKey(e.target.value.toLowerCase());
             }}
-            placeholder="banking"
-            className={`w-full px-3 py-2 border rounded-lg font-mono text-sm ${
+            placeholder="saas_sales"
+            className={`w-full px-3 py-2 border rounded-lg font-mono text-sm text-gray-900 placeholder-gray-400 ${
               keyError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
             } focus:outline-none focus:ring-2`}
             disabled={isSubmitting}
@@ -175,8 +175,8 @@ export function VerticalStep() {
               setName(e.target.value);
               validateName(e.target.value);
             }}
-            placeholder="Banking"
-            className={`w-full px-3 py-2 border rounded-lg text-sm ${
+            placeholder="SaaS Sales"
+            className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 placeholder-gray-400 ${
               nameError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
             } focus:outline-none focus:ring-2`}
             disabled={isSubmitting}

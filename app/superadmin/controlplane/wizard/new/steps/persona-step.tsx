@@ -276,7 +276,7 @@ export function PersonaStep() {
               id="scope"
               value={scope}
               onChange={(e) => setScope(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isSubmitting}
             >
               {SCOPES.map((s) => (
@@ -324,7 +324,7 @@ export function PersonaStep() {
             onChange={(e) => setMission(e.target.value)}
             placeholder="Define what this persona aims to achieve..."
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isSubmitting}
           />
         </div>
@@ -339,7 +339,7 @@ export function PersonaStep() {
             onChange={(e) => setDecisionLens(e.target.value)}
             placeholder="How does this persona evaluate opportunities..."
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isSubmitting}
           />
         </div>
