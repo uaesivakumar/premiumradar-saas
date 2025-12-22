@@ -1099,6 +1099,50 @@ export const salesBench = {
       body: options,
     });
   },
+
+  /**
+   * Run Wiring Parity Certification
+   * Verifies Frontend Discovery and Sales-Bench use identical SIVA path.
+   * Returns binary result: PARITY_VERIFIED or PARITY_BROKEN
+   */
+  async runParityCertification(options: {
+    triggered_by?: string;
+  }): Promise<OSResponse<{
+    certification_id: string;
+    status: 'PARITY_VERIFIED' | 'PARITY_BROKEN';
+    total_tests: number;
+    passed: number;
+    failed: number;
+    test_cases: Array<{
+      case_name: string;
+      passed: boolean;
+      frontend_outcome?: string;
+      salesbench_outcome?: string;
+      deviation_reason?: string;
+    }>;
+    timestamp: string;
+    commit_sha?: string;
+  }>> {
+    return osRequest('/api/os/sales-bench/parity/certify', {
+      method: 'POST',
+      body: options,
+    });
+  },
+
+  /**
+   * Get Parity Certification Status
+   */
+  async getParityStatus(): Promise<OSResponse<{
+    last_certification?: {
+      certification_id: string;
+      status: 'PARITY_VERIFIED' | 'PARITY_BROKEN';
+      timestamp: string;
+      triggered_by?: string;
+    };
+    is_certified: boolean;
+  }>> {
+    return osRequest('/api/os/sales-bench/parity/status');
+  },
 };
 
 // =============================================================================

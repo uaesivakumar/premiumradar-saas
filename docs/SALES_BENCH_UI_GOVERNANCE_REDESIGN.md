@@ -188,6 +188,52 @@ The new UI enforces governance mental model:
 
 ---
 
+## 7. Wiring Parity Check (Governance Tripwire)
+
+### Purpose
+
+The Parity Check button is a **governance tripwire** that verifies Frontend Discovery and Sales-Bench use the **identical SIVA scoring path**. This prevents intelligence path drift.
+
+### Behavior
+
+| Aspect | Value |
+|--------|-------|
+| Location | Founder View only |
+| Output | Binary: `PARITY_VERIFIED` or `PARITY_BROKEN` |
+| Test Cases | Fixed, immutable set (minimum 5) |
+| Comparison | Outcomes, policy gates, persona_id, tools_used |
+| Logging | Timestamp, certification_id, commit SHA |
+
+### UI Elements
+
+1. **Run Parity Check** button
+2. **Result Display**: Green for VERIFIED, Red for BROKEN
+3. **Last Certification Status**: Shows previous certification if available
+
+### RM Trial Readiness Impact
+
+When parity is BROKEN:
+- All RM Trial Readiness badges show `PARITY BROKEN — LOCKED`
+- Governance alert displayed: "Do not proceed with RM trials until parity is restored"
+- All suites locked from RM involvement
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/superadmin/os/sales-bench?action=parity-status` | GET | Get last certification status |
+| `/api/superadmin/os/sales-bench` | POST | Run parity check (command: `parity-check`) |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `lib/os/os-client.ts` | Added `runParityCertification()` and `getParityStatus()` methods |
+| `app/api/superadmin/os/sales-bench/route.ts` | Added `parity-check` command and `parity-status` action |
+| `app/superadmin/sales-bench/page.tsx` | Added Parity Check UI (Founder View only) |
+
+---
+
 ## Stop Condition
 
 Implementation complete. Awaiting founder review and sign-off before any additional features.

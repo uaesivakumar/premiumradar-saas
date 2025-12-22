@@ -268,6 +268,12 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(verifyData);
       }
 
+      case 'parity-status': {
+        // Get wiring parity certification status
+        const result = await salesBench.getParityStatus();
+        return NextResponse.json(result);
+      }
+
       default: {
         // Default: list all suites
         const vertical = searchParams.get('vertical') || undefined;
@@ -311,12 +317,13 @@ export async function POST(request: NextRequest) {
 
     if (!command) {
       return NextResponse.json(
-        { error: 'Command required. Use: run-system-validation, start-human-calibration, approve-for-ga, deprecate-suite' },
+        { error: 'Command required. Use: run-system-validation, start-human-calibration, approve-for-ga, deprecate-suite, parity-check' },
         { status: 400 }
       );
     }
 
-    if (!suite_key) {
+    // parity-check doesn't require suite_key (it's global)
+    if (!suite_key && command !== 'parity-check') {
       return NextResponse.json(
         { error: 'suite_key required' },
         { status: 400 }
@@ -389,9 +396,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(result);
       }
 
+      case 'parity-check': {
+        // Run wiring parity certification
+        // Verifies Frontend Discovery and Sales-Bench use identical SIVA path
+        // Returns binary: PARITY_VERIFIED or PARITY_BROKEN
+        const result = await salesBench.runParityCertification({
+          triggered_by: triggeredBy,
+        });
+        return NextResponse.json(result);
+      }
+
       default:
         return NextResponse.json(
-          { error: `Unknown command: ${command}. Use: run-system-validation, start-human-calibration, approve-for-ga, deprecate-suite` },
+          { error: `Unknown command: ${command}. Use: run-system-validation, start-human-calibration, approve-for-ga, deprecate-suite, parity-check` },
           { status: 400 }
         );
     }

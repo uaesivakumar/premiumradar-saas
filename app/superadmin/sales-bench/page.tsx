@@ -19,6 +19,9 @@ import {
   Info,
   Scale,
   FileCheck,
+  GitCompare,
+  ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react';
 
 // ============================================================================
@@ -123,6 +126,34 @@ interface DashboardStats {
   insight: string;
 }
 
+// Parity Check Types
+interface ParityStatus {
+  last_certification?: {
+    certification_id: string;
+    status: 'PARITY_VERIFIED' | 'PARITY_BROKEN';
+    timestamp: string;
+    triggered_by?: string;
+  };
+  is_certified: boolean;
+}
+
+interface ParityResult {
+  certification_id: string;
+  status: 'PARITY_VERIFIED' | 'PARITY_BROKEN';
+  total_tests: number;
+  passed: number;
+  failed: number;
+  test_cases: Array<{
+    case_name: string;
+    passed: boolean;
+    frontend_outcome?: string;
+    salesbench_outcome?: string;
+    deviation_reason?: string;
+  }>;
+  timestamp: string;
+  commit_sha?: string;
+}
+
 // Tooltip Component
 function MetricTooltip({ children }: { children: ReactNode }) {
   return (
@@ -139,15 +170,32 @@ function MetricTooltip({ children }: { children: ReactNode }) {
 }
 
 // RM Trial Readiness Badge
-function RMTrialBadge({ suite }: { suite: SuiteSummary }) {
+function RMTrialBadge({ suite, globalParityBroken }: { suite: SuiteSummary; globalParityBroken?: boolean }) {
   // Compute RM Trial Readiness based on governance conditions
   const isSystemValidated = suite.status === 'SYSTEM_VALIDATED' || suite.status === 'GA_APPROVED';
   const hasShadowStability = (suite.shadow_weeks ?? 0) >= 2;
   const hasFounderApproval = (suite.founder_approved_acts ?? 0) >= 10;
   const hasBlockIntegrity = (suite.block_false_positives ?? 0) === 0;
-  const hasWiringParity = suite.wiring_parity_valid !== false;
+  // Global parity broken overrides per-suite status
+  const hasWiringParity = globalParityBroken === true ? false : suite.wiring_parity_valid !== false;
 
   const isReady = isSystemValidated && hasShadowStability && hasFounderApproval && hasBlockIntegrity && hasWiringParity;
+
+  // Special case: if globally parity broken, show specific message
+  if (globalParityBroken) {
+    return (
+      <div className="group relative">
+        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 border border-red-500/30 rounded text-xs text-red-400">
+          <ShieldAlert className="w-3 h-3" />
+          PARITY BROKEN — LOCKED
+        </span>
+        <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-red-900/50 border border-red-500/30 rounded text-xs text-red-200 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-50">
+          RM trials are LOCKED because Frontend ↔ Sales-Bench parity is broken. Run parity certification to verify.
+          <div className="absolute top-full left-4 border-4 border-transparent border-t-red-900/50" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="group relative">
@@ -207,6 +255,56 @@ function SalesBenchDashboardInner() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('founder');
 
+  // Parity Check State
+  const [parityStatus, setParityStatus] = useState<ParityStatus | null>(null);
+  const [parityResult, setParityResult] = useState<ParityResult | null>(null);
+  const [parityChecking, setParityChecking] = useState(false);
+  const [parityError, setParityError] = useState<string | null>(null);
+
+  // Compute global parity broken status
+  const globalParityBroken = parityResult?.status === 'PARITY_BROKEN' ||
+    (parityStatus?.last_certification?.status === 'PARITY_BROKEN');
+
+  const fetchParityStatus = async () => {
+    try {
+      const res = await fetch('/api/superadmin/os/sales-bench?action=parity-status');
+      const data = await res.json();
+      if (data.success && data.data) {
+        setParityStatus(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch parity status:', err);
+    }
+  };
+
+  const runParityCheck = async () => {
+    setParityChecking(true);
+    setParityError(null);
+    setParityResult(null);
+
+    try {
+      const res = await fetch('/api/superadmin/os/sales-bench', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'parity-check' }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.data) {
+        setParityResult(data.data);
+        // Also refresh parity status
+        await fetchParityStatus();
+      } else {
+        setParityError(data.error || 'Parity check failed');
+      }
+    } catch (err) {
+      console.error('Parity check error:', err);
+      setParityError('Failed to run parity check');
+    } finally {
+      setParityChecking(false);
+    }
+  };
+
   const fetchDashboard = async () => {
     try {
       const res = await fetch('/api/superadmin/os/sales-bench?action=dashboard');
@@ -231,6 +329,7 @@ function SalesBenchDashboardInner() {
 
   useEffect(() => {
     fetchDashboard();
+    fetchParityStatus();
     // Load saved view preference
     const savedView = localStorage.getItem('salesbench_view_mode');
     if (savedView === 'operator') {
@@ -462,6 +561,121 @@ function SalesBenchDashboardInner() {
               </ul>
             </div>
           </div>
+
+          {/* Wiring Parity Check - Governance Tripwire (Founder View Only) */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <GitCompare className="w-5 h-5 text-violet-400" />
+                <h3 className="font-medium text-white">Frontend ↔ Sales-Bench Parity Check</h3>
+              </div>
+              <button
+                onClick={runParityCheck}
+                disabled={parityChecking}
+                className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-violet-800 disabled:cursor-not-allowed rounded text-sm text-white transition-colors"
+              >
+                {parityChecking ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <GitCompare className="w-4 h-4" />
+                    Run Parity Check
+                  </>
+                )}
+              </button>
+            </div>
+
+            <p className="text-neutral-400 text-sm mb-4">
+              Verifies that Frontend Discovery and Sales-Bench use the <strong>identical SIVA scoring path</strong>.
+              If parity is broken, all RM Trial Readiness gates are locked until resolved.
+            </p>
+
+            {/* Parity Error */}
+            {parityError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded p-3 mb-4">
+                <div className="flex items-center gap-2 text-red-400 text-sm">
+                  <AlertTriangle className="w-4 h-4" />
+                  {parityError}
+                </div>
+              </div>
+            )}
+
+            {/* Parity Result - Binary Output Only */}
+            {parityResult && (
+              <div className={`rounded-lg p-4 ${
+                parityResult.status === 'PARITY_VERIFIED'
+                  ? 'bg-emerald-500/10 border border-emerald-500/30'
+                  : 'bg-red-500/10 border border-red-500/30'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    {parityResult.status === 'PARITY_VERIFIED' ? (
+                      <>
+                        <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                        <span className="font-bold text-emerald-400">PARITY VERIFIED</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldAlert className="w-5 h-5 text-red-400" />
+                        <span className="font-bold text-red-400">PARITY BROKEN</span>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-xs text-neutral-500">
+                    {new Date(parityResult.timestamp).toLocaleString()}
+                  </span>
+                </div>
+
+                {/* Binary summary - no percentages */}
+                <div className="text-sm text-neutral-300 mb-2">
+                  {parityResult.passed}/{parityResult.total_tests} test cases passed
+                </div>
+
+                {/* Commit SHA if available */}
+                {parityResult.commit_sha && (
+                  <div className="text-xs text-neutral-500">
+                    Commit: <code className="bg-neutral-800 px-1 rounded">{parityResult.commit_sha.slice(0, 7)}</code>
+                  </div>
+                )}
+
+                {/* If PARITY BROKEN, show governance warning */}
+                {parityResult.status === 'PARITY_BROKEN' && (
+                  <div className="mt-4 p-3 bg-red-900/30 border border-red-500/20 rounded">
+                    <div className="flex items-start gap-2 text-red-300 text-sm">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <strong>GOVERNANCE ALERT:</strong> All RM Trial Readiness gates are now LOCKED.
+                        Do not proceed with RM trials until parity is restored.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Previous Certification Status (if no new result) */}
+            {!parityResult && parityStatus?.last_certification && (
+              <div className="text-sm text-neutral-400">
+                <span>Last certification: </span>
+                <span className={parityStatus.last_certification.status === 'PARITY_VERIFIED' ? 'text-emerald-400' : 'text-red-400'}>
+                  {parityStatus.last_certification.status === 'PARITY_VERIFIED' ? '✓ VERIFIED' : '✗ BROKEN'}
+                </span>
+                <span className="text-neutral-500 ml-2">
+                  ({new Date(parityStatus.last_certification.timestamp).toLocaleDateString()})
+                </span>
+              </div>
+            )}
+
+            {/* No certification yet */}
+            {!parityResult && !parityStatus?.last_certification && (
+              <div className="text-sm text-neutral-500">
+                No parity certification on record. Run the check above to verify.
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -608,7 +822,7 @@ function SalesBenchDashboardInner() {
                       </td>
                     )}
                     <td className="px-4 py-3 text-center">
-                      <RMTrialBadge suite={suite} />
+                      <RMTrialBadge suite={suite} globalParityBroken={globalParityBroken} />
                     </td>
                     <td className="px-4 py-3">
                       {suite.latest_run ? (
