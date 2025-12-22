@@ -716,4 +716,243 @@ Persists: `currentStep`, `completedSteps`, `profile`, `workspace`, `selectedVert
 
 ---
 
+## 15. Control Plane v2.0 (FROZEN)
+
+**Status:** 🔒 FROZEN
+**Applies to:** Super Admin, OS Runtime, Workspace Resolution
+**Out of scope:** CRM lifecycle, system-of-record data models
+
+### 15.1 Purpose
+
+The Control Plane defines how sales contexts are created, governed, activated, and resolved inside PremiumRadar.
+
+This is **not** UI logic and **not** runtime intelligence.
+It is the **authoritative configuration layer**.
+
+### 15.2 Core Design Principles (Non-Negotiable)
+
+1. Authority precedes intelligence
+2. Super Admin is the only write authority
+3. Incomplete configurations must never reach runtime
+4. Determinism > convenience
+5. Primary sales target drives discovery; relationships provide context
+6. Inheritance over duplication
+7. Immutability for identity, mutability for behavior
+
+### 15.3 Canonical Hierarchy (Locked)
+
+```
+Vertical (Sales Domain)
+  └── Sub-Vertical (Sales Motion)
+        ├── primary_entity_type (MANDATORY)
+        ├── related_entity_types (OPTIONAL)
+        └── Region Context (hierarchical)
+              └── Persona (scoped)
+                    └── Persona Policy (versioned lifecycle)
+```
+
+**All five layers are mandatory for runtime eligibility.**
+
+### 15.4 Definitions
+
+#### 15.4.1 Vertical (Sales Domain)
+
+**Represents:** The salesperson's domain of work.
+
+**Examples:**
+- Banking
+- Insurance
+- Real Estate
+- Recruitment
+- SaaS Sales
+
+**Rules:**
+- No entity type at vertical level
+- Immutable key
+- Mutable display name
+- Cannot be activated alone
+
+#### 15.4.2 Sub-Vertical (Sales Motion)
+
+**Represents:** A concrete sales motion inside a Vertical.
+
+**Examples (Banking):**
+- Employee Banking
+- Corporate Banking
+- Personal Loan
+- Home Loan
+
+**Fields:**
+- `primary_entity_type` (MANDATORY, immutable)
+- `related_entity_types` (OPTIONAL)
+
+**Rules:**
+- Exactly one primary entity type
+- Related entities are contextual only
+- Discovery, ranking, and outreach are driven **only** by primary entity
+
+**Example:**
+```
+Sub-Vertical: Corporate Insurance
+primary_entity_type: company
+related_entity_types: [individual]
+```
+
+#### 15.4.3 Entity Type Semantics
+
+**Primary Entity Type:**
+- The object being discovered, ranked, and sold to
+- Drives signals, enrichment, personas, outreach
+
+**Related Entity Types:**
+- Supporting entities required for compliance or workflow
+- **Never** drive discovery or ranking
+
+This avoids:
+- Multi-entity chaos
+- CRM-like overreach
+- Signal contamination
+
+### 15.5 Region Context (Mandatory)
+
+#### 15.5.1 Region Is Context, Not Identity
+
+- Region is **not** a new vertical
+- Region is **not** free text
+- Region affects behavior, compliance, language, personas
+
+#### 15.5.2 Region Hierarchy
+
+Regions are hierarchical.
+
+**Example:**
+```
+GLOBAL
+└── US
+    └── US-CA
+```
+
+**Resolution Rule:** Longest match wins
+
+### 15.6 Persona Model (With Inheritance)
+
+#### 15.6.1 Persona Scope
+
+Each Persona has a scope:
+- GLOBAL
+- REGIONAL
+- LOCAL (rare)
+
+#### 15.6.2 Persona Resolution Order
+
+```
+LOCAL → REGIONAL → GLOBAL
+```
+
+If no match is found → configuration is **INVALID**.
+
+#### 15.6.3 Persona Constraints
+
+- `Persona.entity_type` must match `Sub-Vertical.primary_entity_type`
+- Personas cannot exist without a Sub-Vertical + Region context
+
+### 15.7 Persona Policy (Lifecycle-Safe)
+
+#### 15.7.1 Policy States
+
+```
+DRAFT → STAGED → ACTIVE → DEPRECATED
+```
+
+#### 15.7.2 Policy Binding
+
+Each Persona maintains:
+- `active_policy_id`
+- `next_policy_id` (optional)
+
+#### 15.7.3 Guarantees
+
+- Zero downtime rollout
+- Blue/green policy deployment
+- Audit-safe transitions
+- No hot swaps without staging
+
+### 15.8 Runtime Eligibility Rules (Hard Gate)
+
+A configuration becomes runtime-eligible **ONLY IF**:
+
+- ✅ Vertical exists and is active
+- ✅ Sub-Vertical exists and is active
+- ✅ Region resolves
+- ✅ Persona resolves via inheritance
+- ✅ An ACTIVE policy exists
+
+**Otherwise:**
+```
+status = DRAFT
+runtime_eligible = false
+```
+
+**No partial resolution. No fallback. No guessing.**
+
+### 15.9 Explicit Non-Goals (Important)
+
+The Control Plane does **NOT**:
+
+- ❌ Model full CRM entity lifecycles
+- ❌ Track candidate → employee transitions
+- ❌ Replace core banking systems
+- ❌ Perform runtime inference
+- ❌ Allow UI-level shortcuts
+
+Those belong elsewhere.
+
+### 15.10 Governance Rules
+
+- Keys are **immutable forever**
+- Display names are mutable
+- Deletions are destructive and audited
+- **No seed scripts**
+- **No non–Super Admin write paths**
+- All writes are audited
+
+### 15.11 Version Freeze Declaration
+
+**Control Plane v2.0 is frozen.**
+
+Changes require:
+- Explicit v3 proposal
+- Written migration plan
+- Backward compatibility strategy
+
+**No incremental "small tweaks".**
+
+### 15.12 Database Tables (Reference)
+
+| Table | Purpose |
+|-------|---------|
+| `os_verticals` | Sales domains (Banking, Insurance, etc.) |
+| `os_sub_verticals` | Sales motions (Employee Banking, Corporate Banking, etc.) |
+| `os_personas` | Persona definitions per sub-vertical + region |
+| `os_persona_policies` | Policy configurations with lifecycle states |
+| `os_workspace_bindings` | Tenant → vertical/sub-vertical/persona bindings |
+| `os_controlplane_audit` | Immutable audit log of all changes |
+
+### 15.13 API Endpoints (Super Admin Only)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/superadmin/controlplane/verticals` | List verticals |
+| POST | `/api/superadmin/controlplane/verticals` | Create vertical |
+| PATCH | `/api/superadmin/controlplane/verticals/:id` | Update vertical |
+| GET | `/api/superadmin/controlplane/sub-verticals` | List sub-verticals |
+| POST | `/api/superadmin/controlplane/sub-verticals` | Create sub-vertical |
+| GET | `/api/superadmin/controlplane/personas` | List personas |
+| POST | `/api/superadmin/controlplane/personas` | Create persona |
+| PATCH | `/api/superadmin/controlplane/personas/:id/policy` | Update policy |
+
+**All endpoints require Super Admin session authentication.**
+
+---
+
 **End of UPR_SAAS_CONTEXT.md**
