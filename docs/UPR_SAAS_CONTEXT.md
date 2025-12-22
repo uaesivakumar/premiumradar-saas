@@ -996,6 +996,97 @@ Changes require:
 
 **All endpoints require Super Admin session authentication.**
 
+### 15.15 SIVA Routing Transitional Rules (v2.0)
+
+**Status:** TRANSITIONAL (until all verticals are bound)
+
+#### Resolution Order
+
+SIVA agent selection follows this priority:
+
+1. **DB Agent First (v2.0 Path)**
+   - Check `os_workspace_bindings` for tenant+workspace
+   - If bound: Use `sub_vertical.default_agent` from binding
+   - This is the canonical path
+
+2. **Hardcoded Routing (Legacy Only)**
+   - If no binding exists: Fall back to `mapToProfile()` / `getOSProfile()`
+   - These functions emit DEPRECATED warnings in development
+   - Legacy path maintained for backward compatibility only
+
+#### Code Locations
+
+| File | Function | Status |
+|------|----------|--------|
+| `lib/os-client.ts` | `mapToProfile()` | DEPRECATED |
+| `lib/stores/siva-store.ts` | `getOSProfile()` | DEPRECATED |
+| `app/api/os/resolve-binding/route.ts` | (new) | v2.0 CANONICAL |
+
+#### Transitional Contract
+
+```
+IF workspace_binding EXISTS:
+  agent = sub_vertical.default_agent (from DB)
+  persona = binding.persona_id (from DB)
+  RESOLUTION_METHOD = "BINDING"
+
+ELSE:
+  agent = hardcoded_profile_map[sub_vertical]  // DEPRECATED
+  persona = null
+  RESOLUTION_METHOD = "LEGACY_HARDCODED"
+  console.warn("[DEPRECATED] Using hardcoded routing...")
+```
+
+#### NOT READY Markers
+
+Unbound vertical stacks return explicit errors:
+
+| Endpoint | Error Code | Meaning |
+|----------|------------|---------|
+| `/api/os/resolve-binding` | `BINDING_NOT_FOUND` | No workspace binding exists |
+| `/api/os/resolve-binding` | `BINDING_INACTIVE` | Binding exists but is_active=false |
+| `/api/os/resolve-vertical` | `VERTICAL_NOT_CONFIGURED` | Vertical not found |
+| `/api/os/resolve-vertical` | `SUB_VERTICAL_NOT_CONFIGURED` | Sub-vertical not found |
+| `/api/os/resolve-vertical` | `PERSONA_NOT_CONFIGURED` | Persona not found |
+| `/api/os/resolve-vertical` | `POLICY_NOT_ACTIVE` | No ACTIVE policy |
+
+**Rule:** If any of these errors occur, the stack is NOT READY for production use.
+
+### 15.16 Control Plane v2.0 Schema Freeze
+
+**Status:** FROZEN as of 2025-12-22
+**Version:** 2.0.0
+
+#### Frozen Schema
+
+The following tables are now frozen:
+
+| Table | Frozen Columns |
+|-------|----------------|
+| `os_verticals` | `entity_type` (deprecated), `region_scope` (deprecated) |
+| `os_sub_verticals` | `primary_entity_type` (immutable), `related_entity_types` |
+| `os_personas` | `scope`, `region_code` |
+| `os_persona_policies` | `status`, `activated_at` |
+| `os_workspace_bindings` | All columns |
+
+#### Frozen Constraints
+
+- `valid_primary_entity_type`: CHECK (primary_entity_type IN ('deal', 'company', 'individual'))
+- `valid_persona_scope`: CHECK (scope IN ('LOCAL', 'REGIONAL', 'GLOBAL'))
+- `valid_policy_status`: CHECK (status IN ('DRAFT', 'STAGED', 'ACTIVE', 'DEPRECATED'))
+
+#### Change Process (v3.0+)
+
+Any schema changes require:
+
+1. Explicit v3.0 proposal document
+2. Written migration plan with rollback strategy
+3. Backward compatibility analysis
+4. Founder approval
+5. Staged rollout (DRAFT → STAGED → ACTIVE)
+
+**No incremental "small tweaks" allowed.**
+
 ---
 
 **End of UPR_SAAS_CONTEXT.md**
