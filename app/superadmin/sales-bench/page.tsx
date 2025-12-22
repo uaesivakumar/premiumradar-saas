@@ -315,7 +315,7 @@ function SalesBenchDashboardInner() {
                       {suite.scenario_count}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {suite.latest_run ? (
+                      {suite.latest_run?.golden_pass_rate != null ? (
                         <span className={`font-medium ${getScoreColor(suite.latest_run.golden_pass_rate)}`}>
                           {suite.latest_run.golden_pass_rate.toFixed(0)}%
                         </span>
@@ -324,7 +324,7 @@ function SalesBenchDashboardInner() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {suite.latest_run ? (
+                      {suite.latest_run?.kill_containment_rate != null ? (
                         <span className={`font-medium ${getScoreColor(suite.latest_run.kill_containment_rate)}`}>
                           {suite.latest_run.kill_containment_rate.toFixed(0)}%
                         </span>
@@ -333,7 +333,7 @@ function SalesBenchDashboardInner() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {suite.latest_run ? (
+                      {suite.latest_run?.cohens_d != null ? (
                         <span className={`font-medium ${
                           suite.latest_run.cohens_d >= 2 ? 'text-emerald-400' :
                           suite.latest_run.cohens_d >= 0.8 ? 'text-amber-400' : 'text-red-400'
