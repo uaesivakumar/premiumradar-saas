@@ -4,17 +4,28 @@ import { useState, useEffect, Component, ReactNode, ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FlaskConical,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   ChevronRight,
   RefreshCw,
-  Zap,
   Shield,
   Target,
   Clock,
   AlertTriangle,
+  Lock,
+  Archive,
+  Eye,
+  Settings,
+  CheckCircle2,
+  XCircle,
+  Info,
+  Scale,
+  FileCheck,
 } from 'lucide-react';
+
+// ============================================================================
+// GOVERNANCE UI - PRD v1.3 APPENDIX COMPLIANT
+// This UI is for validation and trust evaluation ONLY.
+// It does NOT represent conversion performance or optimization guidance.
+// ============================================================================
 
 // Error Boundary to catch and display errors
 interface ErrorBoundaryProps {
@@ -72,10 +83,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
+// Types
+type ViewMode = 'founder' | 'operator';
+
 interface SuiteSummary {
   key: string;
   name: string;
-  type: string; // PRE_ENTRY, POST_ENTRY, etc.
+  type: string;
   vertical: string;
   sub_vertical: string;
   region: string;
@@ -92,6 +106,12 @@ interface SuiteSummary {
     golden_pass_rate: number;
     kill_containment_rate: number;
   };
+  // RM Trial Readiness fields (computed)
+  rm_trial_ready?: boolean;
+  shadow_weeks?: number;
+  founder_approved_acts?: number;
+  block_false_positives?: number;
+  wiring_parity_valid?: boolean;
 }
 
 interface DashboardStats {
@@ -103,12 +123,89 @@ interface DashboardStats {
   insight: string;
 }
 
+// Tooltip Component
+function MetricTooltip({ children }: { children: ReactNode }) {
+  return (
+    <div className="group relative inline-block">
+      {children}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+        This metric is for validation and trust evaluation only.
+        <br />
+        It does not represent conversion performance or optimization guidance.
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-800" />
+      </div>
+    </div>
+  );
+}
+
+// RM Trial Readiness Badge
+function RMTrialBadge({ suite }: { suite: SuiteSummary }) {
+  // Compute RM Trial Readiness based on governance conditions
+  const isSystemValidated = suite.status === 'SYSTEM_VALIDATED' || suite.status === 'GA_APPROVED';
+  const hasShadowStability = (suite.shadow_weeks ?? 0) >= 2;
+  const hasFounderApproval = (suite.founder_approved_acts ?? 0) >= 10;
+  const hasBlockIntegrity = (suite.block_false_positives ?? 0) === 0;
+  const hasWiringParity = suite.wiring_parity_valid !== false;
+
+  const isReady = isSystemValidated && hasShadowStability && hasFounderApproval && hasBlockIntegrity && hasWiringParity;
+
+  return (
+    <div className="group relative">
+      {isReady ? (
+        <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded text-xs text-emerald-400">
+          <CheckCircle2 className="w-3 h-3" />
+          RM TRIAL READY
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-400">
+          <XCircle className="w-3 h-3" />
+          NOT READY FOR RM TRIALS
+        </span>
+      )}
+      <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-50">
+        RM trials are allowed only after governance validation, shadow stability, and founder trust approval.
+        <div className="absolute top-full left-4 border-4 border-transparent border-t-neutral-800" />
+      </div>
+    </div>
+  );
+}
+
+// Suite Status Badge
+function SuiteStatusBadge({ status }: { status: string }) {
+  if (status === 'FROZEN' || status === 'SYSTEM_VALIDATED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[10px] text-blue-400">
+        <Lock className="w-2.5 h-2.5" />
+        BASELINE — DO NOT TUNE
+      </span>
+    );
+  }
+  if (status === 'ARCHIVED' || status === 'DEPRECATED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-800 border border-neutral-700 rounded text-[10px] text-neutral-500">
+        <Archive className="w-2.5 h-2.5" />
+        REFERENCE ONLY
+      </span>
+    );
+  }
+  if (status === 'GA_APPROVED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-[10px] text-emerald-400">
+        <FileCheck className="w-2.5 h-2.5" />
+        GA APPROVED
+      </span>
+    );
+  }
+  return null;
+}
+
 function SalesBenchDashboardInner() {
   const router = useRouter();
   const [suites, setSuites] = useState<SuiteSummary[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('founder');
 
   const fetchDashboard = async () => {
     try {
@@ -118,7 +215,6 @@ function SalesBenchDashboardInner() {
         setSuites(data.data.suites || []);
         setStats(data.data.stats || null);
       } else {
-        // API error or unauthorized - show empty state
         console.warn('Sales-Bench API response:', data.error || 'Unknown error');
         setSuites([]);
         setStats(null);
@@ -135,6 +231,11 @@ function SalesBenchDashboardInner() {
 
   useEffect(() => {
     fetchDashboard();
+    // Load saved view preference
+    const savedView = localStorage.getItem('salesbench_view_mode');
+    if (savedView === 'operator') {
+      setViewMode('operator');
+    }
   }, []);
 
   const handleRefresh = () => {
@@ -142,18 +243,18 @@ function SalesBenchDashboardInner() {
     fetchDashboard();
   };
 
-  const getTrend = (current: number, previous?: number) => {
-    if (!previous) return { icon: Minus, color: 'text-neutral-500', label: 'New' };
-    const diff = current - previous;
-    if (diff > 2) return { icon: TrendingUp, color: 'text-emerald-400', label: `+${diff.toFixed(0)}%` };
-    if (diff < -2) return { icon: TrendingDown, color: 'text-red-400', label: `${diff.toFixed(0)}%` };
-    return { icon: Minus, color: 'text-neutral-500', label: 'Stable' };
+  const handleViewToggle = () => {
+    const newMode = viewMode === 'founder' ? 'operator' : 'founder';
+    setViewMode(newMode);
+    localStorage.setItem('salesbench_view_mode', newMode);
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 95) return 'text-emerald-400';
-    if (score >= 80) return 'text-amber-400';
-    return 'text-red-400';
+  // Governance-compliant score display (no color coding that implies good/bad)
+  const getComplianceColor = (score: number) => {
+    // Neutral colors - no red/green that implies performance
+    if (score >= 95) return 'text-neutral-200';
+    if (score >= 80) return 'text-neutral-300';
+    return 'text-neutral-400';
   };
 
   const formatType = (stage: string) => {
@@ -165,12 +266,28 @@ function SalesBenchDashboardInner() {
     return types[stage] || { label: stage, color: 'bg-neutral-500/20 text-neutral-400' };
   };
 
+  // Generate governance notice (NOT performance insight)
+  const getGovernanceNotice = () => {
+    if (!stats) return null;
+
+    const avgGolden = stats.avg_golden_pass ?? 0;
+    const avgKill = stats.avg_kill_containment ?? 0;
+
+    if (avgGolden >= 95 && avgKill >= 95) {
+      return 'Governance Status: All suites meet baseline compliance thresholds. Suitable for RM trial evaluation.';
+    }
+    if (avgGolden >= 80 && avgKill >= 80) {
+      return 'Governance Status: Most suites meet baseline compliance. Review individual suite status before RM involvement.';
+    }
+    return 'Governance Status: Some suites require attention before RM trials. This is an observational status, not an optimization target.';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
           <FlaskConical className="w-8 h-8 text-violet-400 animate-pulse mx-auto mb-2" />
-          <p className="text-neutral-400 text-sm">Loading Sales-Bench...</p>
+          <p className="text-neutral-400 text-sm">Loading Governance Dashboard...</p>
         </div>
       </div>
     );
@@ -178,91 +295,228 @@ function SalesBenchDashboardInner() {
 
   return (
     <div className="min-h-screen bg-black text-white p-6">
+      {/* View Mode Banner */}
+      {viewMode === 'founder' ? (
+        <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-3 mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-violet-400" />
+              <span className="text-violet-300 text-sm font-medium">Founder View</span>
+            </div>
+            <p className="text-violet-300/70 text-xs">
+              You are evaluating trust and maturity, not performance.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Settings className="w-4 h-4 text-amber-400" />
+              <span className="text-amber-300 text-sm font-medium">Operator View</span>
+            </div>
+            <p className="text-amber-300/70 text-xs">
+              Metrics here do not indicate sales success. Do not tune thresholds without governance approval.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FlaskConical className="w-6 h-6 text-violet-400" />
-            SIVA Sales-Bench
+            <Scale className="w-6 h-6 text-violet-400" />
+            SIVA Governance Console
           </h1>
           <p className="text-neutral-500 text-sm mt-1">
-            Behavioral validation & performance tracking
+            Behavioral Validation & Trust Evaluation — No Runtime Impact
           </p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleViewToggle}
+            className="flex items-center gap-2 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm transition-colors"
+          >
+            {viewMode === 'founder' ? (
+              <>
+                <Settings className="w-4 h-4" />
+                Operator View
+              </>
+            ) : (
+              <>
+                <Eye className="w-4 h-4" />
+                Founder View
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Hero Stats */}
-      {stats && (
+      {/* Founder View: Trust Summary */}
+      {viewMode === 'founder' && stats && (
+        <>
+          {/* Governance Metrics (Read-Only) */}
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <MetricTooltip>
+              <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+                <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
+                  <Target className="w-3 h-3" />
+                  GOLDEN PATH COMPLIANCE
+                  <Info className="w-3 h-3 opacity-50" />
+                </div>
+                <p className={`text-3xl font-bold ${getComplianceColor(stats.avg_golden_pass ?? 0)}`}>
+                  {(stats.avg_golden_pass ?? 0).toFixed(0)}%
+                </p>
+                <p className="text-xs text-neutral-600 mt-1">Observational metric only</p>
+              </div>
+            </MetricTooltip>
+            <MetricTooltip>
+              <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+                <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
+                  <Shield className="w-3 h-3" />
+                  POLICY CONTAINMENT RATE
+                  <Info className="w-3 h-3 opacity-50" />
+                </div>
+                <p className={`text-3xl font-bold ${getComplianceColor(stats.avg_kill_containment ?? 0)}`}>
+                  {(stats.avg_kill_containment ?? 0).toFixed(0)}%
+                </p>
+                <p className="text-xs text-neutral-600 mt-1">Observational metric only</p>
+              </div>
+            </MetricTooltip>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
+                <FlaskConical className="w-3 h-3" />
+                VALIDATION RUNS
+              </div>
+              <p className="text-3xl font-bold text-white">
+                {stats.total_runs}
+              </p>
+              <p className="text-xs text-neutral-600 mt-1">Across {stats.total_suites} suites</p>
+            </div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
+                <FileCheck className="w-3 h-3" />
+                REFERENCE SUITE
+              </div>
+              <p className="text-lg font-bold text-neutral-200 truncate">
+                {stats.best_performer || '-'}
+              </p>
+              <p className="text-xs text-neutral-600 mt-1">Baseline for comparison</p>
+            </div>
+          </div>
+
+          {/* Governance Notice */}
+          <div className="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-neutral-400 mt-0.5" />
+              <div>
+                <p className="text-neutral-300 text-sm font-medium">Governance Notice</p>
+                <p className="text-neutral-400 text-sm mt-1">{getGovernanceNotice()}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* What This Proves / Does Not Prove */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-4">
+              <p className="text-emerald-400 text-xs font-medium mb-2">WHAT THIS PROVES</p>
+              <ul className="space-y-1.5 text-sm text-neutral-300">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <span>SIVA follows expected behavioral patterns on known scenarios</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <span>Policy gates are consistently enforced</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <span>Golden path scenarios produce expected ACT decisions</span>
+                </li>
+              </ul>
+            </div>
+            <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
+              <p className="text-red-400 text-xs font-medium mb-2">WHAT THIS DOES NOT PROVE</p>
+              <ul className="space-y-1.5 text-sm text-neutral-300">
+                <li className="flex items-start gap-2">
+                  <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <span>Real-world conversion rates or sales success</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <span>Model accuracy on unseen data</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <span>Optimization guidance or tuning recommendations</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Operator View: Raw Metrics */}
+      {viewMode === 'operator' && stats && (
         <div className="grid grid-cols-4 gap-4 mb-6">
+          <MetricTooltip>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
+                <Target className="w-3 h-3" />
+                GOLDEN PATH COMPLIANCE
+              </div>
+              <p className="text-3xl font-bold text-neutral-200">
+                {(stats.avg_golden_pass ?? 0).toFixed(1)}%
+              </p>
+            </div>
+          </MetricTooltip>
+          <MetricTooltip>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
+                <Shield className="w-3 h-3" />
+                POLICY CONTAINMENT RATE
+              </div>
+              <p className="text-3xl font-bold text-neutral-200">
+                {(stats.avg_kill_containment ?? 0).toFixed(1)}%
+              </p>
+            </div>
+          </MetricTooltip>
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
             <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
-              <Zap className="w-3 h-3" />
-              GOLDEN PASS RATE
+              <FlaskConical className="w-3 h-3" />
+              VALIDATION RUNS
             </div>
-            <p className={`text-3xl font-bold ${getScoreColor(stats.avg_golden_pass ?? 0)}`}>
-              {(stats.avg_golden_pass ?? 0).toFixed(0)}%
-            </p>
-            <p className="text-xs text-neutral-600 mt-1">Qualified leads engaged</p>
+            <p className="text-3xl font-bold text-white">{stats.total_runs}</p>
           </div>
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
             <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
-              <Shield className="w-3 h-3" />
-              KILL CONTAINMENT
+              <FileCheck className="w-3 h-3" />
+              REFERENCE SUITE
             </div>
-            <p className={`text-3xl font-bold ${getScoreColor(stats.avg_kill_containment ?? 0)}`}>
-              {(stats.avg_kill_containment ?? 0).toFixed(0)}%
-            </p>
-            <p className="text-xs text-neutral-600 mt-1">Bad leads blocked</p>
-          </div>
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-            <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
-              <Target className="w-3 h-3" />
-              TOTAL RUNS
-            </div>
-            <p className="text-3xl font-bold text-white">
-              {stats.total_runs}
-            </p>
-            <p className="text-xs text-neutral-600 mt-1">Across {stats.total_suites} suites</p>
-          </div>
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-            <div className="flex items-center gap-2 text-neutral-500 text-xs mb-1">
-              <TrendingUp className="w-3 h-3" />
-              BEST PERFORMER
-            </div>
-            <p className="text-lg font-bold text-emerald-400 truncate">
-              {stats.best_performer || '-'}
-            </p>
-            <p className="text-xs text-neutral-600 mt-1">Highest combined score</p>
+            <p className="text-lg font-bold text-neutral-200 truncate">{stats.best_performer || '-'}</p>
           </div>
         </div>
       )}
 
-      {/* Auto-Insight */}
-      {stats?.insight && (
-        <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-4 mb-6">
-          <p className="text-violet-300 text-sm">
-            <span className="font-medium text-violet-400">Insight:</span> {stats.insight}
-          </p>
-        </div>
-      )}
-
-      {/* Suites Table */}
+      {/* Validation Suites Table */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-neutral-800">
-          <h2 className="font-medium">Validation Suites</h2>
+        <div className="px-4 py-3 border-b border-neutral-800 flex items-center justify-between">
+          <h2 className="font-medium">Governance Suites</h2>
+          <span className="text-xs text-neutral-500">Frozen suites — Metrics are observational</span>
         </div>
 
         {suites.length === 0 ? (
           <div className="p-8 text-center text-neutral-500">
-            No validation suites found. Create one to get started.
+            No validation suites found.
           </div>
         ) : (
           <table className="w-full">
@@ -270,25 +524,28 @@ function SalesBenchDashboardInner() {
               <tr>
                 <th className="px-4 py-3 text-left">Suite</th>
                 <th className="px-4 py-3 text-left">Type</th>
-                <th className="px-4 py-3 text-left">Vertical</th>
-                <th className="px-4 py-3 text-left">Sub-Vertical</th>
                 <th className="px-4 py-3 text-center">Scenarios</th>
-                <th className="px-4 py-3 text-center">Golden %</th>
-                <th className="px-4 py-3 text-center">Kill %</th>
-                <th className="px-4 py-3 text-center">Cohen&apos;s d</th>
-                <th className="px-4 py-3 text-center">Trend</th>
-                <th className="px-4 py-3 text-left">Last Run</th>
+                <th className="px-4 py-3 text-center">
+                  <MetricTooltip>
+                    <span className="cursor-help">Golden Compliance</span>
+                  </MetricTooltip>
+                </th>
+                <th className="px-4 py-3 text-center">
+                  <MetricTooltip>
+                    <span className="cursor-help">Policy Containment</span>
+                  </MetricTooltip>
+                </th>
+                {viewMode === 'operator' && (
+                  <th className="px-4 py-3 text-center">Cohen&apos;s d</th>
+                )}
+                <th className="px-4 py-3 text-center">RM Trial Status</th>
+                <th className="px-4 py-3 text-left">Last Validated</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/50">
               {suites.map((suite) => {
                 const typeInfo = formatType(suite.type);
-                const goldenTrend = getTrend(
-                  suite.latest_run?.golden_pass_rate || 0,
-                  suite.previous_run?.golden_pass_rate
-                );
-                const TrendIcon = goldenTrend.icon;
 
                 return (
                   <tr
@@ -297,26 +554,33 @@ function SalesBenchDashboardInner() {
                     onClick={() => router.push(`/superadmin/sales-bench/${suite.key}`)}
                   >
                     <td className="px-4 py-3">
-                      <p className="font-medium text-white">{suite.name}</p>
-                      <p className="text-xs text-neutral-500">{suite.key}</p>
+                      <div className="flex items-center gap-2">
+                        {(suite.status === 'FROZEN' || suite.status === 'SYSTEM_VALIDATED') && (
+                          <Lock className="w-4 h-4 text-blue-400" />
+                        )}
+                        {(suite.status === 'ARCHIVED' || suite.status === 'DEPRECATED') && (
+                          <Archive className="w-4 h-4 text-neutral-500" />
+                        )}
+                        <div>
+                          <p className="font-medium text-white">{suite.name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs text-neutral-500">{suite.key}</p>
+                            <SuiteStatusBadge status={suite.status} />
+                          </div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded text-xs ${typeInfo.color}`}>
                         {typeInfo.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-neutral-300 capitalize">
-                      {suite.vertical.replace(/_/g, ' ')}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-300 capitalize">
-                      {suite.sub_vertical.replace(/_/g, ' ')}
-                    </td>
                     <td className="px-4 py-3 text-center text-neutral-400">
                       {suite.scenario_count}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {suite.latest_run?.golden_pass_rate != null ? (
-                        <span className={`font-medium ${getScoreColor(suite.latest_run.golden_pass_rate)}`}>
+                        <span className="font-medium text-neutral-200">
                           {suite.latest_run.golden_pass_rate.toFixed(0)}%
                         </span>
                       ) : (
@@ -325,30 +589,26 @@ function SalesBenchDashboardInner() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       {suite.latest_run?.kill_containment_rate != null ? (
-                        <span className={`font-medium ${getScoreColor(suite.latest_run.kill_containment_rate)}`}>
+                        <span className="font-medium text-neutral-200">
                           {suite.latest_run.kill_containment_rate.toFixed(0)}%
                         </span>
                       ) : (
                         <span className="text-neutral-600">-</span>
                       )}
                     </td>
+                    {viewMode === 'operator' && (
+                      <td className="px-4 py-3 text-center">
+                        {suite.latest_run?.cohens_d != null ? (
+                          <span className="font-medium text-neutral-200">
+                            {suite.latest_run.cohens_d.toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-600">-</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-center">
-                      {suite.latest_run?.cohens_d != null ? (
-                        <span className={`font-medium ${
-                          suite.latest_run.cohens_d >= 2 ? 'text-emerald-400' :
-                          suite.latest_run.cohens_d >= 0.8 ? 'text-amber-400' : 'text-red-400'
-                        }`}>
-                          {suite.latest_run.cohens_d.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span className="text-neutral-600">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className={`flex items-center justify-center gap-1 ${goldenTrend.color}`}>
-                        <TrendIcon className="w-3 h-3" />
-                        <span className="text-xs">{goldenTrend.label}</span>
-                      </div>
+                      <RMTrialBadge suite={suite} />
                     </td>
                     <td className="px-4 py-3">
                       {suite.latest_run ? (
@@ -371,9 +631,13 @@ function SalesBenchDashboardInner() {
         )}
       </div>
 
-      {/* Footer Help */}
-      <div className="mt-6 text-center text-xs text-neutral-600">
-        Click any suite to view detailed results, run validation, or download reports.
+      {/* Footer - Governance Disclaimer */}
+      <div className="mt-6 p-4 bg-neutral-900/50 border border-neutral-800 rounded-lg">
+        <p className="text-xs text-neutral-500 text-center">
+          Sales-Bench is a governance and validation system. Metrics shown are observational and do not indicate sales success.
+          <br />
+          Do not use these metrics to tune, optimize, or adjust SIVA configuration without explicit governance approval.
+        </p>
       </div>
     </div>
   );
