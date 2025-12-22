@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // ============================================================================
 
 // Types
-type Section = 'overview' | 'manifesto' | 'category' | 'philosophy' | 'architecture' | 'prd' | 'scale' | 'orchestration' | 'roadmap' | 'learn' | 'quiz' | 'progress';
+type Section = 'overview' | 'manifesto' | 'category' | 'philosophy' | 'architecture' | 'prd' | 'scale' | 'orchestration' | 'roadmap' | 'learn' | 'quiz' | 'progress' | 'salesbench';
 type LearningModule = {
   id: string;
   title: string;
@@ -216,6 +216,7 @@ export default function FounderBiblePage() {
             {activeSection === 'prd' && <PRDSection />}
             {activeSection === 'scale' && <ScaleSection />}
             {activeSection === 'orchestration' && <OrchestrationSection />}
+            {activeSection === 'salesbench' && <SalesBenchSection />}
             {activeSection === 'roadmap' && <RoadmapSection sprintProgress={sprintProgress} loading={sprintProgressLoading} />}
             {activeSection === 'learn' && (
               <LearnSection
@@ -247,7 +248,7 @@ export default function FounderBiblePage() {
 
 // Calculate total topics dynamically
 // 20 comprehensive modules with 100+ topics covering every inch of the product
-const TOTAL_TOPICS = 114; // Updated Dec 2025: Added 6 topics for Model Capability Routing (S228-S233)
+const TOTAL_TOPICS = 119; // Updated Dec 2025: Added 5 topics for Sales-Bench v1
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: '🏠' },
@@ -258,6 +259,7 @@ const SECTIONS = [
   { id: 'prd', label: 'Master PRD', icon: '📋' },
   { id: 'scale', label: 'Scale', icon: '🚀' },
   { id: 'orchestration', label: 'AI Console', icon: '🤖' },
+  { id: 'salesbench', label: 'Sales-Bench', icon: '🧪' },
   { id: 'roadmap', label: 'Roadmap', icon: '🗺️' },
   { id: 'learn', label: 'Learn', icon: '📚' },
   { id: 'quiz', label: 'Quiz', icon: '🧠' },
@@ -2712,6 +2714,275 @@ const DB_TABLE_GROUPS = [
     ],
   },
 ];
+
+// ============================================================================
+// SALES-BENCH SECTION
+// PRD v1.3 Appendix - Behavioral Validation System for SIVA
+// ============================================================================
+
+function SalesBenchSection() {
+  const [activeTab, setActiveTab] = useState<'overview' | 'golden' | 'crs' | 'parity' | 'shadow'>('overview');
+
+  return (
+    <div className="max-w-7xl mx-auto px-6">
+      <div className="text-center mb-12">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+          <span className="text-2xl">🧪</span>
+        </div>
+        <h1 className="text-4xl font-bold mb-4">Sales-Bench v1</h1>
+        <p className="text-slate-400 max-w-2xl mx-auto">
+          The behavioral validation system for SIVA. Proving AI makes the right sales decisions.
+        </p>
+        <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-violet-500/20 border border-violet-500/30 rounded-full">
+          <span className="text-violet-400 text-sm font-medium">PRD v1.3 Appendix</span>
+          <span className="text-slate-500">|</span>
+          <span className="text-slate-400 text-sm">Advisory Only</span>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+        {[
+          { id: 'overview', label: 'Overview', icon: '📋' },
+          { id: 'golden', label: 'Golden/Kill Paths', icon: '🎯' },
+          { id: 'crs', label: 'CRS Scoring', icon: '📊' },
+          { id: 'parity', label: 'Wiring Parity', icon: '🔌' },
+          { id: 'shadow', label: 'Shadow Mode', icon: '👁️' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+            className={`px-5 py-2.5 rounded-xl font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+              activeTab === tab.id
+                ? 'bg-violet-500 text-white'
+                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            }`}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="space-y-8">
+          {/* Core Philosophy */}
+          <div className="bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/30 rounded-2xl p-8">
+            <h2 className="text-2xl font-bold mb-4 text-violet-400">Core Philosophy</h2>
+            <div className="bg-slate-900/50 rounded-xl p-6 font-mono text-sm mb-6">
+              <p className="text-emerald-400">SALES-BENCH IS ADVISORY ONLY</p>
+              <p className="text-slate-400">CRS NEVER alters SIVA runtime</p>
+              <p className="text-slate-400">It observes, scores, reports — but never changes behavior</p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="bg-slate-800/50 rounded-xl p-4">
+                <h3 className="font-bold text-amber-400 mb-2">⚖️ Authority Invariance</h3>
+                <p className="text-slate-400 text-sm">Cannot modify envelopes, personas, or policies</p>
+              </div>
+              <div className="bg-slate-800/50 rounded-xl p-4">
+                <h3 className="font-bold text-cyan-400 mb-2">🔒 Production Isolation</h3>
+                <p className="text-slate-400 text-sm">Never impacts live SIVA decisions</p>
+              </div>
+              <div className="bg-slate-800/50 rounded-xl p-4">
+                <h3 className="font-bold text-emerald-400 mb-2">📝 Advisory Only</h3>
+                <p className="text-slate-400 text-sm">CRS informs humans, never controls SIVA</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Key Metrics */}
+          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+            <h2 className="text-2xl font-bold mb-6">Key Metrics</h2>
+            <div className="grid md:grid-cols-4 gap-6">
+              <div className="text-center">
+                <p className="text-4xl font-bold text-emerald-400 mb-2">≥80%</p>
+                <p className="text-slate-400 text-sm">Golden Pass Rate</p>
+                <p className="text-xs text-slate-500">Correctly pursuing good leads</p>
+              </div>
+              <div className="text-center">
+                <p className="text-4xl font-bold text-red-400 mb-2">≥95%</p>
+                <p className="text-slate-400 text-sm">Kill Containment</p>
+                <p className="text-xs text-slate-500">Correctly blocking bad leads</p>
+              </div>
+              <div className="text-center">
+                <p className="text-4xl font-bold text-violet-400 mb-2">≥0.80</p>
+                <p className="text-slate-400 text-sm">Cohen&apos;s d</p>
+                <p className="text-xs text-slate-500">Statistical separation</p>
+              </div>
+              <div className="text-center">
+                <p className="text-4xl font-bold text-amber-400 mb-2">≥0.70</p>
+                <p className="text-slate-400 text-sm">Spearman ρ</p>
+                <p className="text-xs text-slate-500">Human correlation</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'golden' && (
+        <div className="space-y-8">
+          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+            <h2 className="text-2xl font-bold mb-6">The Golden/Kill Path Paradigm</h2>
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
+                <h3 className="text-xl font-bold text-emerald-400 mb-4">✅ Golden Path</h3>
+                <p className="text-slate-300 mb-4">Test cases SIVA should pursue and WIN</p>
+                <ul className="space-y-2 text-sm text-slate-400">
+                  <li>• Tech startup with hiring signals → PASS</li>
+                  <li>• Fintech with recent funding → PASS</li>
+                  <li>• Growing company expanding to UAE → PASS</li>
+                </ul>
+                <div className="mt-4 pt-4 border-t border-emerald-500/20">
+                  <p className="text-emerald-400 font-medium">Measures: False Negatives</p>
+                  <p className="text-slate-500 text-sm">Missed opportunities</p>
+                </div>
+              </div>
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
+                <h3 className="text-xl font-bold text-red-400 mb-4">🚫 Kill Path</h3>
+                <p className="text-slate-300 mb-4">Test cases SIVA should REFUSE or BLOCK</p>
+                <ul className="space-y-2 text-sm text-slate-400">
+                  <li>• Government entity → BLOCK</li>
+                  <li>• Enterprise without signals → BLOCK</li>
+                  <li>• Sanctioned entity → BLOCK</li>
+                </ul>
+                <div className="mt-4 pt-4 border-t border-red-500/20">
+                  <p className="text-red-400 font-medium">Measures: False Positives</p>
+                  <p className="text-slate-500 text-sm">Wasted effort on bad leads</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'crs' && (
+        <div className="space-y-8">
+          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+            <h2 className="text-2xl font-bold mb-6">CRS: Composite Readiness Score</h2>
+            <p className="text-slate-400 mb-6">8 dimensions with fixed weights (PRD v1.3 mandated)</p>
+            <div className="grid md:grid-cols-2 gap-4">
+              {[
+                { name: 'Engagement Quality', weight: '15%', color: 'text-emerald-400' },
+                { name: 'Objection Handling', weight: '15%', color: 'text-cyan-400' },
+                { name: 'Product Knowledge', weight: '12%', color: 'text-violet-400' },
+                { name: 'Personalization', weight: '12%', color: 'text-amber-400' },
+                { name: 'Timing Sensitivity', weight: '12%', color: 'text-pink-400' },
+                { name: 'Value Articulation', weight: '12%', color: 'text-blue-400' },
+                { name: 'Compliance Adherence', weight: '12%', color: 'text-red-400' },
+                { name: 'Close Readiness', weight: '10%', color: 'text-orange-400' },
+              ].map((dim) => (
+                <div key={dim.name} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-4">
+                  <span className={dim.color}>{dim.name}</span>
+                  <span className="text-slate-400 font-mono">{dim.weight}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              <p className="text-amber-400 text-sm font-medium">⚠️ Weights are FIXED by PRD v1.3</p>
+              <p className="text-slate-400 text-sm">Only founder-approved changes allowed. All changes are audit-logged.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'parity' && (
+        <div className="space-y-8">
+          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+            <h2 className="text-2xl font-bold mb-6">Wiring Parity: One SIVA Path</h2>
+            <div className="bg-slate-800/50 rounded-xl p-6 font-mono text-sm mb-6">
+              <pre className="text-slate-300">{`Frontend Discovery          Sales-Bench
+        │                        │
+        ▼                        ▼
+  discovery.js             productionScorer.js
+        │                        │
+        └────────┬───────────────┘
+                 │
+                 ▼
+          scoreSIVA()
+     (os/siva/core-scorer.js)
+
+   NO PARALLEL INTELLIGENCE PATHS`}</pre>
+            </div>
+            <div className="grid md:grid-cols-5 gap-4">
+              {[
+                { case: 'Tech Startup', outcome: 'PASS', score: 73 },
+                { case: 'Enterprise', outcome: 'BLOCK', score: 11 },
+                { case: 'Government', outcome: 'BLOCK', score: 6 },
+                { case: 'Free Zone Fintech', outcome: 'PASS', score: 91 },
+                { case: 'Small Company', outcome: 'BLOCK', score: 38 },
+              ].map((test, i) => (
+                <div key={i} className="bg-slate-800/50 rounded-lg p-4 text-center">
+                  <p className="text-xs text-slate-500 mb-1">Case {i + 1}</p>
+                  <p className="text-sm text-slate-300 mb-2">{test.case}</p>
+                  <p className={`font-bold ${test.outcome === 'PASS' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {test.outcome} ({test.score})
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+              <p className="text-emerald-400 font-medium">✅ CERTIFIED: All 5 tests pass</p>
+              <p className="text-slate-400 text-sm">Frontend and Sales-Bench use identical SIVA path</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'shadow' && (
+        <div className="space-y-8">
+          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8">
+            <h2 className="text-2xl font-bold mb-6">Shadow Mode & Founder Trust</h2>
+            <div className="bg-slate-800/50 rounded-xl p-6 mb-6">
+              <p className="text-lg text-slate-300 italic mb-4">
+                &ldquo;Show me SIVA is making the right decisions.&rdquo;
+              </p>
+              <p className="text-lg text-slate-300 italic">
+                &ldquo;I will decide when to trust it.&rdquo;
+              </p>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
+                <h3 className="font-bold text-red-400 mb-4">🚫 FORBIDDEN in Shadow Mode</h3>
+                <ul className="space-y-2 text-slate-400 text-sm">
+                  <li>❌ Threshold changes</li>
+                  <li>❌ Scenario regeneration</li>
+                  <li>❌ Industry rules</li>
+                  <li>❌ CRS weight tuning</li>
+                  <li>❌ Outreach automation</li>
+                </ul>
+              </div>
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
+                <h3 className="font-bold text-emerald-400 mb-4">✅ ALLOWED in Shadow Mode</h3>
+                <ul className="space-y-2 text-slate-400 text-sm">
+                  <li>✓ Observe SIVA decisions</li>
+                  <li>✓ Generate Trust Reports</li>
+                  <li>✓ Compare to human judgment</li>
+                  <li>✓ Log everything for analysis</li>
+                </ul>
+              </div>
+            </div>
+            <div className="mt-6 p-4 bg-violet-500/10 border border-violet-500/30 rounded-lg">
+              <h4 className="text-violet-400 font-medium mb-2">Weekly Founder Trust Report</h4>
+              <p className="text-slate-400 text-sm">Top 10 ACT, Top 10 WAIT, 5 IGNORE, 3 BLOCK — with full reasoning and trace</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation to Detailed Docs */}
+      <div className="mt-8 text-center">
+        <a
+          href="/superadmin/sales-bench"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-violet-500 hover:bg-violet-600 text-white rounded-xl font-medium transition-colors"
+        >
+          Open Sales-Bench Dashboard →
+        </a>
+        <p className="text-slate-500 text-sm mt-2">Run validation, view results, and manage suites</p>
+      </div>
+    </div>
+  );
+}
 
 // ============================================================================
 // ROADMAP SECTION
@@ -6602,6 +6873,278 @@ Why read-only UI enforces Laws 3 & 4:
 5. TRUST: "Why this model?" has one answer, always
 
 The UI is a window, not a door. Observe, never control.`,
+      },
+    ],
+  },
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SALES-BENCH MODULE (OPERATIONS)
+  // PRD v1.3 Appendix - Behavioral Validation System
+  // ═══════════════════════════════════════════════════════════════════════════
+  {
+    id: 'sales-bench',
+    title: 'Module: Sales-Bench v1',
+    description: 'The behavioral validation system for SIVA - proving AI makes correct sales decisions',
+    icon: '🧪',
+    estimatedTime: '90 min',
+    difficulty: 'advanced',
+    category: 'operations',
+    topics: [
+      {
+        id: 'salesbench-overview',
+        title: 'What is Sales-Bench?',
+        content: 'Sales-Bench is the behavioral validation system for SIVA. It answers one critical question: "Is SIVA making the right sales decisions?" Like unit tests for code, Sales-Bench tests SIVA\'s decision-making quality.',
+        analogy: 'Think of Sales-Bench like a flight simulator for pilots. Before flying a real plane with passengers, pilots train in simulators. Sales-Bench is the simulator where we test SIVA\'s decisions before they affect real sales pipelines.',
+        keyPoints: [
+          'Sales-Bench = QA system for AI sales decisions',
+          'Tests SIVA against realistic buyer scenarios',
+          'Measures Golden Pass Rate (pursuing good leads)',
+          'Measures Kill Containment Rate (blocking bad leads)',
+          'ADVISORY ONLY - never changes SIVA runtime behavior',
+        ],
+        deepDive: `The Three Laws of Sales-Bench:
+
+1. AUTHORITY INVARIANCE
+   Sales-Bench cannot modify envelopes, personas, or policies.
+   It observes only, never changes.
+
+2. PRODUCTION ISOLATION
+   Sales-Bench never impacts live SIVA decisions.
+   All tests run in sandbox mode.
+
+3. ADVISORY ONLY
+   CRS (Composite Readiness Score) informs humans, never controls SIVA.
+   Humans decide what to do with the insights.
+
+Key Metrics:
+- Golden Pass Rate: % of good leads SIVA correctly pursues
+- Kill Containment Rate: % of bad leads SIVA correctly blocks
+- Cohen's d: Statistical separation between good and bad paths
+- Spearman ρ: Correlation with human judgment`,
+        techRationale: `Why build Sales-Bench instead of just monitoring production?
+
+1. PROACTIVE: Catch problems before they affect customers
+2. SYSTEMATIC: Test edge cases that rarely occur in production
+3. REPRODUCIBLE: Same scenario produces same result (deterministic)
+4. COMPARATIVE: Compare SIVA versions before deploying
+5. TRUSTWORTHY: Evidence-based validation, not gut feelings
+
+Without Sales-Bench, we would:
+- Only discover bugs after losing deals
+- Miss rare but critical edge cases
+- Have no way to compare model updates
+- Rely on anecdotes instead of data`,
+      },
+      {
+        id: 'salesbench-golden-kill',
+        title: 'The Golden/Kill Path Paradigm',
+        content: 'Every sales scenario has two possible paths: Golden (SIVA should WIN this deal) and Kill (SIVA should REFUSE this deal). Golden paths test for false negatives (missed opportunities). Kill paths test for false positives (wasted effort).',
+        analogy: 'Like a smoke detector. Golden path = detecting real fires (must alert). Kill path = ignoring steam from showers (must not alert). A good detector catches all fires AND ignores all non-fires.',
+        keyPoints: [
+          'Golden Path: Test cases SIVA should pursue and win',
+          'Kill Path: Test cases SIVA should block or refuse',
+          'Golden Pass Rate = correctly pursuing good leads',
+          'Kill Containment = correctly blocking bad leads',
+          'Both rates must be high for SIVA to be production-ready',
+        ],
+        deepDive: `Golden Path Examples:
+- Tech startup with hiring signals → PASS, pursue for payroll banking
+- Fintech with recent funding → PASS, pursue for treasury services
+- Growing company expanding to UAE → PASS, pursue for corporate accounts
+
+Kill Path Examples:
+- Government entity → BLOCK (ENBD policy restriction)
+- Enterprise with NO expansion signals → BLOCK (likely has established banking)
+- Sanctioned entity → BLOCK (compliance)
+- Competitor employee → BLOCK (competitive intelligence risk)
+
+Scoring:
+- Golden Pass Rate target: ≥80%
+- Kill Containment target: ≥95%
+- Cohen's d target: ≥0.80 (large effect size)
+
+If Golden Pass is low: SIVA is too conservative, missing good leads
+If Kill Containment is low: SIVA is too aggressive, wasting effort on bad leads`,
+        techRationale: `The math behind Golden/Kill validation:
+
+Golden Pass Rate = (Golden scenarios returning PASS) / (Total Golden scenarios) × 100
+
+Kill Containment Rate = (Kill scenarios returning BLOCK) / (Total Kill scenarios) × 100
+
+Cohen's d = (Mean_Golden - Mean_Kill) / Pooled_Standard_Deviation
+
+Why Cohen's d matters:
+- Measures effect SIZE, not just statistical significance
+- d ≥ 0.80 = large effect = clear separation between paths
+- If d < 0.20, Golden and Kill paths are indistinguishable = SIVA is random`,
+      },
+      {
+        id: 'salesbench-crs',
+        title: 'CRS: Composite Readiness Score',
+        content: 'CRS measures SIVA\'s sales readiness across 8 dimensions with fixed weights. It\'s a composite score from 0-100 that indicates how ready SIVA is to handle sales conversations. CRS is ADVISORY ONLY - it never changes SIVA\'s behavior.',
+        analogy: 'Like a school report card. You get grades in Math, Science, English, etc. CRS gives SIVA grades in Engagement, Objection Handling, Product Knowledge, etc. The overall GPA is the CRS score.',
+        keyPoints: [
+          '8 dimensions: Engagement, Objection Handling, Product Knowledge, etc.',
+          'Fixed weights (PRD v1.3): 15%, 15%, 12%, 12%, 12%, 12%, 12%, 10%',
+          'Score 0-100: EXCELLENT (90+), GOOD (75-89), ACCEPTABLE (60-74)',
+          'CRS is advisory - informs humans, never controls SIVA',
+          'Cannot tune weights without founder approval',
+        ],
+        deepDive: `The 8 CRS Dimensions:
+
+1. ENGAGEMENT QUALITY (15%)
+   How well does SIVA engage with buyers?
+
+2. OBJECTION HANDLING (15%)
+   How does SIVA respond to buyer resistance?
+
+3. PRODUCT KNOWLEDGE (12%)
+   Is SIVA accurate about product details?
+
+4. PERSONALIZATION (12%)
+   Does SIVA adapt to buyer context?
+
+5. TIMING SENSITIVITY (12%)
+   Does SIVA respect timing signals?
+
+6. VALUE ARTICULATION (12%)
+   Does SIVA clearly communicate value?
+
+7. COMPLIANCE ADHERENCE (12%)
+   Does SIVA follow regulations?
+
+8. CLOSE READINESS (10%)
+   Can SIVA advance deals toward close?
+
+CRS Calculation:
+CRS = Σ (dimension_score × weight)
+
+Example:
+Engagement: 85 × 0.15 = 12.75
+Objection: 70 × 0.15 = 10.50
+...
+Total CRS = 78.5 (GOOD tier)`,
+        techRationale: `Why fixed weights matter:
+
+PRD v1.3 mandates fixed weights to prevent:
+1. GAMING: Adjusting weights to inflate scores
+2. INCONSISTENCY: Different weights for different teams
+3. CHEATING: Optimizing for CRS instead of real performance
+
+Only founder-approved changes allowed.
+All weight changes are audit-logged.
+CRS is a mirror, not a lever.`,
+      },
+      {
+        id: 'salesbench-wiring-parity',
+        title: 'Wiring Parity: One SIVA Path',
+        content: 'The most critical requirement: Frontend Discovery and Sales-Bench MUST use identical SIVA logic. If they diverge, validation is meaningless. Parity testing proves both paths call the same scoreSIVA() function.',
+        analogy: 'Like testing a car engine. If the test lab uses a different engine than the factory installs in cars, test results are useless. Parity ensures the "test engine" = "production engine".',
+        keyPoints: [
+          'Both paths call scoreSIVA() from os/siva/core-scorer.js',
+          'No parallel intelligence paths allowed',
+          '5 fixed test cases verify identical behavior',
+          'Parity test compares: outcome, tools_used, policy_gates_hit',
+          'If parity fails, validation results cannot be trusted',
+        ],
+        deepDive: `Wiring Parity Architecture:
+
+Frontend Discovery          Sales-Bench
+        │                        │
+        ▼                        ▼
+  discovery.js             productionScorer.js
+        │                        │
+        └────────┬───────────────┘
+                 │
+                 ▼
+          scoreSIVA()
+     (os/siva/core-scorer.js)
+                 │
+                 ▼
+    ┌────────────┼────────────┐
+    │            │            │
+    ▼            ▼            ▼
+EdgeCases   CompanyQuality  TimingScore
+  Tool         Tool           Tool
+
+NO PARALLEL INTELLIGENCE PATHS.
+
+Parity Test Cases:
+1. Tech Startup (150 emp, hiring) → PASS (73, HOT)
+2. Enterprise No Signals (15k emp) → BLOCK (11, COOL)
+3. Government Entity → BLOCK (6, COOL)
+4. Free Zone Fintech → PASS (91, HOT)
+5. Small Company (12 emp) → BLOCK (38, COOL)
+
+All 5 must match between Frontend and Sales-Bench.`,
+        techRationale: `Why parity is non-negotiable:
+
+If Frontend uses Path A and Sales-Bench uses Path B:
+- Validation passes, but production fails
+- Bugs in production never appear in tests
+- No way to reproduce production issues
+
+Parity certification runs on every deploy.
+Certification ID is logged for audit.
+Failed parity = blocked deploy.`,
+      },
+      {
+        id: 'salesbench-shadow-mode',
+        title: 'Shadow Mode & Founder Trust',
+        content: 'Shadow Mode is silent observation mode. SIVA evaluates real companies but takes NO ACTION. Decisions are logged for founder review in weekly Trust Reports. Purpose: Build trust before enabling automation.',
+        analogy: 'Like a new surgeon observing surgeries before performing them. They watch, analyze, and discuss - but don\'t touch the patient. Only after sufficient observation do they perform procedures.',
+        keyPoints: [
+          'Shadow Mode = observe only, no automation',
+          'Real company signals evaluated by SIVA',
+          'Decisions logged: ACT, WAIT, IGNORE, BLOCK',
+          'Weekly Founder Trust Report for manual review',
+          'NO threshold changes, NO scenario regeneration, NO tuning',
+        ],
+        deepDive: `Shadow Mode Philosophy:
+
+"Show me SIVA is making the right decisions."
+"I will decide when to trust it."
+
+FORBIDDEN in Shadow Mode:
+❌ Threshold changes
+❌ Scenario regeneration
+❌ Industry rules
+❌ CRS weight tuning
+❌ Outreach automation
+
+ALLOWED in Shadow Mode:
+✅ Observe SIVA decisions
+✅ Generate Trust Reports
+✅ Compare to human judgment
+✅ Log everything for analysis
+
+Founder Trust Report includes:
+- Top 10 ACT decisions with reasoning
+- Top 10 WAIT decisions with reasoning
+- 5 IGNORE justifications
+- 3 BLOCK explanations
+
+V2 Quality Thesis (Future):
+"Industry is not EB quality. Payroll pattern is."
+
+Shadow data will inform V2 payroll-pattern scoring:
+- WPS patterns (payroll activity)
+- Visa classifications (workforce type)
+- Salary bands (premium vs basic)
+- Headcount stability (growing vs declining)`,
+        techRationale: `Why Shadow Mode before automation:
+
+1. TRUST: Founder must believe in SIVA before it acts
+2. LEARNING: Observe edge cases in real data
+3. VALIDATION: Compare SIVA to RM judgment
+4. SAFETY: No customer impact during learning
+
+Shadow Mode Timeline:
+Week 1-4: Collect shadow decisions
+Week 4-5: Founder reviews Trust Reports
+Week 5-6: Human calibration (Spearman correlation)
+Week 6+: Automation decision (founder approval required)
+
+Shadow data is immutable. DISCOVERY_V1_FROZEN baseline.`,
       },
     ],
   },
