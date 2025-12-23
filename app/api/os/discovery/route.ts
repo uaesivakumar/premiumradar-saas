@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
       user_preferences: userPrefs,
     };
 
-    // Log audit trail
-    console.log(`[OS Discovery] tenant=${session.tenantId} user=${session.user.id} region=${body.region_code || 'default'} prefs_source=${userPrefs ? 'resolved' : 'default'}`);
+    // Log audit trail with UPL diagnostic (S253 validation)
+    console.log(`[OS Discovery] UPL attached: true, verbosity=${userPrefs.verbosity}, workspace_id=${workspaceId}, user_id=${session.user.id}, tenant_id=${session.tenantId}`);
 
     // VS5: Set tenant context for RLS enforcement in OS
     osClient.setContext({
