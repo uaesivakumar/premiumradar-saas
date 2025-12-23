@@ -41,6 +41,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db/client';
+import { getServerSession } from '@/lib/auth/session';
+import { getResolvedUserPrefs, DEFAULT_PREFS, type UserPreferences } from '@/lib/db/user-preferences';
 
 interface DealData {
   arr: number;
@@ -239,7 +241,7 @@ function generateReasoning(
 
 export async function POST(request: NextRequest) {
   try {
-    const body: EvaluationRequest = await request.json();
+    const body: EvaluationRequest & { workspace_id?: string } = await request.json();
 
     // Validate request
     if (!body.deal_id || !body.vertical || !body.subVertical || !body.region || !body.deal_data) {
@@ -251,6 +253,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { deal_id, vertical, subVertical, region, deal_data } = body;
+
+    // S253 UPL: Get user preferences if authenticated (optional for this endpoint)
+    let userPrefs: UserPreferences = DEFAULT_PREFS;
+    const session = await getServerSession();
+    if (session) {
+      const workspaceId = body.workspace_id || 'default';
+      const resolved = await getResolvedUserPrefs({
+        tenantId: session.tenantId,
+        workspaceId,
+        userId: session.user.id,
+      });
+      userPrefs = resolved.prefs;
+    }
 
     // Validate deal_data fields
     if (
@@ -359,6 +374,9 @@ export async function POST(request: NextRequest) {
         evaluated_at: new Date().toISOString(),
         deterministic: true, // Flag that this is rule-based, not AI
       },
+
+      // S253 UPL: Include user preferences in response (leaf-only, for transparency)
+      user_preferences: userPrefs,
     });
 
   } catch (error) {
