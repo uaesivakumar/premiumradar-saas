@@ -125,6 +125,7 @@ async function testDBConstraints() {
   }
 
   // T1.3: Trigger rejects missing compliance rule
+  // IMPORTANT: Test data must NOT contain any of: compliance, regulatory, legal, aml, kyc, sanction
   try {
     await query(`
       INSERT INTO os_sub_vertical_mvt_versions (
@@ -133,7 +134,7 @@ async function testDBConstraints() {
       ) VALUES (
         $1, 'Test Role', 'Test Owner',
         '[{"signal_key":"test","entity_type":"${subVertical.primary_entity_type}","justification":"test"}]',
-        '[{"rule":"rule1","action":"BLOCK","reason":"no compliance"},{"rule":"rule2","action":"BLOCK","reason":"also no"}]',
+        '[{"rule":"rule1","action":"BLOCK","reason":"business decision"},{"rule":"rule2","action":"BLOCK","reason":"market condition"}]',
         '{"golden":[{"scenario_id":"g1"},{"scenario_id":"g2"}],"kill":[{"scenario_id":"k1"},{"scenario_id":"k2"}]}',
         'DRAFT'
       )
@@ -196,19 +197,26 @@ async function testDBConstraints() {
 
   // T1.6: Valid MVT version succeeds AND sets mvt_valid=true
   const testId = crypto.randomUUID();
+  // Get next available version number
+  const nextVersion = await queryOne(`
+    SELECT COALESCE(MAX(mvt_version), 0) + 100 as next_version
+    FROM os_sub_vertical_mvt_versions
+    WHERE sub_vertical_id = $1
+  `, [subVertical.id]);
+
   try {
     const result = await queryOne(`
       INSERT INTO os_sub_vertical_mvt_versions (
-        id, sub_vertical_id, buyer_role, decision_owner,
+        id, sub_vertical_id, mvt_version, buyer_role, decision_owner,
         allowed_signals, kill_rules, seed_scenarios, status
       ) VALUES (
-        $1, $2, 'Test Role', 'Test Owner',
+        $1, $2, $3, 'Test Role', 'Test Owner',
         '[{"signal_key":"test","entity_type":"${subVertical.primary_entity_type}","justification":"test"}]',
         '[{"rule":"rule1","action":"BLOCK","reason":"compliance audit"},{"rule":"rule2","action":"BLOCK","reason":"other"}]',
         '{"golden":[{"scenario_id":"g1"},{"scenario_id":"g2"}],"kill":[{"scenario_id":"k1"},{"scenario_id":"k2"}]}',
         'DRAFT'
       ) RETURNING id, mvt_valid, mvt_validated_at
-    `, [testId, subVertical.id]);
+    `, [testId, subVertical.id, nextVersion.next_version]);
 
     if (result.mvt_valid === true && result.mvt_validated_at !== null) {
       pass('T1.6 Valid MVT succeeds and sets mvt_valid=true');
@@ -338,9 +346,9 @@ async function testVersioning() {
       fail('T3.1d active_mvt_version_id pointer', `expected ${v2.id}, got ${svAfter.active_mvt_version_id}`);
     }
 
-    // Cleanup
-    await query('DELETE FROM os_sub_vertical_mvt_versions WHERE id IN ($1, $2)', [v1.id, v2.id]);
+    // Cleanup - MUST clear pointer before deleting (FK constraint)
     await query('UPDATE os_sub_verticals SET active_mvt_version_id = NULL WHERE id = $1', [subVertical.id]);
+    await query('DELETE FROM os_sub_vertical_mvt_versions WHERE id IN ($1, $2)', [v1.id, v2.id]);
 
   } catch (err) {
     fail('T3.1 Versioning', `Unexpected error: ${err.message}`);
@@ -348,34 +356,41 @@ async function testVersioning() {
 
   // T3.2: Only one ACTIVE version per sub-vertical (partial unique index)
   try {
+    // Get next version number for test
+    const baseVersion = await queryOne(`
+      SELECT COALESCE(MAX(mvt_version), 0) + 200 as next_version
+      FROM os_sub_vertical_mvt_versions
+      WHERE sub_vertical_id = $1
+    `, [subVertical.id]);
+
     // Create first ACTIVE version
     const v1 = await queryOne(`
       INSERT INTO os_sub_vertical_mvt_versions (
-        sub_vertical_id, buyer_role, decision_owner,
+        sub_vertical_id, mvt_version, buyer_role, decision_owner,
         allowed_signals, kill_rules, seed_scenarios, status
       ) VALUES (
-        $1, 'Role', 'Owner',
+        $1, $2, 'Role', 'Owner',
         '[{"signal_key":"test","entity_type":"${subVertical.primary_entity_type}","justification":"test"}]',
         '[{"rule":"r1","action":"BLOCK","reason":"compliance"},{"rule":"r2","action":"BLOCK","reason":"other"}]',
         '{"golden":[{"scenario_id":"g1"},{"scenario_id":"g2"}],"kill":[{"scenario_id":"k1"},{"scenario_id":"k2"}]}',
         'ACTIVE'
       ) RETURNING id
-    `, [subVertical.id]);
+    `, [subVertical.id, baseVersion.next_version]);
 
     // Try to create second ACTIVE version - should fail
     try {
       await query(`
         INSERT INTO os_sub_vertical_mvt_versions (
-          sub_vertical_id, buyer_role, decision_owner,
+          sub_vertical_id, mvt_version, buyer_role, decision_owner,
           allowed_signals, kill_rules, seed_scenarios, status
         ) VALUES (
-          $1, 'Role 2', 'Owner 2',
+          $1, $2, 'Role 2', 'Owner 2',
           '[{"signal_key":"test","entity_type":"${subVertical.primary_entity_type}","justification":"test"}]',
           '[{"rule":"r1","action":"BLOCK","reason":"compliance"},{"rule":"r2","action":"BLOCK","reason":"other"}]',
           '{"golden":[{"scenario_id":"g1"},{"scenario_id":"g2"}],"kill":[{"scenario_id":"k1"},{"scenario_id":"k2"}]}',
           'ACTIVE'
         )
-      `, [subVertical.id]);
+      `, [subVertical.id, baseVersion.next_version + 1]);
       fail('T3.2 Only one ACTIVE version', 'Second ACTIVE insert succeeded but should have failed');
     } catch (indexErr) {
       if (indexErr.message.includes('idx_one_active_mvt_version') || indexErr.message.includes('duplicate key')) {
@@ -430,7 +445,8 @@ async function testRuntimeEligibility() {
       WHERE id = $1
     `, [svNoMVT.id]);
 
-    if (eligibility && eligibility.runtime_eligible === false) {
+    // runtime_eligible can be false OR null (null when no MVT version exists - LEFT JOIN returns NULL)
+    if (eligibility && (eligibility.runtime_eligible === false || eligibility.runtime_eligible === null)) {
       pass(`T4.2 Sub-vertical without MVT is NOT runtime_eligible (blocker: ${eligibility.eligibility_blocker})`);
     } else if (!eligibility) {
       pass('T4.2 Sub-vertical without MVT not in eligible view');
