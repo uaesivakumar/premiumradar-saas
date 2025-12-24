@@ -1,126 +1,23 @@
 {
-  "session_id": "s256-mvt-version-ui",
-  "started_at": "2025-12-24T13:30:00Z",
-  "sprint": "S256",
-  "sprint_title": "MVT Version History UI",
-  "sprint_goal": "Super Admin UI to view and manage MVT version history for sub-verticals",
+  "session_id": "s261-s267-heavy-lift",
+  "started_at": "2025-12-24T15:00:00Z",
+  "sprint_range": "S261-S267",
+  "mode": "heavy-lift-continuous",
+  "deviation_policy": "ZERO",
+  "current_sprint": "S261",
   "environment": {
     "staging_base_url": "https://upr.sivakumar.ai",
     "staging_service_name": "premiumradar-saas-staging",
+    "os_base_url": "https://upr-os-service-191599223867.us-central1.run.app",
     "health_endpoint": "/api/health",
     "region": "us-central1",
     "project": "applied-algebra-474804-e6"
   },
-  "feature_contracts": [
-    {
-      "feature_id": "S256-F1",
-      "feature_name": "MVT version history table component",
-      "ui_entrypoint": {
-        "type": "component",
-        "path": "components/superadmin/mvt/MVTVersionHistory.tsx",
-        "renders_at": "/superadmin/control-plane/sub-verticals/[id]"
-      },
-      "api_endpoints": [
-        {
-          "method": "GET",
-          "path": "/api/superadmin/controlplane/sub-verticals/[id]/mvt-versions",
-          "expected_response_shape": {
-            "success_status": 200,
-            "required_fields": ["success", "versions"]
-          }
-        }
-      ],
-      "wiring_checks": [
-        { "type": "export_exists", "from": "components/superadmin/mvt/index.ts", "exports": "MVTVersionHistory" },
-        { "type": "import_exists", "from": "app/superadmin/control-plane/sub-verticals/[id]/page.tsx", "imports": "MVTVersionHistory" },
-        { "type": "api_called", "component": "MVTVersionHistory.tsx", "calls": "/api/superadmin/controlplane/sub-verticals" }
-      ]
-    },
-    {
-      "feature_id": "S256-F2",
-      "feature_name": "Version diff viewer",
-      "ui_entrypoint": {
-        "type": "component",
-        "path": "components/superadmin/mvt/MVTVersionDiff.tsx",
-        "renders_at": "modal"
-      },
-      "api_endpoints": [
-        {
-          "method": "GET",
-          "path": "/api/superadmin/controlplane/sub-verticals/[id]/mvt-versions/[versionId]",
-          "expected_response_shape": {
-            "success_status": 200,
-            "required_fields": ["success", "version"]
-          }
-        }
-      ],
-      "wiring_checks": [
-        { "type": "export_exists", "from": "components/superadmin/mvt/index.ts", "exports": "MVTVersionDiff" },
-        { "type": "rendered_in", "component": "MVTVersionDiff.tsx", "parent": "MVTVersionHistory.tsx" }
-      ]
-    },
-    {
-      "feature_id": "S256-F3",
-      "feature_name": "Activate/deprecate version actions",
-      "ui_entrypoint": {
-        "type": "component",
-        "path": "components/superadmin/mvt/MVTVersionActions.tsx",
-        "renders_at": "table row"
-      },
-      "api_endpoints": [
-        {
-          "method": "POST",
-          "path": "/api/superadmin/controlplane/sub-verticals/[id]/mvt-versions/[versionId]/activate",
-          "expected_response_shape": {
-            "success_status": 200,
-            "required_fields": ["success", "activated_version"]
-          }
-        },
-        {
-          "method": "POST",
-          "path": "/api/superadmin/controlplane/sub-verticals/[id]/mvt-versions/[versionId]/deprecate",
-          "expected_response_shape": {
-            "success_status": 200,
-            "required_fields": ["success", "deprecated_version"]
-          }
-        }
-      ],
-      "wiring_checks": [
-        { "type": "export_exists", "from": "components/superadmin/mvt/index.ts", "exports": "MVTVersionActions" },
-        { "type": "api_called", "component": "MVTVersionActions.tsx", "calls": "activate" },
-        { "type": "api_called", "component": "MVTVersionActions.tsx", "calls": "deprecate" }
-      ]
-    },
-    {
-      "feature_id": "S256-F4",
-      "feature_name": "Version creation form with validation",
-      "ui_entrypoint": {
-        "type": "component",
-        "path": "components/superadmin/mvt/MVTVersionForm.tsx",
-        "renders_at": "modal"
-      },
-      "api_endpoints": [
-        {
-          "method": "POST",
-          "path": "/api/superadmin/controlplane/sub-verticals/[id]/mvt-versions",
-          "expected_response_shape": {
-            "success_status": 200,
-            "required_fields": ["success", "version", "mvt_version"]
-          }
-        }
-      ],
-      "wiring_checks": [
-        { "type": "export_exists", "from": "components/superadmin/mvt/index.ts", "exports": "MVTVersionForm" },
-        { "type": "validation_exists", "component": "MVTVersionForm.tsx", "validates": ["buyer_role", "decision_owner", "allowed_signals", "kill_rules", "seed_scenarios"] },
-        { "type": "api_called", "component": "MVTVersionForm.tsx", "calls": "mvt-versions" }
-      ]
-    }
-  ],
-  "wiring_status": {},
-  "qa_gate": {
-    "required": true,
-    "passed": false,
-    "last_run": null,
-    "certification_id": null
+  "guardrails": {
+    "no_schema_drift": true,
+    "no_behavior_mutation": true,
+    "bte_read_only": true,
+    "all_writes_auditable": true,
+    "no_partial_success": true
   }
 }
