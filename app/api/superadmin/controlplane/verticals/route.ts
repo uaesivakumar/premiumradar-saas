@@ -1,24 +1,21 @@
 /**
- * OS Verticals CRUD API (Control Plane v2.0)
+ * OS Verticals CRUD API (Control Plane v2.6)
  *
  * GET  /api/superadmin/controlplane/verticals - List all verticals
  * POST /api/superadmin/controlplane/verticals - Create new vertical
  *
- * v2.0 Contract Rules:
+ * v2.6 Contract Rules:
  * - key: required, lowercase snake_case, immutable
  * - name: required, display name
  * - entity_type: REJECTED (moved to sub-vertical.primary_entity_type)
  * - region_scope: REJECTED (moved to persona.scope + persona.region_code)
  * - All writes logged to os_controlplane_audit
  *
- * 5-Layer Hierarchy (v2.0):
+ * 5-Layer Hierarchy:
  * Vertical → Sub-Vertical → Persona → Policy → Binding
+ *
+ * Wizard is the source of truth: /superadmin/controlplane/wizard/new
  */
-
-// PHASE 0: Migration safety lock - prevents schema drift during v2.0 migration
-// UNLOCKED: 2025-12-22 - v2.0 schema frozen + wizard live
-const VERTICAL_CREATION_LOCKED = false;
-const VERTICAL_CREATION_LOCK_REASON = 'Control Plane v2.0 migration in progress. New vertical creation is temporarily disabled. Contact admin to unlock.';
 
 import { NextRequest } from 'next/server';
 import { query, insert } from '@/lib/db/client';
@@ -73,10 +70,8 @@ export async function GET() {
 }
 
 /**
- * POST /api/superadmin/verticals
- * Create new vertical
- *
- * LOCKED: Control Plane v2.0 migration in progress
+ * POST /api/superadmin/controlplane/verticals
+ * Create new vertical (v2.6 - unlocked)
  */
 export async function POST(request: NextRequest) {
   const sessionResult = await validateSuperAdminSession();
@@ -86,22 +81,7 @@ export async function POST(request: NextRequest) {
 
   const actorUser = sessionResult.session?.email || 'unknown';
 
-  // PHASE 0: Migration safety lock
-  if (VERTICAL_CREATION_LOCKED) {
-    await logControlPlaneAudit({
-      actorUser,
-      action: 'create_vertical',
-      targetType: 'vertical',
-      requestJson: { locked: true },
-      success: false,
-      errorMessage: VERTICAL_CREATION_LOCK_REASON,
-    });
-    return Response.json({
-      success: false,
-      error: 'MIGRATION_LOCKED',
-      message: VERTICAL_CREATION_LOCK_REASON,
-    }, { status: 423 }); // 423 Locked
-  }
+  // v2.6: Vertical creation unlocked. Use wizard for full stack creation.
 
   try {
     const body = await request.json();
