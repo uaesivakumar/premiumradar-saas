@@ -1,5 +1,5 @@
 /**
- * OS Vertical Resolver API (F3) - v2.0
+ * OS Vertical Resolver API (F3) - v2.1
  *
  * GET /api/os/resolve-vertical?vertical=...&subVertical=...&region=...
  *
@@ -7,6 +7,11 @@
  * - vertical_id, sub_vertical_id, persona_id
  * - Full persona with policy
  * - Configuration
+ *
+ * v2.1 CHANGES (S255 MVT Hard Gate v2):
+ * - MVT now comes from os_sub_vertical_mvt_versions table
+ * - Only ACTIVE MVT version is used (via active_mvt_version_id pointer)
+ * - MVT must be mvt_valid=true AND status='ACTIVE' for runtime eligibility
  *
  * v2.0 CHANGES:
  * - primary_entity_type now comes from sub-vertical (not vertical)
@@ -17,6 +22,7 @@
  * Contract:
  * - Returns VERTICAL_NOT_CONFIGURED if vertical not found
  * - Returns SUB_VERTICAL_NOT_CONFIGURED if sub-vertical not found
+ * - Returns MVT_INCOMPLETE if no valid active MVT version
  * - Returns PERSONA_NOT_CONFIGURED if persona not found
  * - Returns POLICY_NOT_ACTIVE if policy is not ACTIVE status
  * - All behavior driven by database, not hardcoded
@@ -41,7 +47,22 @@ interface OSSubVertical {
   default_agent: string;
   primary_entity_type: string;       // v2.0
   related_entity_types: string[];    // v2.0
+  active_mvt_version_id: string | null;  // v2.1: Points to versions table
   is_active: boolean;
+}
+
+// v2.1: MVT data comes from separate versions table
+interface OSMVTVersion {
+  id: string;
+  mvt_version: number;
+  buyer_role: string;
+  decision_owner: string;
+  allowed_signals: unknown;
+  kill_rules: unknown;
+  seed_scenarios: unknown;
+  mvt_valid: boolean;
+  mvt_validated_at: string | null;
+  status: string;  // DRAFT | ACTIVE | DEPRECATED
 }
 
 interface OSPersona {
@@ -118,9 +139,12 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // 2. Find sub-vertical (v2.0: includes primary_entity_type)
+    // 2. Find sub-vertical (v2.1: MVT from versions table via active_mvt_version_id)
     const subVerticalRow = await queryOne<OSSubVertical>(
-      `SELECT id, key, name, default_agent, primary_entity_type, related_entity_types, is_active
+      `SELECT id, key, name, default_agent,
+              primary_entity_type, related_entity_types,
+              active_mvt_version_id,
+              is_active
        FROM os_sub_verticals
        WHERE vertical_id = $1 AND key = $2 AND is_active = true`,
       [verticalRow.id, subVertical]
@@ -134,6 +158,58 @@ export async function GET(request: NextRequest) {
         vertical,
         subVertical,
       }, { status: 404 });
+    }
+
+    // v2.1: Get active MVT version from versions table
+    let mvtVersion: OSMVTVersion | null = null;
+
+    if (subVerticalRow.active_mvt_version_id) {
+      mvtVersion = await queryOne<OSMVTVersion>(
+        `SELECT id, mvt_version, buyer_role, decision_owner,
+                allowed_signals, kill_rules, seed_scenarios,
+                mvt_valid, mvt_validated_at, status
+         FROM os_sub_vertical_mvt_versions
+         WHERE id = $1 AND status = 'ACTIVE'`,
+        [subVerticalRow.active_mvt_version_id]
+      );
+    }
+
+    // S255 MVT HARD GATE v2.1:
+    // - Must have active MVT version
+    // - MVT version must be mvt_valid=true AND status='ACTIVE'
+    if (!mvtVersion || !mvtVersion.mvt_valid || mvtVersion.status !== 'ACTIVE') {
+      // Build detailed error response
+      const mvtRequirements: Record<string, string> = {};
+
+      if (!mvtVersion) {
+        mvtRequirements.mvt_version = 'NO_ACTIVE_VERSION';
+      } else {
+        mvtRequirements.buyer_role = mvtVersion.buyer_role ? 'present' : 'MISSING';
+        mvtRequirements.decision_owner = mvtVersion.decision_owner ? 'present' : 'MISSING';
+        mvtRequirements.allowed_signals = Array.isArray(mvtVersion.allowed_signals) && (mvtVersion.allowed_signals as unknown[]).length > 0 ? 'present' : 'MISSING';
+        mvtRequirements.kill_rules = Array.isArray(mvtVersion.kill_rules) && (mvtVersion.kill_rules as unknown[]).length >= 2 ? 'present' : 'MISSING (min 2)';
+        mvtRequirements.seed_scenarios = mvtVersion.seed_scenarios ? 'present' : 'MISSING';
+        mvtRequirements.status = mvtVersion.status === 'ACTIVE' ? 'ACTIVE' : `NOT_ACTIVE (${mvtVersion.status})`;
+        mvtRequirements.mvt_valid = mvtVersion.mvt_valid ? 'valid' : 'INVALID';
+      }
+
+      return NextResponse.json({
+        success: false,
+        error: 'MVT_INCOMPLETE',
+        message: `Sub-vertical '${subVertical}' does not have complete Minimum Viable Truth (MVT). Cannot resolve for runtime.`,
+        vertical,
+        subVertical,
+        mvt_status: {
+          valid: mvtVersion?.mvt_valid || false,
+          version: mvtVersion?.mvt_version || 0,
+          validated_at: mvtVersion?.mvt_validated_at || null,
+          status: mvtVersion?.status || 'NO_VERSION',
+        },
+        mvt_requirements: mvtRequirements,
+        blocker: !mvtVersion ? 'NO_MVT_VERSION' :
+                 !mvtVersion.mvt_valid ? 'MVT_INVALID' :
+                 mvtVersion.status !== 'ACTIVE' ? 'MVT_NOT_ACTIVE' : 'UNKNOWN',
+      }, { status: 400 });
     }
 
     // 3. Find persona (v2.0: scope/region inheritance - LOCAL > REGIONAL > GLOBAL)
@@ -206,7 +282,7 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Build response (v2.0: primary_entity_type from sub-vertical)
+    // Build response (v2.1: MVT from versions table)
     return NextResponse.json({
       success: true,
       vertical_id: verticalRow.id,
@@ -222,6 +298,31 @@ export async function GET(request: NextRequest) {
       default_agent: subVerticalRow.default_agent,
       primary_entity_type: subVerticalRow.primary_entity_type,  // v2.0
       related_entity_types: subVerticalRow.related_entity_types, // v2.0
+
+      // S255 v2.1: ICP Truth Triad (from versions table)
+      icp_truth: {
+        primary_entity_type: subVerticalRow.primary_entity_type,
+        buyer_role: mvtVersion.buyer_role,
+        decision_owner: mvtVersion.decision_owner,
+      },
+
+      // S255 v2.1: Signal Allow-List (from versions table)
+      allowed_signals: mvtVersion.allowed_signals,
+
+      // S255 v2.1: Kill Rules (from versions table)
+      kill_rules: mvtVersion.kill_rules,
+
+      // S255 v2.1: Sales-Bench Seed Scenarios (from versions table)
+      seed_scenarios: mvtVersion.seed_scenarios,
+
+      // S255 v2.1: MVT Status (from versions table)
+      mvt_status: {
+        valid: mvtVersion.mvt_valid,
+        version: mvtVersion.mvt_version,
+        validated_at: mvtVersion.mvt_validated_at,
+        status: mvtVersion.status,
+        version_id: mvtVersion.id,
+      },
 
       persona_id: personaRow.id,
       persona_key: personaRow.key,
@@ -251,7 +352,9 @@ export async function GET(request: NextRequest) {
         subVertical,
         region,
         resolved_at: new Date().toISOString(),
-        control_plane_version: '2.0',  // v2.0
+        control_plane_version: '2.1',  // v2.1: MVT versions table
+        mvt_version: mvtVersion.mvt_version,
+        mvt_version_id: mvtVersion.id,
       },
     });
 

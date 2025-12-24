@@ -15,6 +15,8 @@ export type AuditAction =
   | 'delete_vertical'
   | 'create_sub_vertical'
   | 'update_sub_vertical'
+  | 'update_sub_vertical_mvt'  // S255: MVT field updates
+  | 'create_mvt_version'       // S255: New MVT version creation
   | 'delete_sub_vertical'
   | 'create_persona'
   | 'update_persona'
@@ -29,6 +31,7 @@ export type AuditAction =
 export type AuditTargetType =
   | 'vertical'
   | 'sub_vertical'
+  | 'mvt_version'  // S255: MVT version entries
   | 'persona'
   | 'policy'
   | 'binding';
