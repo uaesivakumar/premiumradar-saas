@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * Super Admin - Verticals & Personas
+ * Super Admin - Verticals & Personas (v2.6)
  *
- * Configure verticals, sub-verticals, and their personas.
- * This is the most critical configuration for SIVA behavior.
+ * Edit and inspect existing verticals, sub-verticals, and personas.
+ * For creating new verticals, use the wizard: /superadmin/controlplane/wizard/new
  */
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Globe,
   Plus,
@@ -28,6 +29,7 @@ import {
   Shield,
   Lightbulb,
   AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 
 interface Persona {
@@ -319,19 +321,37 @@ export default function VerticalsPage() {
 
   return (
     <div className="space-y-4">
+      {/* Breadcrumbs */}
+      <nav className="flex items-center gap-1.5 text-xs text-neutral-500">
+        <Link href="/superadmin/controlplane" className="hover:text-white hover:underline">
+          Control Plane
+        </Link>
+        <ChevronRight className="w-3 h-3" />
+        <span className="text-white">Verticals</span>
+      </nav>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-medium text-white">Verticals & Personas</h1>
-          <p className="text-neutral-500 text-sm mt-0.5">Configure verticals and SIVA personas</p>
+          <p className="text-neutral-500 text-sm mt-0.5">Edit and inspect existing verticals, sub-verticals, and personas</p>
         </div>
-        <a
-          href="/superadmin/controlplane/wizard/new"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Create Vertical Stack
-        </a>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/superadmin/controlplane"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-neutral-400 hover:text-white text-xs transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Control Plane
+          </Link>
+          <a
+            href="/superadmin/controlplane/wizard/new"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Create Vertical Stack
+          </a>
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-4">
@@ -394,11 +414,11 @@ export default function VerticalsPage() {
                         </button>
                       ))}
                       <a
-                        href={`/superadmin/controlplane/wizard/new?step=sub-vertical&vertical_id=${vertical.id}`}
+                        href={`/superadmin/controlplane/wizard/new?startStep=2&vertical_id=${vertical.id}&vertical_key=${vertical.slug}&vertical_name=${encodeURIComponent(vertical.name)}`}
                         className="w-full mt-1.5 p-1.5 text-xs text-violet-400 hover:text-white hover:bg-violet-800/30 rounded transition-colors flex items-center justify-center gap-1.5 border border-violet-500/30"
                       >
                         <Plus className="w-3 h-3" />
-                        Add via Wizard
+                        Add Sub-Vertical
                       </a>
                     </div>
                   )}

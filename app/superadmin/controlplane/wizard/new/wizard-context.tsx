@@ -98,10 +98,26 @@ export const WIZARD_STEPS = [
 
 const WizardContext = createContext<WizardContextValue | null>(null);
 
-export function WizardProvider({ children }: { children: React.ReactNode }) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [wizardState, setWizardState] = useState<WizardState>(initialWizardState);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+interface WizardProviderProps {
+  children: React.ReactNode;
+  initialStep?: number;
+  initialState?: Partial<WizardState>;
+}
+
+export function WizardProvider({ children, initialStep = 1, initialState }: WizardProviderProps) {
+  const [currentStep, setCurrentStep] = useState(initialStep);
+  const [wizardState, setWizardState] = useState<WizardState>({
+    ...initialWizardState,
+    ...initialState,
+  });
+  // If starting at step 2+, mark previous steps as complete
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => {
+    const steps = new Set<number>();
+    for (let i = 1; i < initialStep; i++) {
+      steps.add(i);
+    }
+    return steps;
+  });
 
   const updateWizardState = useCallback((updates: Partial<WizardState>) => {
     setWizardState((prev) => ({ ...prev, ...updates }));
