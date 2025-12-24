@@ -48,3 +48,4 @@ next-env.d.ts
 
 # Sentry
 .sentryclirc
+.claude/session/latest-handoff.md

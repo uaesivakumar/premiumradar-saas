@@ -1,8 +1,32 @@
 # PremiumRadar Session Handoff
 
-**Purpose:** Generate complete context for session continuity. Paste output into new session to avoid drift/derailment.
+**Purpose:** Generate complete context for session continuity. Saved to fixed location for `/begin` to load.
 
 **Usage:** `/handoff` - Run at end of session or before context limit
+
+**Output Location:** `.claude/session/latest-handoff.md` (overwritten each time)
+
+---
+
+## CRITICAL: SAVE HANDOFF TO FILE
+
+After generating the handoff document, TC MUST save it:
+
+```bash
+# Create session directory if needed
+mkdir -p .claude/session
+
+# Save handoff document to fixed location
+cat > .claude/session/latest-handoff.md << 'HANDOFF_EOF'
+[PASTE GENERATED HANDOFF DOCUMENT HERE]
+HANDOFF_EOF
+
+# Verify save
+echo "Handoff saved to .claude/session/latest-handoff.md"
+ls -la .claude/session/latest-handoff.md
+```
+
+**IMPORTANT:** This file is NOT committed to git. It's local session state only.
 
 ---
 
