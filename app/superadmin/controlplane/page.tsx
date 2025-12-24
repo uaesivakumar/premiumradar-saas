@@ -354,10 +354,6 @@ export default function ControlPlanePage() {
     <div className="space-y-4">
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-1.5 text-xs text-neutral-500">
-        <Link href="/superadmin" className="hover:text-white hover:underline">
-          Super Admin
-        </Link>
-        <ChevronRight className="w-3 h-3" />
         <span className="text-white">Control Plane</span>
       </nav>
 
