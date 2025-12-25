@@ -19,23 +19,14 @@ import {
   Globe,
   Plus,
   Edit2,
-  Trash2,
   ChevronDown,
   ChevronRight,
-  Save,
-  X,
   AlertCircle,
   CheckCircle,
   Loader2,
-  Users,
-  Target,
-  Clock,
-  MessageSquare,
-  BarChart3,
-  Shield,
-  Lightbulb,
   AlertTriangle,
   ExternalLink,
+  XCircle,
 } from 'lucide-react';
 
 interface Persona {
@@ -166,15 +157,131 @@ function getVerticalIcon(slug: string): string {
   return icons[slug] || '📊';
 }
 
+// ============================================================================
+// StackReadinessDisplay - Consumes canonical stack_readiness API
+// NO LOCAL STATUS COMPUTATION - 100% derived from API
+// ============================================================================
+function StackReadinessDisplay({ subVerticalId }: { subVerticalId: string }) {
+  const [readiness, setReadiness] = useState<{
+    status: 'READY' | 'BLOCKED' | 'INCOMPLETE' | 'NOT_FOUND';
+    checks: Record<string, boolean>;
+    blockers: string[];
+    metadata: Record<string, unknown>;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchReadiness() {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch(`/api/superadmin/controlplane/stack-readiness?sub_vertical_id=${subVerticalId}`);
+        const data = await res.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch readiness');
+        }
+
+        // Aggregate status from all personas under this sub-vertical
+        const stacks = data.stacks || [];
+        if (stacks.length === 0) {
+          setReadiness({
+            status: 'INCOMPLETE',
+            checks: {},
+            blockers: ['No personas configured'],
+            metadata: {},
+          });
+        } else {
+          // Show worst status across all personas
+          const worstStatus = stacks.reduce((worst: string, s: { status: string }) => {
+            if (worst === 'NOT_FOUND' || s.status === 'NOT_FOUND') return 'NOT_FOUND';
+            if (worst === 'BLOCKED' || s.status === 'BLOCKED') return 'BLOCKED';
+            if (worst === 'INCOMPLETE' || s.status === 'INCOMPLETE') return 'INCOMPLETE';
+            return 'READY';
+          }, 'READY');
+
+          const allBlockers: string[] = stacks.flatMap((s: { blockers: string[] }) => s.blockers || []);
+          const uniqueBlockers: string[] = [...new Set(allBlockers)];
+
+          setReadiness({
+            status: worstStatus as 'READY' | 'BLOCKED' | 'INCOMPLETE' | 'NOT_FOUND',
+            checks: stacks[0]?.checks || {},
+            blockers: uniqueBlockers,
+            metadata: { persona_count: stacks.length },
+          });
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchReadiness();
+  }, [subVerticalId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-neutral-500 text-xs">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        Loading readiness...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 text-red-400 text-xs">
+        <AlertCircle className="w-3 h-3" />
+        {error}
+      </div>
+    );
+  }
+
+  if (!readiness) return null;
+
+  const statusConfig = {
+    READY: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', icon: CheckCircle },
+    BLOCKED: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', icon: XCircle },
+    INCOMPLETE: { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-400', icon: AlertTriangle },
+    NOT_FOUND: { bg: 'bg-neutral-800', border: 'border-neutral-700', text: 'text-neutral-500', icon: AlertCircle },
+  };
+
+  const config = statusConfig[readiness.status];
+  const StatusIcon = config.icon;
+
+  return (
+    <div className={`${config.bg} ${config.border} border rounded-lg p-3`}>
+      <div className="flex items-center gap-2 mb-2">
+        <StatusIcon className={`w-4 h-4 ${config.text}`} />
+        <span className={`text-sm font-medium ${config.text}`}>
+          Stack Status: {readiness.status}
+        </span>
+      </div>
+
+      {readiness.blockers.length > 0 && (
+        <div className="space-y-1 mt-2">
+          <p className="text-[10px] text-neutral-500 uppercase tracking-wide">Blockers</p>
+          {readiness.blockers.map((blocker, i) => (
+            <p key={i} className="text-xs text-red-300">• {blocker}</p>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[10px] text-neutral-600 mt-2">
+        Status derived from stack_readiness API — no local computation
+      </p>
+    </div>
+  );
+}
+
 export default function VerticalsPage() {
   const [verticals, setVerticals] = useState<Vertical[]>(emptyVerticals);
   const [expandedVertical, setExpandedVertical] = useState<string | null>(null);
   const [selectedSubVertical, setSelectedSubVertical] = useState<SubVertical | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'identity' | 'targeting' | 'timing' | 'outreach' | 'scoring' | 'advanced'>('identity');
+  // v3.0: activeTab, isEditing, isSaving removed — this is read-only view
 
   // Load verticals from API
   useEffect(() => {
@@ -247,56 +354,7 @@ export default function VerticalsPage() {
     loadVerticals();
   }, []);
 
-  async function handleSave() {
-    if (!selectedSubVertical) return;
-
-    // Validate persona
-    const persona = selectedSubVertical.persona;
-    if (!persona.persona_name) {
-      alert('Persona name is required');
-      return;
-    }
-    if (!persona.entity_type) {
-      alert('Entity type is required');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      // Update vertical config with new persona
-      const response = await fetch(`/api/admin/vertical-config?id=${selectedSubVertical.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          persona: selectedSubVertical.persona,
-          config: selectedSubVertical.config,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to save');
-      }
-
-      // Update local state
-      setVerticals(prevVerticals =>
-        prevVerticals.map(v => ({
-          ...v,
-          subVerticals: v.subVerticals.map(sv =>
-            sv.id === selectedSubVertical.id ? selectedSubVertical : sv
-          ),
-        }))
-      );
-
-      setIsEditing(false);
-    } catch (err) {
-      console.error('Save failed:', err);
-      alert(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSaving(false);
-    }
-  }
+  // v3.0: handleSave removed — all mutations via Control Plane
 
   // Loading state
   if (isLoading) {
@@ -425,7 +483,6 @@ export default function VerticalsPage() {
                           key={sub.id}
                           onClick={() => {
                             setSelectedSubVertical(sub);
-                            setIsEditing(false);
                           }}
                           className={`w-full flex items-center justify-between p-2 mt-1.5 rounded transition-colors ${
                             selectedSubVertical?.id === sub.id
@@ -473,140 +530,53 @@ export default function VerticalsPage() {
                 </div>
               </div>
 
-              {/* Authority Status Bar (v2.6) */}
-              <div className="px-3 py-2 bg-neutral-800/30 border-b border-neutral-800">
-                <div className="flex items-center gap-3 text-[10px]">
-                  <span className="text-neutral-500">Authority Status:</span>
-                  <div className="flex items-center gap-2">
-                    {/* MVT Status */}
-                    <span className={`px-1.5 py-0.5 rounded ${
-                      selectedSubVertical.persona?.entity_type ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                    }`}>
-                      MVT: {selectedSubVertical.persona?.entity_type ? 'Complete' : 'Incomplete'}
-                    </span>
-                    {/* Persona Status */}
-                    <span className={`px-1.5 py-0.5 rounded ${
-                      selectedSubVertical.persona?.persona_name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-                    }`}>
-                      Persona: {selectedSubVertical.persona?.persona_name ? 'Active' : 'Missing'}
-                    </span>
-                    {/* Policy Status */}
-                    <span className={`px-1.5 py-0.5 rounded ${
-                      selectedSubVertical.persona?.scoring_config ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                    }`}>
-                      Policy: {selectedSubVertical.persona?.scoring_config ? 'Active' : 'Default'}
-                    </span>
-                    {/* Runtime Eligibility */}
-                    <span className={`px-1.5 py-0.5 rounded ${
-                      selectedSubVertical.isActive && selectedSubVertical.persona?.persona_name
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-red-500/20 text-red-400'
-                    }`}>
-                      Runtime: {selectedSubVertical.isActive && selectedSubVertical.persona?.persona_name ? 'Eligible' : 'Blocked'}
-                    </span>
+              {/* v3.0: Read-only persona view - NO TABS, NO PLACEHOLDERS */}
+              <div className="p-4 space-y-4">
+                {/* Persona Identity (Read-Only) */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Persona Identity</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] text-neutral-600 mb-0.5">Name</p>
+                      <p className="text-sm text-white">{selectedSubVertical.persona.persona_name || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-600 mb-0.5">Entity Type</p>
+                      <p className="text-sm text-white capitalize">{selectedSubVertical.persona.entity_type || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-600 mb-0.5">Role</p>
+                      <p className="text-sm text-white">{selectedSubVertical.persona.persona_role || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-neutral-600 mb-0.5">Default Agent</p>
+                      <p className="text-sm text-white">{selectedSubVertical.config?.default_agent || 'discovery'}</p>
+                    </div>
                   </div>
+                  {selectedSubVertical.persona.mission_statement && (
+                    <div>
+                      <p className="text-[10px] text-neutral-600 mb-0.5">Mission</p>
+                      <p className="text-sm text-neutral-300">{selectedSubVertical.persona.mission_statement}</p>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              {/* Tabs */}
-              <div className="border-b border-neutral-800 px-3">
-                <nav className="flex gap-0.5">
-                  {[
-                    { id: 'identity', label: 'Identity', icon: Users },
-                    { id: 'targeting', label: 'Targeting', icon: Target },
-                    { id: 'timing', label: 'Timing', icon: Clock },
-                    { id: 'outreach', label: 'Outreach', icon: MessageSquare },
-                    { id: 'scoring', label: 'Scoring', icon: BarChart3 },
-                    { id: 'advanced', label: 'Advanced', icon: Shield },
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center gap-1.5 px-2.5 py-2 text-xs border-b-2 transition-colors ${
-                        activeTab === tab.id
-                          ? 'border-blue-500 text-blue-400'
-                          : 'border-transparent text-neutral-500 hover:text-white'
-                      }`}
-                    >
-                      <tab.icon className="w-3 h-3" />
-                      {tab.label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
+                {/* Authority Status - FROM stack_readiness API */}
+                <StackReadinessDisplay subVerticalId={selectedSubVertical.id} />
 
-              {/* Tab Content */}
-              <div className="p-4">
-                {activeTab === 'identity' && (
-                  <IdentityTab
-                    persona={selectedSubVertical.persona}
-                    config={selectedSubVertical.config}
-                    isEditing={isEditing}
-                    onChange={(updates) => {
-                      setSelectedSubVertical({
-                        ...selectedSubVertical,
-                        persona: { ...selectedSubVertical.persona, ...updates }
-                      });
-                    }}
-                    onConfigChange={(updates) => {
-                      setSelectedSubVertical({
-                        ...selectedSubVertical,
-                        config: { ...selectedSubVertical.config, ...updates }
-                      });
-                    }}
-                  />
-                )}
-
-                {activeTab === 'targeting' && (
-                  <TargetingTab
-                    persona={selectedSubVertical.persona}
-                    isEditing={isEditing}
-                    onChange={(updates) => {
-                      setSelectedSubVertical({
-                        ...selectedSubVertical,
-                        persona: { ...selectedSubVertical.persona, ...updates }
-                      });
-                    }}
-                  />
-                )}
-
-                {activeTab === 'outreach' && (
-                  <OutreachTab
-                    persona={selectedSubVertical.persona}
-                    isEditing={isEditing}
-                    onChange={(updates) => {
-                      setSelectedSubVertical({
-                        ...selectedSubVertical,
-                        persona: { ...selectedSubVertical.persona, ...updates }
-                      });
-                    }}
-                  />
-                )}
-
-                {activeTab === 'scoring' && (
-                  <ScoringTab
-                    persona={selectedSubVertical.persona}
-                    isEditing={isEditing}
-                    onChange={(updates) => {
-                      setSelectedSubVertical({
-                        ...selectedSubVertical,
-                        persona: { ...selectedSubVertical.persona, ...updates }
-                      });
-                    }}
-                  />
-                )}
-
-                {activeTab === 'timing' && (
-                  <div className="text-neutral-500 text-center py-6 text-sm">
-                    Timing rules coming soon...
-                  </div>
-                )}
-
-                {activeTab === 'advanced' && (
-                  <div className="text-neutral-500 text-center py-6 text-sm">
-                    Advanced settings coming soon...
-                  </div>
-                )}
+                {/* Single CTA */}
+                <div className="pt-4 border-t border-neutral-800">
+                  <p className="text-[10px] text-neutral-600 mb-2">
+                    Policy, targeting, timing, and scoring are managed in Control Plane.
+                  </p>
+                  <Link
+                    href="/superadmin/controlplane"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit in Control Plane
+                  </Link>
+                </div>
               </div>
             </div>
           ) : (
@@ -624,345 +594,5 @@ export default function VerticalsPage() {
   );
 }
 
-// v2.6 Control Plane: Migration complete. Wizard is the source of truth.
-// All vertical creation now goes through /superadmin/controlplane/wizard/new
-
-// Identity Tab Component
-function IdentityTab({
-  persona,
-  config,
-  isEditing,
-  onChange,
-  onConfigChange,
-}: {
-  persona: Persona;
-  config?: { default_agent?: string; [key: string]: unknown };
-  isEditing: boolean;
-  onChange: (updates: Partial<Persona>) => void;
-  onConfigChange?: (updates: { default_agent?: string }) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Persona Name *</label>
-          {isEditing ? (
-            <input
-              type="text"
-              value={persona.persona_name || ''}
-              onChange={(e) => onChange({ persona_name: e.target.value })}
-              className="w-full px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="e.g., EB Sales Officer"
-            />
-          ) : (
-            <p className="text-sm text-white">{persona.persona_name || '-'}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Entity Type *</label>
-          {isEditing ? (
-            <select
-              value={persona.entity_type || 'company'}
-              onChange={(e) => onChange({ entity_type: e.target.value as 'company' | 'individual' | 'deal' })}
-              className="w-full px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="company">Company</option>
-              <option value="individual">Individual</option>
-              <option value="deal">Deal</option>
-            </select>
-          ) : (
-            <p className="text-sm text-white capitalize">{persona.entity_type || '-'}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Default Agent</label>
-          {isEditing ? (
-            <select
-              value={config?.default_agent || 'discovery'}
-              onChange={(e) => onConfigChange?.({ default_agent: e.target.value })}
-              className="w-full px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="discovery">Discovery</option>
-              <option value="deal-evaluation">Deal Evaluation</option>
-              <option value="ranking">Ranking</option>
-              <option value="outreach">Outreach</option>
-              <option value="scoring">Scoring</option>
-            </select>
-          ) : (
-            <p className="text-sm text-white">{config?.default_agent || 'discovery'}</p>
-          )}
-          <p className="text-[10px] text-neutral-600 mt-0.5">SIVA agent mode for this sub-vertical</p>
-        </div>
-
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Role</label>
-          {isEditing ? (
-            <input
-              type="text"
-              value={persona.persona_role || ''}
-              onChange={(e) => onChange({ persona_role: e.target.value })}
-              className="w-full px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="e.g., Senior Banking Officer"
-            />
-          ) : (
-            <p className="text-sm text-white">{persona.persona_role || '-'}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Organization</label>
-          {isEditing ? (
-            <input
-              type="text"
-              value={persona.persona_organization || ''}
-              onChange={(e) => onChange({ persona_organization: e.target.value })}
-              className="w-full px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="e.g., Emirates NBD"
-            />
-          ) : (
-            <p className="text-sm text-white">{persona.persona_organization || '-'}</p>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs text-neutral-500 mb-1">Mission Statement</label>
-        {isEditing ? (
-          <textarea
-            value={persona.mission_statement || ''}
-            onChange={(e) => onChange({ mission_statement: e.target.value })}
-            rows={2}
-            className="w-full px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder="Describe the persona's mission..."
-          />
-        ) : (
-          <p className="text-sm text-white">{persona.mission_statement || '-'}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Targeting Tab Component
-function TargetingTab({ persona, isEditing, onChange }: { persona: Persona; isEditing: boolean; onChange: (updates: Partial<Persona>) => void }) {
-  return (
-    <div className="space-y-4">
-      {/* Contact Priority Tiers */}
-      <div>
-        <h3 className="text-sm font-medium text-neutral-300 mb-2">Contact Priority Tiers</h3>
-        <div className="space-y-2">
-          {persona.contact_priority_rules?.tiers?.map((tier, index) => (
-            <div key={index} className="p-2.5 bg-neutral-800/50 rounded border border-neutral-700">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-neutral-500">
-                  {tier.size_min !== undefined ? `Size ${tier.size_min} - ${tier.size_max || '∞'}` : `Age ${tier.age_min} - ${tier.age_max || '∞'}`}
-                </span>
-                <span className="text-[10px] text-blue-400">Priority {tier.priority}</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {tier.titles.map((title, i) => (
-                  <span key={i} className="px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[10px] rounded">
-                    {title}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )) || <p className="text-neutral-600 text-xs">No contact tiers configured</p>}
-        </div>
-      </div>
-
-      {/* Edge Cases */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Blockers */}
-        <div>
-          <h3 className="text-sm font-medium text-neutral-300 mb-2 flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-            Blockers
-          </h3>
-          <div className="space-y-2">
-            {persona.edge_cases?.blockers?.map((blocker, index) => (
-              <div key={index} className="p-2 bg-red-500/10 border border-red-500/20 rounded">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs text-red-400 capitalize">{blocker.type.replace(/_/g, ' ')}</span>
-                  <span className="text-[10px] text-red-300">×{blocker.multiplier}</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {blocker.values.map((v, i) => (
-                    <span key={i} className="px-1.5 py-0.5 bg-red-500/20 text-red-300 text-[10px] rounded">
-                      {v}
-                    </span>
-                  ))}
-                </div>
-                {blocker.reason && (
-                  <p className="text-[10px] text-neutral-600 mt-1">{blocker.reason}</p>
-                )}
-              </div>
-            )) || <p className="text-neutral-600 text-xs">No blockers</p>}
-          </div>
-        </div>
-
-        {/* Boosters */}
-        <div>
-          <h3 className="text-sm font-medium text-neutral-300 mb-2 flex items-center gap-1.5">
-            <Lightbulb className="w-3.5 h-3.5 text-emerald-400" />
-            Boosters
-          </h3>
-          <div className="space-y-2">
-            {persona.edge_cases?.boosters?.map((booster, index) => (
-              <div key={index} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs text-emerald-400 capitalize">{booster.type.replace(/_/g, ' ')}</span>
-                  <span className="text-[10px] text-emerald-300">×{booster.multiplier}</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {booster.values.map((v, i) => (
-                    <span key={i} className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] rounded">
-                      {v}
-                    </span>
-                  ))}
-                </div>
-                {booster.reason && (
-                  <p className="text-[10px] text-neutral-600 mt-1">{booster.reason}</p>
-                )}
-              </div>
-            )) || <p className="text-neutral-600 text-xs">No boosters</p>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Outreach Tab Component
-function OutreachTab({ persona, isEditing, onChange }: { persona: Persona; isEditing: boolean; onChange: (updates: Partial<Persona>) => void }) {
-  const doctrine = persona.outreach_doctrine;
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Tone</label>
-          {isEditing ? (
-            <select
-              value={doctrine?.tone || 'professional'}
-              onChange={(e) => onChange({
-                outreach_doctrine: { ...doctrine, tone: e.target.value } as any
-              })}
-              className="w-full px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white"
-            >
-              <option value="professional">Professional</option>
-              <option value="friendly">Friendly</option>
-              <option value="casual">Casual</option>
-              <option value="formal">Formal</option>
-            </select>
-          ) : (
-            <p className="text-sm text-white capitalize">{doctrine?.tone || '-'}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Formality</label>
-          {isEditing ? (
-            <select
-              value={doctrine?.formality || 'formal'}
-              onChange={(e) => onChange({
-                outreach_doctrine: { ...doctrine, formality: e.target.value } as any
-              })}
-              className="w-full px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white"
-            >
-              <option value="formal">Formal</option>
-              <option value="casual">Casual</option>
-            </select>
-          ) : (
-            <p className="text-sm text-white capitalize">{doctrine?.formality || '-'}</p>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs text-neutral-500 mb-1">Channels</label>
-        <div className="flex flex-wrap gap-1.5">
-          {doctrine?.channels?.map((channel, i) => (
-            <span key={i} className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-xs rounded">
-              {channel}
-            </span>
-          )) || <p className="text-neutral-600 text-xs">No channels</p>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs text-emerald-400 mb-1">ALWAYS Rules</label>
-          <div className="space-y-1.5">
-            {doctrine?.always?.map((rule, i) => (
-              <div key={i} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded">
-                <p className="text-xs text-emerald-300">{rule}</p>
-              </div>
-            )) || <p className="text-neutral-600 text-xs">No ALWAYS rules</p>}
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs text-red-400 mb-1">NEVER Rules</label>
-          <div className="space-y-1.5">
-            {doctrine?.never?.map((rule, i) => (
-              <div key={i} className="p-2 bg-red-500/10 border border-red-500/20 rounded">
-                <p className="text-xs text-red-300">{rule}</p>
-              </div>
-            )) || <p className="text-neutral-600 text-xs">No NEVER rules</p>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Scoring Tab Component
-function ScoringTab({ persona, isEditing, onChange }: { persona: Persona; isEditing: boolean; onChange: (updates: Partial<Persona>) => void }) {
-  const config = persona.scoring_config;
-
-  return (
-    <div className="space-y-4">
-      {/* Weights */}
-      <div>
-        <h3 className="text-sm font-medium text-neutral-300 mb-2">QTLE Weights</h3>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { key: 'q_score', label: 'Quality', color: 'blue' },
-            { key: 't_score', label: 'Timing', color: 'emerald' },
-            { key: 'l_score', label: 'Likelihood', color: 'violet' },
-            { key: 'e_score', label: 'Engagement', color: 'amber' },
-          ].map((item) => (
-            <div key={item.key} className="p-2.5 bg-neutral-800/50 rounded border border-neutral-700">
-              <p className="text-[10px] text-neutral-500 mb-1">{item.label}</p>
-              <p className="text-lg font-semibold text-white">
-                {((config?.weights as any)?.[item.key] * 100 || 0).toFixed(0)}%
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Thresholds */}
-      <div>
-        <h3 className="text-sm font-medium text-neutral-300 mb-2">Score Thresholds</h3>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded">
-            <p className="text-[10px] text-red-400 mb-1">HOT</p>
-            <p className="text-lg font-semibold text-red-400">{config?.thresholds?.hot || 80}</p>
-          </div>
-          <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded">
-            <p className="text-[10px] text-amber-400 mb-1">WARM</p>
-            <p className="text-lg font-semibold text-amber-400">{config?.thresholds?.warm || 60}</p>
-          </div>
-          <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded">
-            <p className="text-[10px] text-blue-400 mb-1">COLD</p>
-            <p className="text-lg font-semibold text-blue-400">{config?.thresholds?.cold || 40}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// v3.0 Control Plane: All tab components removed.
+// Blueprints is READ-ONLY. All editing via /superadmin/controlplane/wizard/new

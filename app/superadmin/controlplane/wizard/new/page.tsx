@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Vertical Stack Wizard (v2.6)
+ * Vertical Stack Wizard (v3.0)
  *
  * Full-page wizard for creating a complete vertical stack:
  * 1. Vertical Identity
@@ -12,10 +12,16 @@
  * 6. Runtime Verification
  * 7. Published Summary
  *
- * UX Rules (v2.6):
+ * UX Rules (v3.0):
  * - Cancel always asks where to go (Verticals or Control Plane)
  * - Breadcrumbs show navigation path
  * - No silent redirects
+ *
+ * EXTEND_STACK Mode (v3.0):
+ * - URL params: ?mode=extend&vertical_id=xxx&sub_vertical_id=xxx
+ * - Pre-scopes wizard to extend existing stack
+ * - Skips to appropriate step (2 for new sub-vertical, 3 for new persona)
+ * - Shows "Extend Vertical Stack" title instead of "Create"
  */
 
 import { useState, useCallback, useMemo, Suspense } from 'react';
@@ -38,7 +44,15 @@ import { BindingStep } from './steps/binding-step';
 import { VerificationStep } from './steps/verification-step';
 import { PublishedStep } from './steps/published-step';
 
-function WizardContent() {
+interface WizardContentProps {
+  isExtendMode?: boolean;
+  extendContext?: {
+    verticalName?: string | null;
+    subVerticalName?: string | null;
+  };
+}
+
+function WizardContent({ isExtendMode = false, extendContext }: WizardContentProps) {
   const router = useRouter();
   const {
     currentStep,
@@ -55,6 +69,19 @@ function WizardContent() {
   const handleCancel = useCallback(() => {
     setShowCancelConfirm(true);
   }, []);
+
+  // Dynamic title based on mode
+  const wizardTitle = isExtendMode
+    ? extendContext?.subVerticalName
+      ? `Add Persona to ${extendContext.subVerticalName}`
+      : extendContext?.verticalName
+        ? `Add Sub-Vertical to ${extendContext.verticalName}`
+        : 'Extend Vertical Stack'
+    : 'Create Vertical Stack';
+
+  const wizardSubtitle = isExtendMode
+    ? 'Adding to an existing vertical stack'
+    : 'Guided creation of a complete, runnable vertical configuration';
 
   const renderStep = () => {
     switch (currentStep) {
@@ -90,7 +117,7 @@ function WizardContent() {
             Control Plane
           </Link>
           <ChevronRight className="w-3.5 h-3.5" />
-          <span className="text-gray-900 font-medium">Create Vertical Stack</span>
+          <span className="text-gray-900 font-medium">{wizardTitle}</span>
           <ChevronRight className="w-3.5 h-3.5" />
           <span className="text-blue-600">Step {currentStep}: {currentStepInfo?.title}</span>
         </nav>
@@ -98,15 +125,22 @@ function WizardContent() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">
-              Create Vertical Stack
+              {wizardTitle}
             </h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Guided creation of a complete, runnable vertical configuration
+              {wizardSubtitle}
             </p>
           </div>
-          <span className="text-sm text-gray-500">
-            Control Plane v2.6
-          </span>
+          <div className="flex items-center gap-2">
+            {isExtendMode && (
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                EXTEND MODE
+              </span>
+            )}
+            <span className="text-sm text-gray-500">
+              Control Plane v3.0
+            </span>
+          </div>
         </div>
       </header>
 
@@ -263,32 +297,63 @@ function WizardContent() {
 /**
  * Wrapper component that reads URL params and initializes wizard
  * URL params:
+ * - mode: 'create' | 'extend' - wizard mode
  * - startStep: number (1-7) - which step to start on
  * - vertical_id: string - pre-selected vertical UUID
  * - vertical_key: string - pre-selected vertical key
  * - vertical_name: string - pre-selected vertical name
+ * - sub_vertical_id: string - pre-selected sub-vertical UUID (for extend mode)
+ * - sub_vertical_key: string - pre-selected sub-vertical key
+ * - sub_vertical_name: string - pre-selected sub-vertical name
  */
 function WizardWithParams() {
   const searchParams = useSearchParams();
 
   // Parse URL params (with null safety)
-  const startStep = parseInt(searchParams?.get('startStep') || '1', 10);
+  const mode = searchParams?.get('mode') || 'create';
+  const isExtendMode = mode === 'extend';
+
+  const startStepParam = parseInt(searchParams?.get('startStep') || '0', 10);
   const verticalId = searchParams?.get('vertical_id') || null;
   const verticalKey = searchParams?.get('vertical_key') || null;
   const verticalName = searchParams?.get('vertical_name') || null;
+  const subVerticalId = searchParams?.get('sub_vertical_id') || null;
+  const subVerticalKey = searchParams?.get('sub_vertical_key') || null;
+  const subVerticalName = searchParams?.get('sub_vertical_name') || null;
 
-  // Validate step number
-  const initialStep = startStep >= 1 && startStep <= 7 ? startStep : 1;
+  // Auto-compute starting step for extend mode:
+  // - If sub_vertical_id provided → start at step 3 (add persona)
+  // - If only vertical_id provided → start at step 2 (add sub-vertical)
+  // - Otherwise → start at step 1
+  let initialStep = 1;
+  if (startStepParam >= 1 && startStepParam <= 7) {
+    initialStep = startStepParam;
+  } else if (isExtendMode) {
+    if (subVerticalId) {
+      initialStep = 3; // Add persona to existing sub-vertical
+    } else if (verticalId) {
+      initialStep = 2; // Add sub-vertical to existing vertical
+    }
+  }
 
   // Build initial state from URL params
   const initialState: Partial<WizardState> = {};
   if (verticalId) initialState.vertical_id = verticalId;
   if (verticalKey) initialState.vertical_key = verticalKey;
   if (verticalName) initialState.vertical_name = decodeURIComponent(verticalName);
+  if (subVerticalId) initialState.sub_vertical_id = subVerticalId;
+  if (subVerticalKey) initialState.sub_vertical_key = subVerticalKey;
+  if (subVerticalName) initialState.sub_vertical_name = decodeURIComponent(subVerticalName);
+
+  // Context for dynamic title
+  const extendContext = {
+    verticalName: verticalName ? decodeURIComponent(verticalName) : null,
+    subVerticalName: subVerticalName ? decodeURIComponent(subVerticalName) : null,
+  };
 
   return (
     <WizardProvider initialStep={initialStep} initialState={initialState}>
-      <WizardContent />
+      <WizardContent isExtendMode={isExtendMode} extendContext={extendContext} />
     </WizardProvider>
   );
 }
