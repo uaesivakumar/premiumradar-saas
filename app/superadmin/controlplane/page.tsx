@@ -28,15 +28,10 @@ import {
   Shield,
   Server,
   Users,
-  Settings,
   FileText,
   RefreshCw,
   Clock,
-  FlaskConical,
-  Play,
-  TrendingUp,
   Lock,
-  ExternalLink,
 } from 'lucide-react';
 
 // =============================================================================
@@ -296,7 +291,7 @@ export default function ControlPlanePage() {
   const [showRuntimeConfig, setShowRuntimeConfig] = useState(false);
   const [showAuditViewer, setShowAuditViewer] = useState(false);
   const [showBindingsViewer, setShowBindingsViewer] = useState(false);
-  const [showDeployModal, setShowDeployModal] = useState<{ persona: OSPersona; verticalName: string; subVerticalName: string } | null>(null);
+  // v3.1: Deploy modal REMOVED - Activation is auto-managed by system
 
   // Load all data
   const loadData = useCallback(async () => {
@@ -512,20 +507,6 @@ export default function ControlPlanePage() {
                 setSelectedPolicy(result);
                 return result;
               }}
-              onDeploy={() => {
-                // Find vertical and sub-vertical names for context
-                const subVertical = Array.from(subVerticals.values())
-                  .flat()
-                  .find((sv) => sv.id === selectedPersona.sub_vertical_id);
-                const vertical = verticals.find((v) =>
-                  subVerticals.get(v.id)?.some((sv) => sv.id === selectedPersona.sub_vertical_id)
-                );
-                setShowDeployModal({
-                  persona: selectedPersona,
-                  verticalName: vertical?.name || 'Unknown',
-                  subVerticalName: subVertical?.name || 'Unknown',
-                });
-              }}
             />
           ) : selectedPersona ? (
             <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-8 text-center">
@@ -544,8 +525,10 @@ export default function ControlPlanePage() {
             </div>
           )}
 
-          {/* v3.0: WorkspaceBindingSection REMOVED from Design screen */}
-          {/* Bindings are now created only via "Deploy to Runtime" modal */}
+          {/* v3.1: Runtime Status (Read-Only) */}
+          {selectedPersona && (
+            <RuntimeStatusPanel personaId={selectedPersona.id} />
+          )}
         </div>
       </div>
 
@@ -572,15 +555,7 @@ export default function ControlPlanePage() {
         />
       )}
 
-      {/* Deploy to Runtime Modal - v3.0: Separate from Design */}
-      {showDeployModal && (
-        <DeployToRuntimeModal
-          persona={showDeployModal.persona}
-          verticalName={showDeployModal.verticalName}
-          subVerticalName={showDeployModal.subVerticalName}
-          onClose={() => setShowDeployModal(null)}
-        />
-      )}
+      {/* v3.1: Deploy to Runtime Modal REMOVED - Activation is auto-managed */}
 
       {/* Runtime Config Modal (Rule 5) */}
       {showRuntimeConfig && (
@@ -830,12 +805,10 @@ function PolicyEditor({
   persona,
   policy,
   onSave,
-  onDeploy,
 }: {
   persona: OSPersona;
   policy: OSPersonaPolicy;
   onSave: (policy: Partial<OSPersonaPolicy>) => Promise<OSPersonaPolicy>;
-  onDeploy?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -898,15 +871,17 @@ function PolicyEditor({
 
   return (
     <div className="bg-neutral-900/50 rounded-lg border border-neutral-800">
-      {/* v3.0: Design Persona Header - No runtime concerns */}
+      {/* v3.1: Design Intelligence Header */}
       <div className="px-3 py-2 border-b border-neutral-700 bg-neutral-800/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Edit2 className="w-3.5 h-3.5 text-violet-400" />
-            <span className="text-xs font-medium text-violet-300">Design Persona</span>
-            <span className="text-[10px] text-neutral-500">(Blueprint & Policy)</span>
+            <span className="text-xs font-medium text-violet-300">Design Intelligence</span>
           </div>
-          <span className="text-[10px] text-neutral-600">No runtime deployment happens here</span>
+          <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+            <CheckCircle className="w-3 h-3" />
+            <span>Activation: Auto-managed</span>
+          </div>
         </div>
       </div>
 
@@ -954,24 +929,13 @@ function PolicyEditor({
               </button>
             </>
           ) : (
-            <>
-              <button
-                onClick={startEditing}
-                className="flex items-center gap-1.5 px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white text-xs rounded transition-colors"
-              >
-                <Edit2 className="w-3 h-3" />
-                Edit Policy
-              </button>
-              {onDeploy && (
-                <button
-                  onClick={onDeploy}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded transition-colors"
-                >
-                  <Play className="w-3 h-3" />
-                  Deploy to Runtime
-                </button>
-              )}
-            </>
+            <button
+              onClick={startEditing}
+              className="flex items-center gap-1.5 px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white text-xs rounded transition-colors"
+            >
+              <Edit2 className="w-3 h-3" />
+              Edit Policy
+            </button>
           )}
         </div>
       </div>
@@ -1162,6 +1126,128 @@ function PolicyArrayField({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// =============================================================================
+// RUNTIME STATUS PANEL (v3.1: Read-Only, Auto-Managed)
+// =============================================================================
+
+function RuntimeStatusPanel({ personaId }: { personaId: string }) {
+  const [readiness, setReadiness] = useState<{
+    status: 'READY' | 'BLOCKED' | 'INCOMPLETE' | 'NOT_FOUND';
+    checks: Record<string, boolean>;
+    blockers: string[];
+    metadata: { binding_count: number; active_policy_version: number | null };
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadReadiness() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await fetchStackReadiness(personaId);
+        setReadiness(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadReadiness();
+  }, [personaId]);
+
+  if (isLoading) {
+    return (
+      <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+        <div className="flex items-center gap-2 text-neutral-500">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-xs">Loading runtime status...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !readiness) {
+    return (
+      <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+        <div className="flex items-center gap-2 text-red-400">
+          <AlertCircle className="w-4 h-4" />
+          <span className="text-xs">{error || 'Failed to load runtime status'}</span>
+        </div>
+      </div>
+    );
+  }
+
+  const statusColors = {
+    READY: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
+    BLOCKED: 'bg-red-500/10 border-red-500/30 text-red-400',
+    INCOMPLETE: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+    NOT_FOUND: 'bg-neutral-700/50 border-neutral-600 text-neutral-400',
+  };
+
+  return (
+    <div className="bg-neutral-900/50 rounded-lg border border-neutral-800">
+      {/* v3.1: Runtime Status Header */}
+      <div className="px-3 py-2 border-b border-neutral-700 bg-neutral-800/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Server className="w-3.5 h-3.5 text-blue-400" />
+            <span className="text-xs font-medium text-blue-300">Runtime Status</span>
+            <span className="text-[10px] text-neutral-500">(Auto-Managed)</span>
+          </div>
+          <span className={`px-2 py-0.5 text-[10px] font-medium rounded border ${statusColors[readiness.status]}`}>
+            {readiness.status}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {/* Status Checks */}
+        <div className="grid grid-cols-3 gap-2">
+          {Object.entries(readiness.checks).map(([key, passed]) => (
+            <div
+              key={key}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] ${
+                passed
+                  ? 'bg-emerald-500/10 text-emerald-400'
+                  : 'bg-neutral-800 text-neutral-500'
+              }`}
+            >
+              {passed ? (
+                <CheckCircle className="w-2.5 h-2.5" />
+              ) : (
+                <X className="w-2.5 h-2.5" />
+              )}
+              <span className="truncate">{key.replace(/_/g, ' ')}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Blockers */}
+        {readiness.blockers.length > 0 && (
+          <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded">
+            <p className="text-[10px] font-medium text-amber-400 mb-1">Blockers:</p>
+            <ul className="text-[10px] text-amber-300 space-y-0.5">
+              {readiness.blockers.map((blocker, i) => (
+                <li key={i} className="flex items-start gap-1">
+                  <span>•</span>
+                  <span>{blocker}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Metadata */}
+        <div className="flex items-center justify-between text-[10px] text-neutral-500 pt-2 border-t border-neutral-800">
+          <span>Active bindings: {readiness.metadata.binding_count}</span>
+          <span>Policy version: v{readiness.metadata.active_policy_version || 'N/A'}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1423,457 +1509,14 @@ function CreatePersonaModal({
 }
 
 // =============================================================================
-// WORKSPACE BINDING SECTION
+// v3.1: WORKSPACE BINDING SECTION REMOVED
+// Binding is now auto-managed by the system, not manual user action
 // =============================================================================
 
-interface WorkspaceBinding {
-  id: string;
-  tenant_id: string;
-  workspace_id: string;
-  vertical_id: string;
-  sub_vertical_id: string;
-  persona_id: string;
-  is_active: boolean;
-  created_at: string;
-  vertical_key?: string;
-  sub_vertical_key?: string;
-  persona_key?: string;
-}
-
-function WorkspaceBindingSection({
-  verticals,
-  subVerticals,
-  personas,
-}: {
-  verticals: OSVertical[];
-  subVerticals: Map<string, OSSubVertical[]>;
-  personas: OSPersona[];
-}) {
-  const [tenantId, setTenantId] = useState('');
-  const [workspaceId, setWorkspaceId] = useState('');
-  const [selectedVerticalId, setSelectedVerticalId] = useState('');
-  const [selectedSubVerticalId, setSelectedSubVerticalId] = useState('');
-  const [selectedPersonaId, setSelectedPersonaId] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<WorkspaceBinding | null>(null);
-
-  const availableSubVerticals = selectedVerticalId
-    ? subVerticals.get(selectedVerticalId) || []
-    : [];
-
-  const availablePersonas = selectedSubVerticalId
-    ? personas.filter((p) => p.sub_vertical_id === selectedSubVerticalId)
-    : [];
-
-  const handleCreateBinding = async () => {
-    if (!tenantId || !workspaceId || !selectedVerticalId || !selectedSubVerticalId || !selectedPersonaId) {
-      setError('All fields are required');
-      return;
-    }
-
-    setIsCreating(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const res = await fetch(`/api/superadmin/controlplane/workspaces/${workspaceId}/binding`, {
-        method: 'PUT',  // Backend only has GET and PUT - PUT handles upsert
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          vertical_id: selectedVerticalId,
-          sub_vertical_id: selectedSubVerticalId,
-          persona_id: selectedPersonaId,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || data.error || 'Failed to create binding');
-      }
-
-      setSuccess(data.data);
-      // Clear form
-      setTenantId('');
-      setWorkspaceId('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create binding');
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  return (
-    <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
-      <h3 className="text-sm font-medium text-white flex items-center gap-2 mb-4">
-        <Settings className="w-4 h-4 text-violet-400" />
-        Create Workspace Binding
-      </h3>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Tenant ID *</label>
-          <input
-            type="text"
-            value={tenantId}
-            onChange={(e) => setTenantId(e.target.value)}
-            placeholder="UUID of tenant..."
-            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Workspace ID *</label>
-          <input
-            type="text"
-            value={workspaceId}
-            onChange={(e) => setWorkspaceId(e.target.value)}
-            placeholder="Workspace identifier..."
-            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Vertical *</label>
-          <select
-            value={selectedVerticalId}
-            onChange={(e) => {
-              setSelectedVerticalId(e.target.value);
-              setSelectedSubVerticalId('');
-              setSelectedPersonaId('');
-            }}
-            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-          >
-            <option value="">Select vertical...</option>
-            {verticals.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name} ({v.key})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">Sub-Vertical *</label>
-          <select
-            value={selectedSubVerticalId}
-            onChange={(e) => {
-              setSelectedSubVerticalId(e.target.value);
-              setSelectedPersonaId('');
-            }}
-            disabled={!selectedVerticalId}
-            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-50"
-          >
-            <option value="">Select sub-vertical...</option>
-            {availableSubVerticals.map((sv) => (
-              <option key={sv.id} value={sv.id}>
-                {sv.name} ({sv.default_agent})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-xs text-neutral-500 mb-1">Persona *</label>
-          <select
-            value={selectedPersonaId}
-            onChange={(e) => setSelectedPersonaId(e.target.value)}
-            disabled={!selectedSubVerticalId}
-            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-50"
-          >
-            <option value="">Select persona...</option>
-            {availablePersonas.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} - {p.mission?.substring(0, 50)}...
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {error && (
-        <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-400" />
-          <p className="text-xs text-red-400">{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="mt-3 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded">
-          <p className="text-xs text-emerald-400 flex items-center gap-2">
-            <CheckCircle className="w-4 h-4" />
-            Binding created: {success.id.substring(0, 8)}...
-          </p>
-          <p className="text-[10px] text-neutral-600 mt-1">
-            Use "View Runtime Config" to verify the binding
-          </p>
-        </div>
-      )}
-
-      <button
-        onClick={handleCreateBinding}
-        disabled={isCreating || !tenantId || !workspaceId || !selectedPersonaId}
-        className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isCreating ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
-        ) : (
-          <Plus className="w-4 h-4" />
-        )}
-        Create Binding
-      </button>
-
-      <p className="text-[10px] text-neutral-600 mt-2 text-center">
-        Bindings link workspaces to personas. Required for resolve-config to work.
-      </p>
-    </div>
-  );
-}
-
 // =============================================================================
-// DEPLOY TO RUNTIME MODAL (v3.0: Separate from Design)
+// v3.1: DEPLOY TO RUNTIME MODAL REMOVED
+// Activation is now auto-managed by the system
 // =============================================================================
-
-function DeployToRuntimeModal({
-  persona,
-  verticalName,
-  subVerticalName,
-  onClose,
-}: {
-  persona: OSPersona;
-  verticalName: string;
-  subVerticalName: string;
-  onClose: () => void;
-}) {
-  const [tenantId, setTenantId] = useState('');
-  const [workspaceId, setWorkspaceId] = useState('');
-  const [isDeploying, setIsDeploying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{
-    bindingId: string;
-    workspaceId: string;
-    personaName: string;
-  } | null>(null);
-
-  const handleDeploy = async () => {
-    if (!tenantId || !workspaceId) {
-      setError('Tenant ID and Workspace ID are required');
-      return;
-    }
-
-    setIsDeploying(true);
-    setError(null);
-
-    try {
-      // Get vertical_id and sub_vertical_id from persona context
-      const res = await fetch(`/api/superadmin/controlplane/workspaces/${workspaceId}/binding`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          persona_id: persona.id,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || data.error || 'Failed to create binding');
-      }
-
-      setSuccess({
-        bindingId: data.data.id,
-        workspaceId: workspaceId,
-        personaName: persona.name,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to deploy');
-    } finally {
-      setIsDeploying(false);
-    }
-  };
-
-  // Success state - show confirmation with links
-  if (success) {
-    return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
-          <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-400" />
-              <h2 className="text-sm font-medium text-white">Deployment Successful</h2>
-            </div>
-            <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="p-6">
-            {/* Success confirmation */}
-            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="w-5 h-5 text-emerald-400" />
-                <span className="text-sm font-medium text-emerald-400">Runtime Binding Activated</span>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Persona:</span>
-                  <span className="text-white">{success.personaName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Workspace:</span>
-                  <span className="text-white font-mono">{success.workspaceId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">Status:</span>
-                  <span className="text-emerald-400 font-medium">ACTIVE</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick links */}
-            <div className="space-y-2">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  // Open runtime config modal with pre-filled workspace
-                  // For now, just close and let user use the View Runtime Config button
-                  onClose();
-                }}
-                className="flex items-center justify-between p-3 bg-neutral-800/50 hover:bg-neutral-800 border border-neutral-700 rounded-lg transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-violet-400" />
-                  <span className="text-sm text-white">View Runtime Config</span>
-                </div>
-                <ExternalLink className="w-3 h-3 text-neutral-500" />
-              </a>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onClose();
-                }}
-                className="flex items-center justify-between p-3 bg-neutral-800/50 hover:bg-neutral-800 border border-neutral-700 rounded-lg transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-blue-400" />
-                  <span className="text-sm text-white">View Audit Log</span>
-                </div>
-                <ExternalLink className="w-3 h-3 text-neutral-500" />
-              </a>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="w-full mt-4 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Play className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-medium text-white">Deploy to Runtime</h2>
-          </div>
-          <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-4">
-          {/* Pre-filled context (LOCKED) */}
-          <div className="p-3 bg-neutral-800/50 rounded-lg border border-neutral-700">
-            <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-2">
-              Configuration (Locked)
-            </p>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-500">Vertical:</span>
-                <span className="text-white flex items-center gap-1">
-                  <Lock className="w-2.5 h-2.5 text-neutral-600" />
-                  {verticalName}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-500">Sub-Vertical:</span>
-                <span className="text-white flex items-center gap-1">
-                  <Lock className="w-2.5 h-2.5 text-neutral-600" />
-                  {subVerticalName}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-500">Persona:</span>
-                <span className="text-white flex items-center gap-1">
-                  <Lock className="w-2.5 h-2.5 text-neutral-600" />
-                  {persona.name}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* User inputs */}
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-neutral-400 mb-1">Tenant ID *</label>
-              <input
-                type="text"
-                value={tenantId}
-                onChange={(e) => setTenantId(e.target.value)}
-                placeholder="UUID of the tenant..."
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-400 mb-1">Workspace ID *</label>
-              <input
-                type="text"
-                value={workspaceId}
-                onChange={(e) => setWorkspaceId(e.target.value)}
-                placeholder="Workspace identifier..."
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-
-          {/* Explanation */}
-          <p className="text-[10px] text-neutral-500 text-center">
-            This will activate the selected persona and policy for the specified workspace.
-          </p>
-
-          {/* Error */}
-          {error && (
-            <div className="p-2 bg-red-500/10 border border-red-500/20 rounded flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-400" />
-              <p className="text-xs text-red-400">{error}</p>
-            </div>
-          )}
-
-          {/* Action */}
-          <button
-            onClick={handleDeploy}
-            disabled={isDeploying || !tenantId || !workspaceId}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isDeploying ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Play className="w-4 h-4" />
-            )}
-            Activate Runtime Binding
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // =============================================================================
 // AUDIT VIEWER (Read-only for ops/compliance)
