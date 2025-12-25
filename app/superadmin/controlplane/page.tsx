@@ -17,11 +17,8 @@ import {
   Loader2,
   AlertCircle,
   AlertTriangle,
-  Plus,
   ChevronDown,
   ChevronRight,
-  Edit2,
-  Save,
   X,
   Eye,
   CheckCircle,
@@ -33,6 +30,7 @@ import {
   Clock,
   Lock,
 } from 'lucide-react';
+// S274: Removed Plus, Edit2, Save - no mutation affordances in read-only view
 
 // =============================================================================
 // TYPES (Match DB schema exactly)
@@ -283,15 +281,10 @@ export default function ControlPlanePage() {
   const [selectedPersona, setSelectedPersona] = useState<OSPersona | null>(null);
   const [selectedPolicy, setSelectedPolicy] = useState<OSPersonaPolicy | null>(null);
 
-  // Modal state
-  const [showCreateVertical, setShowCreateVertical] = useState(false);
-  const [showEditVertical, setShowEditVertical] = useState<OSVertical | null>(null);
-  const [showCreateSubVertical, setShowCreateSubVertical] = useState<{ verticalId: string; verticalName: string } | null>(null);
-  const [showCreatePersona, setShowCreatePersona] = useState<{ subVerticalId: string; subVerticalName: string; verticalId: string; verticalName: string } | null>(null);
+  // Modal state - S274: All mutation modals removed, read-only viewers only
   const [showRuntimeConfig, setShowRuntimeConfig] = useState(false);
   const [showAuditViewer, setShowAuditViewer] = useState(false);
   const [showBindingsViewer, setShowBindingsViewer] = useState(false);
-  // v3.1: Deploy modal REMOVED - Activation is auto-managed by system
 
   // Load all data
   const loadData = useCallback(async () => {
@@ -379,7 +372,7 @@ export default function ControlPlanePage() {
         <span className="text-white">Control Plane</span>
       </nav>
 
-      {/* Control Plane v3.0 Status Strip - AUTHORITY CONSOLIDATED */}
+      {/* Control Plane v3.0 Status Strip - READ-ONLY MONITORING */}
       <div className="bg-violet-900/20 border border-violet-500/30 rounded-lg px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="px-2 py-0.5 bg-violet-600 text-white text-xs font-medium rounded">
@@ -389,13 +382,11 @@ export default function ControlPlanePage() {
             READY = Vertical ✓ + Sub-Vertical ✓ + Persona ✓ + ACTIVE Policy ✓ + Binding ✓ + Runtime Resolves ✓
           </span>
         </div>
-        <a
-          href="/superadmin/controlplane/wizard/new"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create Vertical Stack
-        </a>
+        {/* S274: Create button removed - use wizard directly at /superadmin/controlplane/wizard/new */}
+        <div className="flex items-center gap-2 text-[10px] text-neutral-500">
+          <Lock className="w-3 h-3" />
+          <span>Read-Only Monitoring</span>
+        </div>
       </div>
 
       {/* Header */}
@@ -478,14 +469,7 @@ export default function ControlPlanePage() {
                         )
                       }
                       onSelectPersona={handleSelectPersona}
-                      onEditVertical={() => setShowEditVertical(vertical)}
-                      onAddSubVertical={() => setShowCreateSubVertical({ verticalId: vertical.id, verticalName: vertical.name })}
-                      onAddPersona={(subVerticalId, subVerticalName) => setShowCreatePersona({
-                        subVerticalId,
-                        subVerticalName,
-                        verticalId: vertical.id,
-                        verticalName: vertical.name,
-                      })}
+                      // S274: All mutation callbacks removed - read-only view
                     />
                   );
                 })
@@ -520,7 +504,7 @@ export default function ControlPlanePage() {
                 Select a Persona
               </h3>
               <p className="text-xs text-neutral-600">
-                Choose from the hierarchy to edit policy
+                Choose from the hierarchy to view policy details
               </p>
             </div>
           )}
@@ -532,30 +516,8 @@ export default function ControlPlanePage() {
         </div>
       </div>
 
-      {/* Create Vertical Modal - DEPRECATED: Use wizard instead */}
+      {/* S274: All creation modals removed - mutations are wizard-only */}
       {/* Wizard route: /superadmin/controlplane/wizard/new */}
-
-      {/* Create Sub-Vertical Modal - v3.0: EXTEND_STACK mode */}
-      {showCreateSubVertical && (
-        <CreateSubVerticalModal
-          verticalId={showCreateSubVertical.verticalId}
-          verticalName={showCreateSubVertical.verticalName}
-          onClose={() => setShowCreateSubVertical(null)}
-        />
-      )}
-
-      {/* Create Persona Modal - v3.0: EXTEND_STACK mode */}
-      {showCreatePersona && (
-        <CreatePersonaModal
-          subVerticalId={showCreatePersona.subVerticalId}
-          subVerticalName={showCreatePersona.subVerticalName}
-          verticalId={showCreatePersona.verticalId}
-          verticalName={showCreatePersona.verticalName}
-          onClose={() => setShowCreatePersona(null)}
-        />
-      )}
-
-      {/* v3.1: Deploy to Runtime Modal REMOVED - Activation is auto-managed */}
 
       {/* Runtime Config Modal (Rule 5) */}
       {showRuntimeConfig && (
@@ -567,25 +529,7 @@ export default function ControlPlanePage() {
         <AuditViewer onClose={() => setShowAuditViewer(false)} />
       )}
 
-      {/* Edit Vertical Modal */}
-      {showEditVertical && (
-        <EditVerticalModal
-          vertical={showEditVertical}
-          onClose={() => setShowEditVertical(null)}
-          onSave={async (payload) => {
-            const res = await fetch(`/api/superadmin/controlplane/verticals/${showEditVertical.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            });
-            const data = await res.json();
-            if (!data.success) throw new Error(data.message || data.error || 'Failed to update vertical');
-            // Rule 2: Re-fetch after update
-            await loadData();
-            setShowEditVertical(null);
-          }}
-        />
-      )}
+      {/* S274: EditVerticalModal removed - no mutations from Control Plane */}
 
       {/* Workspace Bindings Viewer (Read-only) */}
       {showBindingsViewer && (
@@ -608,9 +552,6 @@ function VerticalItem({
   selectedPersonaId,
   onToggle,
   onSelectPersona,
-  onEditVertical,
-  onAddSubVertical,
-  onAddPersona,
 }: {
   vertical: OSVertical;
   subVerticals: OSSubVertical[];
@@ -620,9 +561,7 @@ function VerticalItem({
   selectedPersonaId?: string;
   onToggle: () => void;
   onSelectPersona: (persona: OSPersona) => void;
-  onEditVertical: () => void;
-  onAddSubVertical: () => void;
-  onAddPersona: (subVerticalId: string, subVerticalName: string) => void;
+  // S274: All mutation callbacks removed - read-only view
 }) {
   const isReady = stackStatus?.stack_status === 'READY';
   const notReadyReason = stackStatus?.not_ready_reason;
@@ -668,16 +607,7 @@ function VerticalItem({
               )}
             </span>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditVertical();
-            }}
-            className="p-1 text-neutral-600 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
-            title="Edit vertical"
-          >
-            <Edit2 className="w-3 h-3" />
-          </button>
+          {/* S274: Edit pencil removed - no mutation affordances in read-only view */}
           <span
             className={`px-1.5 py-0.5 text-[10px] rounded ${
               vertical.is_active
@@ -774,23 +704,11 @@ function VerticalItem({
                     </div>
                   );
                 })}
-                <button
-                  onClick={() => onAddPersona(sv.id, sv.name)}
-                  className="w-full mt-1 p-1.5 text-[10px] text-neutral-600 hover:text-white hover:bg-neutral-800 rounded transition-colors flex items-center justify-center gap-1"
-                >
-                  <Plus className="w-2.5 h-2.5" />
-                  Add Persona
-                </button>
+{/* S274: Add Persona button removed - use wizard for mutations */}
               </div>
             );
           })}
-          <button
-            onClick={onAddSubVertical}
-            className="w-full mt-2 p-1.5 text-xs text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors flex items-center justify-center gap-1.5"
-          >
-            <Plus className="w-3 h-3" />
-            Add Sub-Vertical
-          </button>
+          {/* S274: Add Sub-Vertical button removed - use wizard for mutations */}
         </div>
       )}
     </div>
@@ -801,82 +719,31 @@ function VerticalItem({
 // POLICY EDITOR COMPONENT (Rule 4: Single atomic save)
 // =============================================================================
 
+// S274: PolicyEditor renamed to PolicyViewer - read-only, no mutations
 function PolicyEditor({
   persona,
   policy,
-  onSave,
 }: {
   persona: OSPersona;
   policy: OSPersonaPolicy;
-  onSave: (policy: Partial<OSPersonaPolicy>) => Promise<OSPersonaPolicy>;
+  onSave?: (policy: Partial<OSPersonaPolicy>) => Promise<OSPersonaPolicy>; // Kept for compatibility
 }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [editedPolicy, setEditedPolicy] = useState<Partial<OSPersonaPolicy>>({});
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [lastSavedVersion, setLastSavedVersion] = useState<number | null>(null);
-  // Concurrency tracking
-  const [versionAtEditStart, setVersionAtEditStart] = useState<number | null>(null);
-  const [concurrencyWarning, setConcurrencyWarning] = useState<string | null>(null);
+  // S274: All editing state removed - this is now a read-only viewer
+  const currentAllowedIntents = policy.allowed_intents;
+  const currentForbiddenOutputs = policy.forbidden_outputs;
+  const currentAllowedTools = policy.allowed_tools;
 
-  // Reset edited state when persona changes
-  useEffect(() => {
-    setEditedPolicy({});
-    setIsEditing(false);
-    setSaveError(null);
-    setLastSavedVersion(null);
-    setVersionAtEditStart(null);
-    setConcurrencyWarning(null);
-  }, [persona.id]);
-
-  // Track version when editing starts
-  const startEditing = () => {
-    setVersionAtEditStart(policy.policy_version);
-    setConcurrencyWarning(null);
-    setIsEditing(true);
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSaveError(null);
-    setConcurrencyWarning(null);
-
-    try {
-      // Check for concurrent modifications before saving
-      const checkRes = await fetch(`/api/superadmin/controlplane/personas/${persona.id}/policy`);
-      const checkData = await checkRes.json();
-
-      if (checkData.success && checkData.data.policy_version !== versionAtEditStart) {
-        setConcurrencyWarning(
-          `Policy was modified by another user (v${versionAtEditStart} → v${checkData.data.policy_version}). ` +
-          `Your save will create v${checkData.data.policy_version + 1}.`
-        );
-      }
-
-      const result = await onSave(editedPolicy);
-      setLastSavedVersion(result.policy_version);
-      setIsEditing(false);
-      setEditedPolicy({});
-      setVersionAtEditStart(null);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const currentAllowedIntents = editedPolicy.allowed_intents ?? policy.allowed_intents;
-  const currentForbiddenOutputs = editedPolicy.forbidden_outputs ?? policy.forbidden_outputs;
-  const currentAllowedTools = editedPolicy.allowed_tools ?? policy.allowed_tools;
-
+  // S274: PolicyEditor converted to read-only PolicyViewer
+  // No editing functionality - mutations via wizard only
   return (
     <div className="bg-neutral-900/50 rounded-lg border border-neutral-800">
-      {/* v3.1: Design Intelligence Header */}
+      {/* S274: Read-only status header */}
       <div className="px-3 py-2 border-b border-neutral-700 bg-neutral-800/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Edit2 className="w-3.5 h-3.5 text-violet-400" />
-            <span className="text-xs font-medium text-violet-300">Design Intelligence</span>
+            <Eye className="w-3.5 h-3.5 text-blue-400" />
+            <span className="text-xs font-medium text-blue-300">Policy Inspector</span>
+            <span className="text-[10px] text-neutral-500">(Read-Only)</span>
           </div>
           <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
             <CheckCircle className="w-3 h-3" />
@@ -895,66 +762,14 @@ function PolicyEditor({
           </h2>
           <p className="text-xs text-neutral-500 mt-0.5">
             Policy v{policy.policy_version}
-            {lastSavedVersion && lastSavedVersion > policy.policy_version && (
-              <span className="ml-2 text-emerald-400">
-                → Saved as v{lastSavedVersion}
-              </span>
-            )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {isEditing ? (
-            <>
-              <button
-                onClick={() => {
-                  setIsEditing(false);
-                  setEditedPolicy({});
-                  setSaveError(null);
-                }}
-                className="px-2 py-1 text-xs text-neutral-500 hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving || Object.keys(editedPolicy).length === 0}
-                className="flex items-center gap-1.5 px-3 py-1 bg-violet-600 hover:bg-violet-700 text-white text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSaving ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Save className="w-3 h-3" />
-                )}
-                Save All
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={startEditing}
-              className="flex items-center gap-1.5 px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white text-xs rounded transition-colors"
-            >
-              <Edit2 className="w-3 h-3" />
-              Edit Policy
-            </button>
-          )}
+        {/* S274: No edit buttons - read-only view */}
+        <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
+          <Lock className="w-3 h-3" />
+          <span>View Only</span>
         </div>
       </div>
-
-      {/* Concurrency Warning */}
-      {concurrencyWarning && (
-        <div className="mx-3 mt-3 p-2 bg-amber-500/10 border border-amber-500/20 rounded flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-400">{concurrencyWarning}</p>
-        </div>
-      )}
-
-      {/* Save Error */}
-      {saveError && (
-        <div className="mx-3 mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-400" />
-          <p className="text-xs text-red-400">{saveError}</p>
-        </div>
-      )}
 
       {/* Persona Info */}
       <div className="p-3 border-b border-neutral-800 bg-neutral-800/30">
@@ -972,40 +787,34 @@ function PolicyEditor({
 
       {/* Policy Fields */}
       <div className="p-4 space-y-4">
-        {/* Allowed Intents */}
+        {/* Allowed Intents - S274: Read-only */}
         <PolicyArrayField
           label="Allowed Intents"
-          description="What SIVA can do"
+          description="What the agent can do"
           items={currentAllowedIntents}
-          isEditing={isEditing}
+          isEditing={false}
           color="emerald"
-          onChange={(items) =>
-            setEditedPolicy({ ...editedPolicy, allowed_intents: items })
-          }
+          onChange={() => {}}
         />
 
-        {/* Forbidden Outputs */}
+        {/* Forbidden Outputs - S274: Read-only */}
         <PolicyArrayField
           label="Forbidden Outputs"
-          description="What SIVA must never output"
+          description="What the agent must never output"
           items={currentForbiddenOutputs}
-          isEditing={isEditing}
+          isEditing={false}
           color="red"
-          onChange={(items) =>
-            setEditedPolicy({ ...editedPolicy, forbidden_outputs: items })
-          }
+          onChange={() => {}}
         />
 
-        {/* Allowed Tools */}
+        {/* Allowed Tools - S274: Read-only */}
         <PolicyArrayField
           label="Allowed Tools"
-          description="Tools SIVA can invoke"
+          description="Tools the agent can invoke"
           items={currentAllowedTools}
-          isEditing={isEditing}
+          isEditing={false}
           color="blue"
-          onChange={(items) =>
-            setEditedPolicy({ ...editedPolicy, allowed_tools: items })
-          }
+          onChange={() => {}}
         />
       </div>
 
@@ -1025,23 +834,20 @@ function PolicyEditor({
 // POLICY ARRAY FIELD COMPONENT
 // =============================================================================
 
+// S274: PolicyArrayField converted to read-only (no editing)
 function PolicyArrayField({
   label,
   description,
   items,
-  isEditing,
   color,
-  onChange,
 }: {
   label: string;
   description: string;
   items: string[];
-  isEditing: boolean;
+  isEditing?: boolean; // Kept for compatibility but always false
   color: 'emerald' | 'red' | 'blue';
-  onChange: (items: string[]) => void;
+  onChange?: (items: string[]) => void; // Kept for compatibility but never called
 }) {
-  const [newItem, setNewItem] = useState('');
-
   const colorClasses = {
     emerald: {
       bg: 'bg-emerald-500/10',
@@ -1065,18 +871,6 @@ function PolicyArrayField({
 
   const colors = colorClasses[color];
 
-  const handleAdd = () => {
-    const trimmed = newItem.trim();
-    if (trimmed && !items.includes(trimmed)) {
-      onChange([...items, trimmed]);
-      setNewItem('');
-    }
-  };
-
-  const handleRemove = (item: string) => {
-    onChange(items.filter((i) => i !== item));
-  };
-
   return (
     <div className={`p-3 ${colors.bg} border ${colors.border} rounded`}>
       <div className="flex items-center justify-between mb-2">
@@ -1090,42 +884,15 @@ function PolicyArrayField({
         {items.map((item) => (
           <span
             key={item}
-            className={`px-2 py-0.5 ${colors.tag} text-[10px] rounded flex items-center gap-1`}
+            className={`px-2 py-0.5 ${colors.tag} text-[10px] rounded`}
           >
             {item}
-            {isEditing && (
-              <button
-                onClick={() => handleRemove(item)}
-                className="hover:text-white transition-colors"
-              >
-                <X className="w-2.5 h-2.5" />
-              </button>
-            )}
           </span>
         ))}
         {items.length === 0 && (
           <span className="text-[10px] text-neutral-600">None configured</span>
         )}
       </div>
-      {isEditing && (
-        <div className="mt-2 flex gap-2">
-          <input
-            type="text"
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Add item..."
-            className="flex-1 px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          />
-          <button
-            onClick={handleAdd}
-            disabled={!newItem.trim()}
-            className="px-2 py-1 bg-neutral-800 hover:bg-neutral-700 text-white text-xs rounded transition-colors disabled:opacity-50"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -1392,130 +1159,9 @@ function RuntimeConfigModal({ onClose }: { onClose: () => void }) {
 }
 
 // =============================================================================
-// CREATE MODALS
-// =============================================================================
-
-// =============================================================================
-// DEPRECATED: CreateVerticalModal
-// Use the Vertical Stack Wizard instead: /superadmin/controlplane/wizard/new
-// =============================================================================
-
-function CreateSubVerticalModal({
-  verticalId,
-  verticalName,
-  onClose,
-}: {
-  verticalId: string;
-  verticalName?: string;
-  onClose: () => void;
-}) {
-  // v3.0: Redirect to wizard in EXTEND_STACK mode
-  const wizardUrl = `/superadmin/controlplane/wizard/new?mode=extend&vertical_id=${verticalId}${verticalName ? `&vertical_name=${encodeURIComponent(verticalName)}` : ''}`;
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Plus className="w-4 h-4 text-violet-400" />
-            <h2 className="text-sm font-medium text-white">Add Sub-Vertical</h2>
-          </div>
-          <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-6 text-center">
-          <div className="w-12 h-12 bg-violet-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Plus className="w-6 h-6 text-violet-400" />
-          </div>
-          <h3 className="text-white font-medium mb-2">
-            Add Sub-Vertical to {verticalName || 'Vertical'}
-          </h3>
-          <p className="text-neutral-400 text-sm mb-4">
-            The wizard will guide you through creating a new sub-vertical,
-            persona, and policy for this vertical.
-          </p>
-          <a
-            href={wizardUrl}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Continue in Wizard
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CreatePersonaModal({
-  subVerticalId,
-  subVerticalName,
-  verticalId,
-  verticalName,
-  onClose,
-}: {
-  subVerticalId: string;
-  subVerticalName?: string;
-  verticalId?: string;
-  verticalName?: string;
-  onClose: () => void;
-}) {
-  // v3.0: Redirect to wizard in EXTEND_STACK mode, starting at Step 3 (Persona)
-  const params = new URLSearchParams({
-    mode: 'extend',
-    sub_vertical_id: subVerticalId,
-  });
-  if (subVerticalName) params.set('sub_vertical_name', subVerticalName);
-  if (verticalId) params.set('vertical_id', verticalId);
-  if (verticalName) params.set('vertical_name', verticalName);
-
-  const wizardUrl = `/superadmin/controlplane/wizard/new?${params.toString()}`;
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-violet-400" />
-            <h2 className="text-sm font-medium text-white">Add Persona</h2>
-          </div>
-          <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-6 text-center">
-          <div className="w-12 h-12 bg-violet-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Users className="w-6 h-6 text-violet-400" />
-          </div>
-          <h3 className="text-white font-medium mb-2">
-            Add Persona to {subVerticalName || 'Sub-Vertical'}
-          </h3>
-          <p className="text-neutral-400 text-sm mb-4">
-            The wizard will guide you through creating a new persona with
-            policy and optional workspace binding.
-          </p>
-          <a
-            href={wizardUrl}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Continue in Wizard
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// v3.1: WORKSPACE BINDING SECTION REMOVED
-// Binding is now auto-managed by the system, not manual user action
-// =============================================================================
-
-// =============================================================================
-// v3.1: DEPLOY TO RUNTIME MODAL REMOVED
-// Activation is now auto-managed by the system
+// S274: CREATE MODALS REMOVED
+// All creation flows are now wizard-only: /superadmin/controlplane/wizard/new
+// This enforces read-only monitoring on the Control Plane main view
 // =============================================================================
 
 // =============================================================================
@@ -1704,161 +1350,9 @@ function AuditViewer({ onClose }: { onClose: () => void }) {
 }
 
 // =============================================================================
-// EDIT VERTICAL MODAL
+// S274: EDIT VERTICAL MODAL REMOVED
+// All editing is now wizard-only: /superadmin/controlplane/wizard/new
 // =============================================================================
-
-function EditVerticalModal({
-  vertical,
-  onClose,
-  onSave,
-}: {
-  vertical: OSVertical;
-  onClose: () => void;
-  onSave: (payload: { name?: string; region_scope?: string[]; is_active?: boolean }) => Promise<void>;
-}) {
-  const [name, setName] = useState(vertical.name);
-  const [regions, setRegions] = useState((vertical.region_scope || []).join(', '));
-  const [isActive, setIsActive] = useState(vertical.is_active);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const hasChanges =
-    name !== vertical.name ||
-    regions !== (vertical.region_scope || []).join(', ') ||
-    isActive !== vertical.is_active;
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      const payload: { name?: string; region_scope?: string[]; is_active?: boolean } = {};
-
-      if (name !== vertical.name) {
-        payload.name = name;
-      }
-      if (regions !== (vertical.region_scope || []).join(', ')) {
-        payload.region_scope = regions.split(',').map((r) => r.trim()).filter(Boolean);
-      }
-      if (isActive !== vertical.is_active) {
-        payload.is_active = isActive;
-      }
-
-      await onSave(payload);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-md">
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-medium text-white">Edit Vertical</h2>
-            <p className="text-[10px] text-neutral-600 mt-0.5">
-              Key: {vertical.key} (immutable)
-            </p>
-          </div>
-          <button onClick={onClose} className="p-1 text-neutral-500 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-4">
-          {/* Immutable fields - display only */}
-          <div className="p-3 bg-neutral-800/50 rounded border border-neutral-700">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <span className="text-neutral-500">Key (immutable):</span>
-                <p className="text-white font-mono">{vertical.key}</p>
-              </div>
-              <div>
-                <span className="text-neutral-500">Entity Type (immutable):</span>
-                <p className="text-white">{vertical.entity_type}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Editable: Name */}
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
-
-          {/* Editable: Regions */}
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Regions</label>
-            <input
-              type="text"
-              value={regions}
-              onChange={(e) => setRegions(e.target.value)}
-              placeholder="US, UAE"
-              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-            <p className="text-[10px] text-neutral-600 mt-1">Comma-separated</p>
-          </div>
-
-          {/* Editable: Status */}
-          <div>
-            <label className="block text-xs text-neutral-500 mb-2">Status</label>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsActive(true)}
-                className={`flex-1 px-3 py-2 rounded border text-sm transition-colors ${
-                  isActive
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                    : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600'
-                }`}
-              >
-                Active
-              </button>
-              <button
-                onClick={() => setIsActive(false)}
-                className={`flex-1 px-3 py-2 rounded border text-sm transition-colors ${
-                  !isActive
-                    ? 'bg-red-500/20 border-red-500/40 text-red-400'
-                    : 'bg-neutral-800 border-neutral-700 text-neutral-500 hover:border-neutral-600'
-                }`}
-              >
-                Inactive
-              </button>
-            </div>
-            {!isActive && vertical.is_active && (
-              <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded">
-                <p className="text-[10px] text-amber-400 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" />
-                  Deactivating will affect all workspace bindings using this vertical
-                </p>
-              </div>
-            )}
-          </div>
-
-          {error && (
-            <div className="p-2 bg-red-500/10 border border-red-500/20 rounded">
-              <p className="text-xs text-red-400">{error}</p>
-            </div>
-          )}
-
-          <button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {hasChanges ? 'Save Changes' : 'No Changes'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // =============================================================================
 // WORKSPACE BINDINGS VIEWER (Read-only)
@@ -1980,7 +1474,7 @@ function WorkspaceBindingsViewer({ onClose }: { onClose: () => void }) {
               <Users className="w-8 h-8 text-neutral-700 mx-auto mb-3" />
               <p className="text-neutral-500 text-sm">No workspace bindings</p>
               <p className="text-neutral-600 text-xs mt-1">
-                Create bindings to link workspaces to personas
+                Bindings are created via the wizard
               </p>
             </div>
           ) : (
