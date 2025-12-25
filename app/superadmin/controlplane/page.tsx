@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Clock,
   Lock,
+  ExternalLink,
 } from 'lucide-react';
 // S274: Removed Plus, Edit2, Save - no mutation affordances in read-only view
 
@@ -708,7 +709,14 @@ function VerticalItem({
               </div>
             );
           })}
-          {/* S274: Add Sub-Vertical button removed - use wizard for mutations */}
+          {/* S274: Extend link - navigates to wizard with vertical context */}
+          <Link
+            href={`/superadmin/controlplane/wizard/new?mode=extend&vertical_id=${vertical.id}&vertical_name=${encodeURIComponent(vertical.name)}`}
+            className="mt-3 flex items-center justify-center gap-1.5 py-1.5 text-[10px] text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 rounded border border-dashed border-violet-500/30 transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Extend in Wizard
+          </Link>
         </div>
       )}
     </div>
