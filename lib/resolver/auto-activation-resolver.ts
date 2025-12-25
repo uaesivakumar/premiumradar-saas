@@ -386,37 +386,75 @@ export async function resolveActivation(input: ResolverInput): Promise<ResolverO
     const workspace = await getOrCreateDefaultWorkspace(tenant.id, user.id, userType);
 
     // Step 8: Create binding (the actual activation)
-    const binding = await insert<BindingRow>(
-      `INSERT INTO os_workspace_bindings (
-        id, tenant_id, workspace_id, vertical_id, sub_vertical_id, persona_id, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, true)
-      RETURNING *`,
-      [
-        randomUUID(),
-        tenant.id,
-        workspace.id,
-        stackReadiness.metadata.vertical_id,
-        stackReadiness.metadata.sub_vertical_id,
-        personaId,
-      ]
-    );
+    // S270: DB UNIQUE constraint is the final arbiter of idempotency.
+    // If a race condition causes duplicate INSERT, catch it and return ALREADY_ACTIVATED.
+    try {
+      const binding = await insert<BindingRow>(
+        `INSERT INTO os_workspace_bindings (
+          id, tenant_id, workspace_id, vertical_id, sub_vertical_id, persona_id, is_active
+        ) VALUES ($1, $2, $3, $4, $5, $6, true)
+        RETURNING *`,
+        [
+          randomUUID(),
+          tenant.id,
+          workspace.id,
+          stackReadiness.metadata.vertical_id,
+          stackReadiness.metadata.sub_vertical_id,
+          personaId,
+        ]
+      );
 
-    // Success!
-    const output: ResolverOutput = {
-      activated: true,
-      reason_code: 'READY_ACTIVATED',
-      reason_message: 'Successfully activated runtime binding',
-      audit_id: auditId,
-      binding_id: binding.id,
-      workspace_id: workspace.id,
-      persona_id: personaId,
-      user_type: userType,
-      stack_status: 'READY',
-      timestamp,
-    };
+      // Success!
+      const output: ResolverOutput = {
+        activated: true,
+        reason_code: 'READY_ACTIVATED',
+        reason_message: 'Successfully activated runtime binding',
+        audit_id: auditId,
+        binding_id: binding.id,
+        workspace_id: workspace.id,
+        persona_id: personaId,
+        user_type: userType,
+        stack_status: 'READY',
+        timestamp,
+      };
 
-    await logResolverAudit(auditId, input, output, userType);
-    return output;
+      await logResolverAudit(auditId, input, output, userType);
+      return output;
+    } catch (insertError: unknown) {
+      // S270: Handle UNIQUE constraint violation (PostgreSQL error code 23505)
+      // This happens if another request activated between our SELECT and INSERT.
+      // The DB is the final arbiter - return ALREADY_ACTIVATED, not an error.
+      const pgError = insertError as { code?: string };
+      if (pgError.code === '23505') {
+        console.log('[AutoActivationResolver] Race condition caught by DB constraint. Returning ALREADY_ACTIVATED.');
+
+        // Fetch the binding that won the race
+        const winningBinding = await queryOne<BindingRow>(
+          `SELECT id, workspace_id FROM os_workspace_bindings
+           WHERE persona_id = $1 AND tenant_id = $2 AND is_active = true`,
+          [personaId, tenant.id]
+        );
+
+        const output: ResolverOutput = {
+          activated: true,
+          reason_code: 'ALREADY_ACTIVATED',
+          reason_message: 'Binding activated by concurrent request (race resolved by DB)',
+          audit_id: auditId,
+          binding_id: winningBinding?.id,
+          workspace_id: winningBinding?.workspace_id,
+          persona_id: personaId,
+          user_type: userType,
+          stack_status: 'READY',
+          timestamp,
+        };
+
+        await logResolverAudit(auditId, input, output, userType);
+        return output;
+      }
+
+      // Re-throw non-constraint errors
+      throw insertError;
+    }
 
   } catch (error) {
     console.error('[AutoActivationResolver] Error:', error);
