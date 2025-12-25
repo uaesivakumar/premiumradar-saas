@@ -1373,7 +1373,7 @@ function WorkspaceBindingSection({
 
     try {
       const res = await fetch(`/api/superadmin/controlplane/workspaces/${workspaceId}/binding`, {
-        method: 'POST',
+        method: 'PUT',  // Backend only has GET and PUT - PUT handles upsert
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenant_id: tenantId,
