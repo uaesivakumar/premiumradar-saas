@@ -37,6 +37,7 @@ import {
   Box,
   Shield,
   FlaskConical,
+  Wand2,
 } from 'lucide-react';
 import AICommandBar from '@/components/superadmin/AICommandBar';
 
@@ -52,8 +53,9 @@ const navItems = [
   { label: 'Sales-Bench', href: '/superadmin/sales-bench', icon: FlaskConical },
   { label: 'Financials', href: '/superadmin/financials', icon: DollarSign },
   { type: 'divider' },
-  // v3.0: Control Plane is THE authority - Blueprints is read-only view
+  // S274: Control Plane = read-only monitoring, Wizard = mutations
   { label: 'Control Plane', href: '/superadmin/controlplane', icon: Shield },
+  { label: 'CP Wizard', href: '/superadmin/controlplane/wizard/new', icon: Wand2, isMutation: true },
   { label: 'Blueprints', href: '/superadmin/verticals', icon: Layers, readOnly: true },
   { label: 'OS Config', href: '/superadmin/os', icon: Server },
   { label: 'Settings', href: '/superadmin/settings', icon: Settings },
@@ -153,20 +155,33 @@ export default function SuperAdminLayout({
                 (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''));
               const Icon = item.icon;
 
+              const isMutation = (item as { isMutation?: boolean }).isMutation;
+              const isReadOnly = (item as { readOnly?: boolean }).readOnly;
+
               return (
                 <Link
                   key={item.href}
                   href={item.href || '#'}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                     isActive
-                      ? 'bg-neutral-800 text-white'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+                      ? isMutation
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-neutral-800 text-white'
+                      : isMutation
+                        ? 'text-violet-400 hover:text-violet-300 hover:bg-violet-500/20 border border-violet-500/30'
+                        : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
                   }`}
-                  title={(item as { readOnly?: boolean }).readOnly ? 'Read-only view' : undefined}
+                  title={
+                    isMutation
+                      ? 'Create or modify vertical stacks'
+                      : isReadOnly
+                        ? 'Read-only view'
+                        : undefined
+                  }
                 >
                   {Icon && <Icon className="w-3.5 h-3.5" />}
                   <span>{item.label}</span>
-                  {(item as { readOnly?: boolean }).readOnly && (
+                  {isReadOnly && (
                     <span className="text-[8px] text-neutral-600 ml-0.5">(R)</span>
                   )}
                 </Link>
