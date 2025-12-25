@@ -244,6 +244,32 @@ async function fetchStacks(): Promise<StackStatus[]> {
   return data.stacks;
 }
 
+// v3.0: Fetch stack readiness from canonical resolver
+async function fetchStackReadiness(personaId: string): Promise<{
+  status: 'READY' | 'BLOCKED' | 'INCOMPLETE' | 'NOT_FOUND';
+  checks: Record<string, boolean>;
+  blockers: string[];
+  metadata: { binding_count: number; active_policy_version: number | null };
+}> {
+  const res = await fetch(`/api/superadmin/controlplane/stack-readiness?persona_id=${personaId}`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Failed to fetch readiness');
+  return data.data;
+}
+
+// v3.0: Fetch bindings for a persona (VIEW ONLY - no edit from here)
+async function fetchPersonaBindings(personaId: string): Promise<{
+  id: string;
+  workspace_id: string;
+  tenant_id: string;
+  is_active: boolean;
+}[]> {
+  const res = await fetch(`/api/superadmin/controlplane/bindings?persona_id=${personaId}`);
+  const data = await res.json();
+  if (!data.success) return [];
+  return data.data || [];
+}
+
 // =============================================================================
 // MAIN COMPONENT
 // =============================================================================
@@ -357,14 +383,14 @@ export default function ControlPlanePage() {
         <span className="text-white">Control Plane</span>
       </nav>
 
-      {/* Control Plane v2.6 Status Strip */}
+      {/* Control Plane v3.0 Status Strip - AUTHORITY CONSOLIDATED */}
       <div className="bg-violet-900/20 border border-violet-500/30 rounded-lg px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="px-2 py-0.5 bg-violet-600 text-white text-xs font-medium rounded">
-            Control Plane v2.6
+            Control Plane v3.0
           </span>
           <span className="text-violet-300 text-xs">
-            A stack is READY only if: Vertical + Sub-Vertical + Persona + ACTIVE Policy + Binding
+            READY = Vertical ✓ + Sub-Vertical ✓ + Persona ✓ + ACTIVE Policy ✓ + Binding ✓ + Runtime Resolves ✓
           </span>
         </div>
         <a
@@ -381,19 +407,20 @@ export default function ControlPlanePage() {
         <div>
           <h1 className="text-lg font-medium text-white flex items-center gap-2">
             <Server className="w-5 h-5 text-violet-400" />
-            Control Plane Overview
+            Runtime Control Plane
           </h1>
           <p className="text-neutral-500 text-sm mt-0.5">
-            System readiness, bindings, and runtime configuration
+            Single source of truth for system readiness and runtime configuration
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Link
             href="/superadmin/verticals"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-sm rounded transition-colors"
+            title="Read-only view of blueprints"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Verticals & Personas
+            <Eye className="w-3.5 h-3.5" />
+            Blueprints (Read-Only)
           </Link>
           <button
             onClick={() => setShowBindingsViewer(true)}
@@ -700,35 +727,46 @@ function VerticalItem({
                 {subPersonas.map((persona) => {
                   const personaStatus = svStatus?.personas.find(p => p.id === persona.id);
                   return (
-                    <button
-                      key={persona.id}
-                      onClick={() => onSelectPersona(persona)}
-                      className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
-                        selectedPersonaId === persona.id
-                          ? 'bg-violet-500/10 border border-violet-500/30'
-                          : 'bg-neutral-800/50 hover:bg-neutral-800 border border-transparent'
-                      }`}
-                    >
-                      <div className="text-left">
-                        <p className="text-xs font-medium text-white flex items-center gap-1.5">
-                          {persona.name}
-                          {personaStatus && (
-                            <span
-                              className={`text-[8px] px-1 py-0.5 rounded ${
-                                personaStatus.status === 'READY'
-                                  ? 'bg-emerald-500/20 text-emerald-400'
-                                  : 'bg-amber-500/20 text-amber-400'
-                              }`}
-                              title={personaStatus.not_ready_reason || 'Ready'}
-                            >
-                              {personaStatus.policy_status || 'NO POLICY'}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[10px] text-neutral-600">{persona.key}</p>
-                      </div>
-                      <Users className="w-3 h-3 text-neutral-600" />
-                    </button>
+                    <div key={persona.id} className="space-y-1">
+                      <button
+                        onClick={() => onSelectPersona(persona)}
+                        className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
+                          selectedPersonaId === persona.id
+                            ? 'bg-violet-500/10 border border-violet-500/30'
+                            : 'bg-neutral-800/50 hover:bg-neutral-800 border border-transparent'
+                        }`}
+                      >
+                        <div className="text-left">
+                          <p className="text-xs font-medium text-white flex items-center gap-1.5">
+                            {persona.name}
+                            {personaStatus && (
+                              <span
+                                className={`text-[8px] px-1 py-0.5 rounded ${
+                                  personaStatus.status === 'READY'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : 'bg-amber-500/20 text-amber-400'
+                                }`}
+                                title={personaStatus.not_ready_reason || 'Ready'}
+                              >
+                                {personaStatus.policy_status || 'NO POLICY'}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-neutral-600">{persona.key}</p>
+                        </div>
+                        <Users className="w-3 h-3 text-neutral-600" />
+                      </button>
+                      {/* v3.0: Inline bindings (VIEW ONLY) */}
+                      {personaStatus?.has_binding && (
+                        <div className="ml-4 pl-2 border-l border-neutral-700 text-[9px] text-neutral-500">
+                          <div className="flex items-center gap-1">
+                            <Lock className="w-2.5 h-2.5" />
+                            <span>Bindings: Active</span>
+                            <span className="text-emerald-400">✓</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
                 <button

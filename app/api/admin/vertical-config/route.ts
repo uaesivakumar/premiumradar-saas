@@ -8,18 +8,16 @@
  *   - Get sub-verticals: ?subVerticals=true&vertical=banking
  *   - Get regions: ?regions=true&vertical=banking&subVertical=employee-banking
  *
- * POST /api/admin/vertical-config
- *   - Create new config
+ * ⚠️ AUTHORITY LOCK (Control Plane v3.0):
+ * POST/PATCH/DELETE mutations are DEPRECATED on this endpoint.
+ * All vertical/persona creation MUST go through Control Plane wizard:
+ *   /api/superadmin/controlplane/* endpoints
  *
- * PATCH /api/admin/vertical-config
- *   - Update config (requires ?id=xxx)
- *
- * DELETE /api/admin/vertical-config
- *   - Delete config (requires ?id=xxx)
- *
- * This endpoint is called by:
+ * This endpoint now serves as READ-ONLY for:
  * 1. UPR OS at runtime to fetch vertical config
- * 2. Super-Admin Panel for CRUD operations
+ * 2. Legacy compatibility (read operations only)
+ *
+ * Mutations blocked with: AUTHORITY_LOCKED error
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -30,13 +28,12 @@ import {
   getVerticals,
   getSubVerticals,
   getRegions,
-  createVerticalConfig,
-  updateVerticalConfig,
-  deleteVerticalConfig,
   getVerticalConfigById,
-  VerticalConfigSchema,
-  invalidateConfigCache,
 } from '@/lib/admin/server';
+
+// ⛔ AUTHORITY LOCK: These imports are intentionally removed
+// createVerticalConfig, updateVerticalConfig, deleteVerticalConfig
+// All mutations MUST go through Control Plane APIs
 
 // =============================================================================
 // GET - Fetch vertical configs
@@ -145,201 +142,78 @@ export async function GET(request: NextRequest) {
 }
 
 // =============================================================================
-// POST - Create new vertical config
+// POST - AUTHORITY LOCKED
 // =============================================================================
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
+  // ⛔ AUTHORITY LOCK: All mutations MUST go through Control Plane
+  // This is NOT a silent rejection - it's a loud governance failure
+  console.error('[AUTHORITY VIOLATION] POST /api/admin/vertical-config called directly. Use Control Plane wizard.');
 
-    // Validate input
-    const parseResult = VerticalConfigSchema.safeParse(body);
-    if (!parseResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: parseResult.error.issues,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Mandatory persona validation (S71-fix)
-    const persona = body.persona;
-    if (!persona || !persona.persona_name || persona.persona_name.trim() === '') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'PERSONA_REQUIRED',
-          message: 'No persona found for this sub-vertical. Please create a persona first. SIVA cannot function without knowing HOW to think for this role.',
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!persona.entity_type) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'PERSONA_INCOMPLETE',
-          message: 'Entity type is required in persona config. Please select company, individual, or family.',
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!persona.contact_priority_rules?.tiers?.length) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'PERSONA_INCOMPLETE',
-          message: 'At least one contact priority tier is required in persona config.',
-        },
-        { status: 400 }
-      );
-    }
-
-    const config = await createVerticalConfig(parseResult.data);
-
-    return NextResponse.json(
-      { success: true, data: config },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error('[API] POST /api/admin/vertical-config error:', error);
-
-    // Handle unique constraint violation
-    if (error instanceof Error && error.message.includes('unique_vertical_config')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'A config for this vertical/sub-vertical/region already exists',
-        },
-        { status: 409 }
-      );
-    }
-
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'AUTHORITY_LOCKED',
+      code: 'GOVERNANCE_VIOLATION',
+      message: 'Direct vertical creation is FORBIDDEN. All vertical/persona creation MUST go through the Control Plane wizard.',
+      redirect: '/superadmin/controlplane/wizard/new',
+      reason: 'Control Plane is the single source of truth for vertical configuration. This endpoint is now READ-ONLY.',
+      timestamp: new Date().toISOString(),
+    },
+    { status: 403 }
+  );
 }
 
 // =============================================================================
-// PATCH - Update vertical config
+// PATCH - AUTHORITY LOCKED
 // =============================================================================
 
 export async function PATCH(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  // ⛔ AUTHORITY LOCK: All mutations MUST go through Control Plane
+  // This is NOT a silent rejection - it's a loud governance failure
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
 
-    if (!id) {
-      return NextResponse.json(
-        { success: false, error: 'id parameter required' },
-        { status: 400 }
-      );
-    }
+  console.error(`[AUTHORITY VIOLATION] PATCH /api/admin/vertical-config?id=${id} called directly. Use Control Plane.`);
 
-    const body = await request.json();
-
-    // Get existing config to check if it exists and get its identifiers
-    const existing = await getVerticalConfigById(id);
-    if (!existing) {
-      return NextResponse.json(
-        { success: false, error: 'Config not found' },
-        { status: 404 }
-      );
-    }
-
-    // Mandatory persona validation on update (S71-fix)
-    if (body.persona) {
-      const persona = body.persona;
-      if (!persona.persona_name || persona.persona_name.trim() === '') {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'PERSONA_REQUIRED',
-            message: 'Persona name cannot be empty. SIVA cannot function without knowing HOW to think for this role.',
-          },
-          { status: 400 }
-        );
-      }
-
-      if (!persona.entity_type) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'PERSONA_INCOMPLETE',
-            message: 'Entity type is required in persona config.',
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    const config = await updateVerticalConfig(id, body);
-
-    // Invalidate cache for this config
-    invalidateConfigCache(existing.vertical, existing.subVertical, existing.regionCountry);
-
-    return NextResponse.json({ success: true, data: config });
-  } catch (error) {
-    console.error('[API] PATCH /api/admin/vertical-config error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'AUTHORITY_LOCKED',
+      code: 'GOVERNANCE_VIOLATION',
+      message: 'Direct vertical editing is FORBIDDEN. All vertical/persona updates MUST go through the Control Plane.',
+      redirect: '/superadmin/controlplane',
+      reason: 'Control Plane is the single source of truth for vertical configuration. This endpoint is now READ-ONLY.',
+      attempted_id: id,
+      timestamp: new Date().toISOString(),
+    },
+    { status: 403 }
+  );
 }
 
 // =============================================================================
-// DELETE - Delete vertical config
+// DELETE - AUTHORITY LOCKED
 // =============================================================================
 
 export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  // ⛔ AUTHORITY LOCK: All mutations MUST go through Control Plane
+  // This is NOT a silent rejection - it's a loud governance failure
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
 
-    if (!id) {
-      return NextResponse.json(
-        { success: false, error: 'id parameter required' },
-        { status: 400 }
-      );
-    }
+  console.error(`[AUTHORITY VIOLATION] DELETE /api/admin/vertical-config?id=${id} called directly. Use Control Plane.`);
 
-    // Get existing config to check if it's seeded
-    const existing = await getVerticalConfigById(id);
-    if (!existing) {
-      return NextResponse.json(
-        { success: false, error: 'Config not found' },
-        { status: 404 }
-      );
-    }
-
-    if (existing.isSeeded) {
-      return NextResponse.json(
-        { success: false, error: 'Cannot delete seeded configs' },
-        { status: 403 }
-      );
-    }
-
-    const success = await deleteVerticalConfig(id);
-
-    if (success) {
-      // Invalidate cache
-      invalidateConfigCache(existing.vertical, existing.subVertical, existing.regionCountry);
-    }
-
-    return NextResponse.json({ success });
-  } catch (error) {
-    console.error('[API] DELETE /api/admin/vertical-config error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'AUTHORITY_LOCKED',
+      code: 'GOVERNANCE_VIOLATION',
+      message: 'Direct vertical deletion is FORBIDDEN. All vertical lifecycle operations MUST go through the Control Plane.',
+      redirect: '/superadmin/controlplane',
+      reason: 'Control Plane is the single source of truth for vertical configuration. This endpoint is now READ-ONLY.',
+      attempted_id: id,
+      timestamp: new Date().toISOString(),
+    },
+    { status: 403 }
+  );
 }

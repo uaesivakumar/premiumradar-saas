@@ -52,8 +52,9 @@ const navItems = [
   { label: 'Sales-Bench', href: '/superadmin/sales-bench', icon: FlaskConical },
   { label: 'Financials', href: '/superadmin/financials', icon: DollarSign },
   { type: 'divider' },
+  // v3.0: Control Plane is THE authority - Blueprints is read-only view
   { label: 'Control Plane', href: '/superadmin/controlplane', icon: Shield },
-  { label: 'Verticals', href: '/superadmin/verticals', icon: Layers },
+  { label: 'Blueprints', href: '/superadmin/verticals', icon: Layers, readOnly: true },
   { label: 'OS Config', href: '/superadmin/os', icon: Server },
   { label: 'Settings', href: '/superadmin/settings', icon: Settings },
   { type: 'divider' },
@@ -161,9 +162,13 @@ export default function SuperAdminLayout({
                       ? 'bg-neutral-800 text-white'
                       : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
                   }`}
+                  title={(item as { readOnly?: boolean }).readOnly ? 'Read-only view' : undefined}
                 >
                   {Icon && <Icon className="w-3.5 h-3.5" />}
                   <span>{item.label}</span>
+                  {(item as { readOnly?: boolean }).readOnly && (
+                    <span className="text-[8px] text-neutral-600 ml-0.5">(R)</span>
+                  )}
                 </Link>
               );
             })}
