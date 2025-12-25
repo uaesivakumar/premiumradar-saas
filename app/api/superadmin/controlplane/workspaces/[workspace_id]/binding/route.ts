@@ -306,7 +306,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       action = 'update_binding';
       result = await queryOne<OSWorkspaceBinding>(
         `UPDATE os_workspace_bindings
-         SET vertical_id = $1, sub_vertical_id = $2, persona_id = $3, is_active = $4
+         SET vertical_id = $1, sub_vertical_id = $2, persona_id = $3, is_active = $4, updated_at = NOW()
          WHERE tenant_id = $5 AND workspace_id = $6
          RETURNING id, tenant_id, workspace_id, vertical_id, sub_vertical_id, persona_id,
                    is_active, created_at, updated_at`,
@@ -315,7 +315,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     } else {
       // Create new binding
       action = 'create_binding';
-      result = await insert<OSWorkspaceBinding>(
+      result = await queryOne<OSWorkspaceBinding>(
         `INSERT INTO os_workspace_bindings
          (tenant_id, workspace_id, vertical_id, sub_vertical_id, persona_id, is_active)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -325,34 +325,63 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Guard: Ensure result is not null
+    if (!result) {
+      console.error('[ControlPlane:Binding PUT] Database operation returned null');
+      await logControlPlaneAudit({
+        actorUser,
+        action,
+        targetType: 'binding',
+        requestJson: { ...body, workspace_id },
+        success: false,
+        errorMessage: 'Database operation returned null result',
+      });
+      return Response.json({
+        success: false,
+        error: 'DATABASE_ERROR',
+        message: 'Failed to create or update binding - database returned empty result',
+      }, { status: 500 });
+    }
+
+    // Build response data
+    const responseData = {
+      id: result.id,
+      tenant_id: result.tenant_id,
+      workspace_id: result.workspace_id,
+      vertical_id: result.vertical_id,
+      sub_vertical_id: result.sub_vertical_id,
+      persona_id: result.persona_id,
+      is_active: result.is_active,
+      created_at: result.created_at,
+      updated_at: result.updated_at,
+      vertical_key: vertical.key,
+      sub_vertical_key: subVertical.key,
+      persona_key: persona.key,
+    };
+
     // Audit log success
     await logControlPlaneAudit({
       actorUser,
       action,
       targetType: 'binding',
-      targetId: result?.id,
+      targetId: result.id,
       requestJson: { ...body, workspace_id },
-      resultJson: {
-        ...result,
-        vertical_key: vertical.key,
-        sub_vertical_key: subVertical.key,
-        persona_key: persona.key,
-      },
+      resultJson: responseData,
       success: true,
     });
 
     return Response.json({
       success: true,
-      data: {
-        ...result,
-        vertical_key: vertical.key,
-        sub_vertical_key: subVertical.key,
-        persona_key: persona.key,
-      },
+      data: responseData,
     }, { status: existingBinding ? 200 : 201 });
 
   } catch (error) {
     console.error('[ControlPlane:Binding PUT] Error:', error);
-    return serverError('Failed to update binding');
+    // Ensure we always return valid JSON even on error
+    return Response.json({
+      success: false,
+      error: 'SERVER_ERROR',
+      message: error instanceof Error ? error.message : 'Failed to update binding',
+    }, { status: 500 });
   }
 }
