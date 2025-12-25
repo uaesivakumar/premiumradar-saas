@@ -86,12 +86,13 @@ const initialWizardState: WizardState = {
   verification_result: null,
 };
 
+// v3.1: Updated step subtitles to reflect auto-managed operations
 export const WIZARD_STEPS = [
   { number: 1, title: 'Vertical', subtitle: 'Identity & Key' },
   { number: 2, title: 'Sub-Vertical', subtitle: 'Sales Motion' },
   { number: 3, title: 'Persona', subtitle: 'Region & Scope' },
-  { number: 4, title: 'Policy', subtitle: 'Lifecycle & Rules' },
-  { number: 5, title: 'Binding', subtitle: 'Workspace Link' },
+  { number: 4, title: 'Policy', subtitle: 'Auto-Activated' },
+  { number: 5, title: 'Binding', subtitle: 'Auto-Managed' },
   { number: 6, title: 'Verify', subtitle: 'Runtime Check' },
   { number: 7, title: 'Published', subtitle: 'Summary' },
 ];

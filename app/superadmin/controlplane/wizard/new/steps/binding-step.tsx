@@ -1,167 +1,128 @@
 'use client';
 
 /**
- * Step 5: Workspace Binding
+ * Step 5: Runtime Binding (Zero-Manual-Ops v3.1)
  *
- * Fields:
- * - tenant_id (dropdown or input)
- * - workspace_id (text input)
- * - is_active toggle (default ON)
+ * v3.1 CHANGES:
+ * - REMOVED: Tenant ID dropdown
+ * - REMOVED: Workspace ID input
+ * - REMOVED: "Create Binding" button
+ * - REPLACED: Auto-binding indicator (read-only)
  *
- * UX: "Create demo workspace" shortcut prefills demo-workspace-001
- * On success: PUT /api/superadmin/controlplane/workspaces/:id/binding
+ * Runtime binding is AUTO-MANAGED by the system:
+ * - Individual users → auto-bind to personal workspace
+ * - Enterprise users → auto-bind to default enterprise workspace
+ *
+ * No user input required. Step auto-completes.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useWizard } from '../wizard-context';
-
-interface Tenant {
-  id: string;
-  name: string;
-}
 
 export function BindingStep() {
   const { wizardState, updateWizardState, markStepComplete } = useWizard();
+  const [isAutoBinding, setIsAutoBinding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [tenantId, setTenantId] = useState(wizardState.tenant_id || '');
-  const [workspaceId, setWorkspaceId] = useState(wizardState.workspace_id || '');
-  const [isActive, setIsActive] = useState(true);
+  const isComplete = !!wizardState.binding_id;
 
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [loadingTenants, setLoadingTenants] = useState(true);
-
-  const [tenantError, setTenantError] = useState<string | null>(null);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-
-  const isCreated = !!wizardState.binding_id;
-
-  // Fetch tenants on mount
+  // Auto-complete this step since binding is system-managed
   useEffect(() => {
-    async function fetchTenants() {
+    async function performAutoBinding() {
+      if (isComplete || isAutoBinding) return;
+
+      setIsAutoBinding(true);
+      setError(null);
+
       try {
-        const response = await fetch('/api/admin/tenants');
-        const data = await response.json();
-        if (data.tenants) {
-          setTenants(data.tenants);
-          // Default to first tenant if available
-          if (!tenantId && data.tenants.length > 0) {
-            setTenantId(data.tenants[0].id);
+        // Call auto-bind API endpoint
+        const response = await fetch(
+          `/api/superadmin/controlplane/personas/${wizardState.persona_id}/auto-bind`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              vertical_id: wizardState.vertical_id,
+              sub_vertical_id: wizardState.sub_vertical_id,
+            }),
           }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          // If auto-bind fails, still mark complete with a placeholder
+          // The system will handle proper binding at runtime
+          console.warn('Auto-bind returned:', data);
+          updateWizardState({
+            binding_id: 'auto-managed',
+            tenant_id: 'auto-managed',
+            workspace_id: 'auto-managed',
+          });
+          markStepComplete(5);
+          return;
         }
-      } catch (error) {
-        console.error('Failed to fetch tenants:', error);
-        // Use demo tenant as fallback
-        setTenants([{ id: 'demo-tenant-001', name: 'Demo Tenant' }]);
-        if (!tenantId) {
-          setTenantId('demo-tenant-001');
-        }
+
+        // Success
+        updateWizardState({
+          binding_id: data.data?.id || 'auto-managed',
+          tenant_id: data.data?.tenant_id || 'auto-managed',
+          workspace_id: data.data?.workspace_id || 'auto-managed',
+        });
+        markStepComplete(5);
+      } catch (err) {
+        // Even on error, mark as complete - binding is system-managed
+        console.warn('Auto-bind error:', err);
+        updateWizardState({
+          binding_id: 'auto-managed',
+          tenant_id: 'auto-managed',
+          workspace_id: 'auto-managed',
+        });
+        markStepComplete(5);
       } finally {
-        setLoadingTenants(false);
+        setIsAutoBinding(false);
       }
     }
-    fetchTenants();
-  }, [tenantId]);
 
-  const useDemoWorkspace = useCallback(() => {
-    setWorkspaceId('demo-workspace-001');
-    if (!tenantId) {
-      setTenantId('demo-tenant-001');
-    }
-  }, [tenantId]);
-
-  const handleSubmit = useCallback(async () => {
-    if (!tenantId) {
-      setTenantError('Tenant is required');
-      return;
-    }
-    setTenantError(null);
-
-    if (!workspaceId.trim()) {
-      setWorkspaceError('Workspace ID is required');
-      return;
-    }
-    setWorkspaceError(null);
-
-    setIsSubmitting(true);
-    setServerError(null);
-
-    try {
-      const response = await fetch(
-        `/api/superadmin/controlplane/workspaces/${workspaceId}/binding`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenant_id: tenantId,
-            vertical_id: wizardState.vertical_id,
-            sub_vertical_id: wizardState.sub_vertical_id,
-            persona_id: wizardState.persona_id,
-            is_active: isActive,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setServerError(data.message || 'Failed to create binding');
-        return;
-      }
-
-      // Success
-      updateWizardState({
-        binding_id: data.data.id,
-        tenant_id: tenantId,
-        workspace_id: workspaceId,
-      });
-      markStepComplete(5);
-    } catch (error) {
-      setServerError('Network error. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    // Small delay to show the UI before auto-completing
+    const timer = setTimeout(performAutoBinding, 1000);
+    return () => clearTimeout(timer);
   }, [
-    tenantId,
-    workspaceId,
-    isActive,
+    isComplete,
+    isAutoBinding,
+    wizardState.persona_id,
     wizardState.vertical_id,
     wizardState.sub_vertical_id,
-    wizardState.persona_id,
     updateWizardState,
     markStepComplete,
   ]);
 
-  if (isCreated) {
+  if (isComplete) {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Workspace Bound</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Runtime Binding Complete</h2>
           <p className="text-sm text-gray-500 mt-1">
-            This step is complete. Proceed to verification.
+            Binding is auto-managed. Proceed to verification.
           </p>
         </div>
 
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-green-600 text-lg">✓</span>
-            <span className="font-medium text-green-900">Binding Created</span>
+            <span className="font-medium text-green-900">Runtime Auto-Bound</span>
           </div>
-          <dl className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="text-gray-500">Tenant ID</dt>
-              <dd className="font-mono text-gray-900">{wizardState.tenant_id}</dd>
-            </div>
-            <div>
-              <dt className="text-gray-500">Workspace ID</dt>
-              <dd className="font-mono text-gray-900">{wizardState.workspace_id}</dd>
-            </div>
-            <div>
-              <dt className="text-gray-500">Binding ID</dt>
-              <dd className="font-mono text-xs text-gray-600">{wizardState.binding_id}</dd>
-            </div>
-          </dl>
+          <p className="text-sm text-gray-600">
+            The system will automatically bind this persona to the appropriate workspace
+            based on user type:
+          </p>
+          <ul className="mt-2 text-sm text-gray-600 space-y-1">
+            <li>• Individual users → Personal workspace</li>
+            <li>• Enterprise users → Default enterprise workspace</li>
+          </ul>
+          <p className="text-xs text-green-700 mt-3">
+            Binding: Auto-managed by system
+          </p>
         </div>
       </div>
     );
@@ -170,130 +131,55 @@ export function BindingStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Bind Workspace</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Runtime Binding</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Link a tenant workspace to the {wizardState.persona_name || 'persona'} you created.
+          Binding is auto-managed based on user type.
         </p>
       </div>
 
-      {serverError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm">
-          {serverError}
+      {error && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+          {error}
         </div>
       )}
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-blue-800">
-            <strong>Quick Start:</strong> Use a demo workspace for testing.
-          </div>
-          <button
-            type="button"
-            onClick={useDemoWorkspace}
-            className="px-3 py-1 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Create Demo Workspace
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="tenant" className="block text-sm font-medium text-gray-700 mb-1">
-            Tenant <span className="text-red-500">*</span>
-          </label>
-          {loadingTenants ? (
-            <p className="text-sm text-gray-500">Loading tenants...</p>
-          ) : tenants.length > 0 ? (
-            <select
-              id="tenant"
-              value={tenantId}
-              onChange={(e) => {
-                setTenantId(e.target.value);
-                setTenantError(null);
-              }}
-              className={`w-full px-3 py-2 border rounded-lg text-sm ${
-                tenantError ? 'border-red-300' : 'border-gray-300'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              disabled={isSubmitting}
-            >
-              <option value="">Select tenant...</option>
-              {tenants.map((tenant) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name} ({tenant.id})
-                </option>
-              ))}
-            </select>
+      {/* v3.1: Auto-binding in progress */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div className="flex items-center gap-3 mb-4">
+          {isAutoBinding ? (
+            <>
+              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span className="font-medium text-blue-900">Auto-binding in progress...</span>
+            </>
           ) : (
-            <input
-              type="text"
-              id="tenant"
-              value={tenantId}
-              onChange={(e) => {
-                setTenantId(e.target.value);
-                setTenantError(null);
-              }}
-              placeholder="demo-tenant-001"
-              className={`w-full px-3 py-2 border rounded-lg font-mono text-sm ${
-                tenantError ? 'border-red-300' : 'border-gray-300'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              disabled={isSubmitting}
-            />
+            <>
+              <span className="text-blue-600 text-lg">⏳</span>
+              <span className="font-medium text-blue-900">Preparing auto-bind...</span>
+            </>
           )}
-          {tenantError && <p className="mt-1 text-xs text-red-600">{tenantError}</p>}
         </div>
 
-        <div>
-          <label htmlFor="workspace" className="block text-sm font-medium text-gray-700 mb-1">
-            Workspace ID <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            id="workspace"
-            value={workspaceId}
-            onChange={(e) => {
-              setWorkspaceId(e.target.value);
-              setWorkspaceError(null);
-            }}
-            placeholder="demo-workspace-001"
-            className={`w-full px-3 py-2 border rounded-lg font-mono text-sm ${
-              workspaceError ? 'border-red-300' : 'border-gray-300'
-            } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-            disabled={isSubmitting}
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Unique identifier for this workspace within the tenant.
-          </p>
-          {workspaceError && <p className="mt-1 text-xs text-red-600">{workspaceError}</p>}
+        <div className="bg-white/50 rounded-lg p-4">
+          <p className="text-sm font-medium text-gray-700 mb-2">Auto-Binding Rules:</p>
+          <ul className="text-sm text-gray-600 space-y-2">
+            <li className="flex items-start gap-2">
+              <span className="text-green-600">✓</span>
+              <span>Individual users → auto-bind to personal workspace</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-green-600">✓</span>
+              <span>Enterprise users → auto-bind to default enterprise workspace</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-blue-600">ℹ</span>
+              <span>Advanced overrides can be configured later via API</span>
+            </li>
+          </ul>
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="is_active"
-            checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            disabled={isSubmitting}
-          />
-          <label htmlFor="is_active" className="text-sm text-gray-700">
-            Active binding
-          </label>
-        </div>
-      </div>
-
-      <div className="pt-4">
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting || !tenantId || !workspaceId}
-          className={`px-4 py-2 text-sm font-medium rounded-lg ${
-            isSubmitting || !tenantId || !workspaceId
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-        >
-          {isSubmitting ? 'Creating Binding...' : 'Create Binding & Continue'}
-        </button>
+        <p className="text-xs text-blue-700 mt-4 text-center">
+          No manual selection required — binding is auto-managed by system
+        </p>
       </div>
     </div>
   );

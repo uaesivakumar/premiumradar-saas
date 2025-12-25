@@ -1,14 +1,17 @@
 'use client';
 
 /**
- * Step 4: Persona Policy (Lifecycle-aware)
+ * Step 4: Persona Policy (Zero-Manual-Ops v3.1)
  *
  * Layout: Two columns
  * - Left: Policy fields editor
- * - Right: Lifecycle panel (status badge, Save Draft/Stage/Activate buttons)
+ * - Right: Status panel (read-only status, auto-activation indicator)
  *
- * Policy Status Lifecycle: DRAFT → STAGED → ACTIVE
- * Wizard cannot proceed to Step 5 unless policy status = ACTIVE
+ * v3.1 CHANGES:
+ * - REMOVED: "Activate Policy" button
+ * - REMOVED: "Stage for Review" button
+ * - ADDED: Auto-activation on save
+ * - Policy activation is AUTO-MANAGED by system
  */
 
 import { useState, useCallback, useEffect } from 'react';
@@ -38,10 +41,7 @@ export function PolicyStep() {
   const [newForbidden, setNewForbidden] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isStaging, setIsStaging] = useState(false);
-  const [isActivating, setIsActivating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   const isActive = wizardState.policy_status === 'ACTIVE';
 
@@ -70,14 +70,20 @@ export function PolicyStep() {
     fetchPolicy();
   }, [wizardState.persona_id]);
 
-  const handleSaveDraft = useCallback(async () => {
+  /**
+   * v3.1: Save and Auto-Activate Policy
+   * Single action that saves policy AND activates it automatically.
+   * No manual activation step required.
+   */
+  const handleSaveAndActivate = useCallback(async () => {
     if (!wizardState.persona_id) return;
 
     setIsSaving(true);
     setError(null);
 
     try {
-      const response = await fetch(
+      // Step 1: Save the policy
+      const saveResponse = await fetch(
         `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy`,
         {
           method: 'PUT',
@@ -89,82 +95,37 @@ export function PolicyStep() {
         }
       );
 
-      const data = await response.json();
-      if (!data.success) {
-        setError(data.message || 'Failed to save draft');
+      const saveData = await saveResponse.json();
+      if (!saveData.success) {
+        setError(saveData.message || 'Failed to save policy');
         return;
       }
 
-      setLastSaved(new Date());
-      updateWizardState({
-        policy_version: data.data.policy_version,
-      });
-    } catch (error) {
-      setError('Network error. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [wizardState.persona_id, policyData, updateWizardState]);
-
-  const handleStage = useCallback(async () => {
-    if (!wizardState.persona_id) return;
-
-    setIsStaging(true);
-    setError(null);
-
-    try {
-      const response = await fetch(
-        `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy/stage`,
-        { method: 'POST' }
-      );
-
-      const data = await response.json();
-      if (!data.success) {
-        setError(data.message || 'Failed to stage policy');
-        return;
-      }
-
-      updateWizardState({
-        policy_status: 'STAGED',
-        policy_version: data.policy.policy_version,
-      });
-    } catch (error) {
-      setError('Network error. Please try again.');
-    } finally {
-      setIsStaging(false);
-    }
-  }, [wizardState.persona_id, updateWizardState]);
-
-  const handleActivate = useCallback(async () => {
-    if (!wizardState.persona_id) return;
-
-    setIsActivating(true);
-    setError(null);
-
-    try {
-      const response = await fetch(
+      // Step 2: Auto-activate the policy (system-managed)
+      const activateResponse = await fetch(
         `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy/activate`,
         { method: 'POST' }
       );
 
-      const data = await response.json();
-      if (!data.success) {
-        setError(data.message || 'Failed to activate policy');
+      const activateData = await activateResponse.json();
+      if (!activateData.success) {
+        setError(activateData.message || 'Failed to auto-activate policy');
         return;
       }
 
+      // Success - update wizard state
       updateWizardState({
         policy_status: 'ACTIVE',
-        policy_version: data.policy.policy_version,
-        policy_activated_at: data.policy.activated_at,
+        policy_version: activateData.policy.policy_version,
+        policy_activated_at: activateData.policy.activated_at,
       });
       markStepComplete(4);
     } catch (error) {
       setError('Network error. Please try again.');
     } finally {
-      setIsActivating(false);
+      setIsSaving(false);
     }
-  }, [wizardState.persona_id, updateWizardState, markStepComplete]);
+  }, [wizardState.persona_id, policyData, updateWizardState, markStepComplete]);
 
   const addTag = useCallback(
     (field: 'allowed_intents' | 'allowed_tools' | 'forbidden_outputs', value: string) => {
@@ -187,33 +148,20 @@ export function PolicyStep() {
     []
   );
 
-  const getStatusColor = (status: string | null) => {
-    switch (status) {
-      case 'ACTIVE':
-        return 'bg-green-100 text-green-800';
-      case 'STAGED':
-        return 'bg-blue-100 text-blue-800';
-      case 'DRAFT':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   if (isActive) {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Policy Activated</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Policy Complete</h2>
           <p className="text-sm text-gray-500 mt-1">
-            This step is complete. Proceed to bind a workspace.
+            Policy has been saved and auto-activated. Proceed to verification.
           </p>
         </div>
 
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-green-600 text-lg">✓</span>
-            <span className="font-medium text-green-900">Policy is ACTIVE</span>
+            <span className="font-medium text-green-900">Policy Auto-Activated</span>
           </div>
           <dl className="grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -229,6 +177,9 @@ export function PolicyStep() {
               </dd>
             </div>
           </dl>
+          <p className="text-xs text-green-700 mt-3">
+            Activation: Auto-managed by system
+          </p>
         </div>
       </div>
     );
@@ -240,7 +191,6 @@ export function PolicyStep() {
         <h2 className="text-lg font-semibold text-gray-900">Persona Policy</h2>
         <p className="text-sm text-gray-500 mt-1">
           Configure policy rules for {wizardState.persona_name || 'this persona'}.
-          Policy must be ACTIVE to proceed.
         </p>
       </div>
 
@@ -410,18 +360,13 @@ export function PolicyStep() {
           </div>
         </div>
 
-        {/* Right: Lifecycle Panel */}
+        {/* Right: Status Panel (Read-Only) */}
         <div className="col-span-1">
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">Policy Status</p>
-              <span
-                className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(
-                  wizardState.policy_status
-                )}`}
-              >
-                {wizardState.policy_status || 'DRAFT'}
-              </span>
+            {/* v3.1: Auto-managed indicator */}
+            <div className="flex items-center gap-2 text-emerald-600 text-sm">
+              <span>✓</span>
+              <span className="font-medium">Activation: Auto-managed</span>
             </div>
 
             <div>
@@ -429,47 +374,19 @@ export function PolicyStep() {
               <p className="text-gray-900">v{wizardState.policy_version || 1}</p>
             </div>
 
-            {lastSaved && (
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-1">Last Saved</p>
-                <p className="text-gray-600 text-sm">{lastSaved.toLocaleTimeString()}</p>
-              </div>
-            )}
-
-            <div className="space-y-2 pt-2 border-t border-gray-200">
+            <div className="pt-2 border-t border-gray-200">
+              {/* v3.1: Single save action - activation is automatic */}
               <button
-                onClick={handleSaveDraft}
+                onClick={handleSaveAndActivate}
                 disabled={isSaving}
-                className="w-full px-3 py-2 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50"
+                className="w-full px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                {isSaving ? 'Saving...' : 'Save Draft'}
+                {isSaving ? 'Saving & Activating...' : 'Save Policy'}
               </button>
-
-              {wizardState.policy_status === 'DRAFT' && (
-                <button
-                  onClick={handleStage}
-                  disabled={isStaging}
-                  className="w-full px-3 py-2 text-sm font-medium bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 disabled:opacity-50"
-                >
-                  {isStaging ? 'Staging...' : 'Stage for Review'}
-                </button>
-              )}
-
-              {(wizardState.policy_status === 'DRAFT' ||
-                wizardState.policy_status === 'STAGED') && (
-                <button
-                  onClick={handleActivate}
-                  disabled={isActivating}
-                  className="w-full px-3 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
-                  {isActivating ? 'Activating...' : 'Activate Policy'}
-                </button>
-              )}
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Policy will be auto-activated on save
+              </p>
             </div>
-
-            <p className="text-xs text-gray-500 mt-2">
-              Policy must be ACTIVE to proceed to the next step.
-            </p>
           </div>
         </div>
       </div>

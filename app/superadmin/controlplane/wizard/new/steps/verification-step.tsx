@@ -1,41 +1,49 @@
 'use client';
 
 /**
- * Step 6: Runtime Verification
+ * Step 6: Runtime Verification (Zero-Manual-Ops v3.1)
  *
- * Auto-run checks with "re-run" button:
- * - GET /api/os/resolve-binding?tenant_id=...&workspace_id=...
+ * Auto-run checks using stack_readiness API:
+ * - GET /api/superadmin/controlplane/stack-readiness?persona_id=...
+ *
+ * v3.1 CHANGES:
+ * - Uses stack_readiness API instead of resolve-binding
+ * - No tenant/workspace parameters needed (auto-managed)
+ * - Shows system-managed verification status
  *
  * Shows result card with:
- * - Resolution method: BINDING
- * - control_plane_version
- * - agent, entity_type, persona_key
- * - policy status
+ * - Stack status: READY | BLOCKED | INCOMPLETE
+ * - All checks passed/failed
+ * - Policy status
  *
- * If fails: show exact NOT READY error code and "Fix it" button
+ * If fails: show blockers and "Fix it" button
  */
 
 import { useState, useCallback, useEffect } from 'react';
 import { useWizard } from '../wizard-context';
 
+interface StackReadiness {
+  status: 'READY' | 'BLOCKED' | 'INCOMPLETE' | 'NOT_FOUND';
+  checks: Record<string, boolean>;
+  blockers: string[];
+  metadata: {
+    vertical_id: string | null;
+    vertical_key: string | null;
+    sub_vertical_id: string | null;
+    sub_vertical_key: string | null;
+    persona_id: string | null;
+    persona_key: string | null;
+    active_policy_id: string | null;
+    active_policy_version: number | null;
+    binding_count: number;
+  };
+}
+
 interface VerificationResult {
   success: boolean;
   error?: string;
   message?: string;
-  resolution_method?: string;
-  control_plane_version?: string;
-  runtime?: {
-    agent: string;
-    entity_type: string;
-    persona_key: string;
-  };
-  policy?: {
-    status: string;
-    version?: number;
-  };
-  vertical?: { key: string; name: string };
-  sub_vertical?: { key: string; name: string };
-  persona?: { key: string; name: string };
+  data?: StackReadiness;
 }
 
 export function VerificationStep() {
@@ -46,11 +54,11 @@ export function VerificationStep() {
   const [autoRan, setAutoRan] = useState(false);
 
   const runVerification = useCallback(async () => {
-    if (!wizardState.tenant_id || !wizardState.workspace_id) {
+    if (!wizardState.persona_id) {
       setResult({
         success: false,
-        error: 'MISSING_BINDING',
-        message: 'Tenant ID and Workspace ID are required. Go back to Step 5.',
+        error: 'MISSING_PERSONA',
+        message: 'Persona ID is required. Go back to Step 3.',
       });
       return;
     }
@@ -59,24 +67,42 @@ export function VerificationStep() {
 
     try {
       const response = await fetch(
-        `/api/os/resolve-binding?tenant_id=${encodeURIComponent(
-          wizardState.tenant_id
-        )}&workspace_id=${encodeURIComponent(wizardState.workspace_id)}`
+        `/api/superadmin/controlplane/stack-readiness?persona_id=${encodeURIComponent(
+          wizardState.persona_id
+        )}`
       );
 
-      const data: VerificationResult = await response.json();
-      setResult(data);
+      const data = await response.json();
 
-      if (data.success) {
+      if (!data.success) {
+        setResult({
+          success: false,
+          error: data.error || 'VERIFICATION_FAILED',
+          message: data.message || 'Failed to verify stack readiness.',
+        });
+        return;
+      }
+
+      const readiness: StackReadiness = data.data;
+      const isReady = readiness.status === 'READY';
+
+      setResult({
+        success: isReady,
+        error: isReady ? undefined : readiness.status,
+        message: isReady ? 'Stack is ready' : readiness.blockers.join('. '),
+        data: readiness,
+      });
+
+      if (isReady) {
         updateWizardState({
           verification_passed: true,
-          verification_result: data as unknown as Record<string, unknown>,
+          verification_result: readiness as unknown as Record<string, unknown>,
         });
         markStepComplete(6);
       } else {
         updateWizardState({
           verification_passed: false,
-          verification_result: data as unknown as Record<string, unknown>,
+          verification_result: readiness as unknown as Record<string, unknown>,
         });
       }
     } catch (error) {
@@ -88,37 +114,29 @@ export function VerificationStep() {
     } finally {
       setIsVerifying(false);
     }
-  }, [wizardState.tenant_id, wizardState.workspace_id, updateWizardState, markStepComplete]);
+  }, [wizardState.persona_id, updateWizardState, markStepComplete]);
 
   // Auto-run on mount
   useEffect(() => {
-    if (!autoRan && wizardState.tenant_id && wizardState.workspace_id) {
+    if (!autoRan && wizardState.persona_id) {
       setAutoRan(true);
       runVerification();
     }
-  }, [autoRan, wizardState.tenant_id, wizardState.workspace_id, runVerification]);
+  }, [autoRan, wizardState.persona_id, runVerification]);
 
-  const getFailingStep = useCallback((error: string) => {
-    switch (error) {
-      case 'BINDING_NOT_FOUND':
-      case 'BINDING_INACTIVE':
-        return 5;
-      case 'POLICY_NOT_ACTIVE':
-        return 4;
-      case 'PERSONA_INACTIVE':
-        return 3;
-      case 'SUB_VERTICAL_INACTIVE':
-        return 2;
-      case 'VERTICAL_INACTIVE':
-        return 1;
-      default:
-        return null;
-    }
+  const getFailingStep = useCallback((blockers: string[]) => {
+    const blockerText = blockers.join(' ').toLowerCase();
+    if (blockerText.includes('binding')) return 5;
+    if (blockerText.includes('policy')) return 4;
+    if (blockerText.includes('persona')) return 3;
+    if (blockerText.includes('sub-vertical')) return 2;
+    if (blockerText.includes('vertical')) return 1;
+    return null;
   }, []);
 
   const handleFixIt = useCallback(() => {
-    if (result?.error) {
-      const step = getFailingStep(result.error);
+    if (result?.data?.blockers) {
+      const step = getFailingStep(result.data.blockers);
       if (step) {
         setCurrentStep(step);
       }
@@ -141,37 +159,44 @@ export function VerificationStep() {
             <span className="font-semibold text-green-900 text-lg">Stack is READY</span>
           </div>
 
-          {result && (
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <dt className="text-gray-500">Resolution Method</dt>
-                <dd className="font-medium text-gray-900">{result.resolution_method}</dd>
+          {result?.data && (
+            <div className="space-y-3">
+              {/* Checks grid */}
+              <div className="grid grid-cols-3 gap-2">
+                {Object.entries(result.data.checks).map(([key, passed]) => (
+                  <div
+                    key={key}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs ${
+                      passed
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}
+                  >
+                    {passed ? '✓' : '✗'}
+                    <span className="truncate">{key.replace(/_/g, ' ')}</span>
+                  </div>
+                ))}
               </div>
-              <div>
-                <dt className="text-gray-500">Control Plane</dt>
-                <dd className="font-medium text-gray-900">v{result.control_plane_version}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Agent</dt>
-                <dd className="font-medium text-gray-900">{result.runtime?.agent}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Entity Type</dt>
-                <dd className="font-medium text-gray-900">{result.runtime?.entity_type}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Persona</dt>
-                <dd className="font-medium text-gray-900">{result.runtime?.persona_key}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Policy Status</dt>
-                <dd className="inline-flex">
-                  <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-800">
-                    {result.policy?.status}
-                  </span>
-                </dd>
-              </div>
-            </dl>
+
+              <dl className="grid grid-cols-2 gap-4 text-sm pt-3 border-t border-green-200">
+                <div>
+                  <dt className="text-gray-500">Persona</dt>
+                  <dd className="font-medium text-gray-900">{result.data.metadata.persona_key}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Policy Version</dt>
+                  <dd className="font-medium text-gray-900">v{result.data.metadata.active_policy_version}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Binding Status</dt>
+                  <dd className="inline-flex">
+                    <span className="px-2 py-0.5 text-xs font-medium rounded bg-emerald-100 text-emerald-800">
+                      Auto-Managed
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
           )}
         </div>
 
@@ -219,9 +244,15 @@ export function VerificationStep() {
             </div>
             <div className="bg-white rounded border border-red-100 p-3 mt-3">
               <p className="font-mono text-sm text-red-800 mb-1">
-                Error: {result.error}
+                Status: {result.error}
               </p>
-              <p className="text-gray-600 text-sm">{result.message}</p>
+              {result.data?.blockers && result.data.blockers.length > 0 && (
+                <ul className="text-gray-600 text-sm space-y-1 mt-2">
+                  {result.data.blockers.map((blocker, i) => (
+                    <li key={i}>• {blocker}</li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="mt-4 flex gap-3">
               <button
@@ -231,12 +262,12 @@ export function VerificationStep() {
               >
                 Re-run
               </button>
-              {getFailingStep(result.error || '') && (
+              {result.data?.blockers && getFailingStep(result.data.blockers) && (
                 <button
                   onClick={handleFixIt}
                   className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  Fix it (Step {getFailingStep(result.error || '')})
+                  Fix it (Step {getFailingStep(result.data.blockers)})
                 </button>
               )}
             </div>
@@ -258,11 +289,14 @@ export function VerificationStep() {
       <div className="text-sm text-gray-500">
         <p className="font-medium mb-2">What we check:</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>Workspace binding exists and is active</li>
           <li>Vertical, Sub-Vertical, and Persona are all active</li>
           <li>Persona has an ACTIVE policy</li>
+          <li>Runtime binding is auto-managed</li>
           <li>Runtime configuration resolves correctly</li>
         </ul>
+        <p className="text-xs text-emerald-600 mt-2">
+          Binding: Auto-managed by system
+        </p>
       </div>
     </div>
   );

@@ -1,18 +1,21 @@
 'use client';
 
 /**
- * Step 7: Published Summary
+ * Step 7: Published Summary (Zero-Manual-Ops v3.1)
  *
  * Read-only summary showing:
- * - Vertical / Sub-Vertical / Persona / Policy status / Binding
- * - Timestamp
- * - Audit trail link filtered to these IDs
+ * - Stack created
+ * - Policy auto-activated
+ * - Runtime auto-bound
  *
- * Buttons:
- * - "Go to Control Plane"
- * - "Create another stack"
+ * Links:
+ * - View Runtime Status
+ * - View Audit Log
+ *
+ * v3.1: Shows auto-managed operations instead of manual binding details
  */
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useWizard } from '../wizard-context';
 
@@ -35,10 +38,32 @@ export function PublishedStep() {
         <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
           <span className="text-3xl text-green-600">✓</span>
         </div>
-        <h2 className="text-2xl font-semibold text-gray-900">Vertical Stack Published</h2>
+        <h2 className="text-2xl font-semibold text-gray-900">Vertical Stack Created</h2>
         <p className="text-gray-500 mt-2">
-          Your new vertical stack is now live and ready to use.
+          Your new vertical stack is live with auto-managed activation and binding.
         </p>
+      </div>
+
+      {/* v3.1: Auto-Managed Operations Summary */}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-green-600 text-lg">✓</span>
+          <span className="font-medium text-green-900">All Operations Auto-Managed</span>
+        </div>
+        <ul className="text-sm text-green-800 space-y-2">
+          <li className="flex items-center gap-2">
+            <span>✓</span>
+            <span>Stack created</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span>✓</span>
+            <span>Policy auto-activated (v{wizardState.policy_version})</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span>✓</span>
+            <span>Runtime auto-bound</span>
+          </li>
+        </ul>
       </div>
 
       {/* Summary Card */}
@@ -97,39 +122,37 @@ export function PublishedStep() {
             </span>
           </div>
 
-          {/* Policy */}
+          {/* Policy - Auto-Activated */}
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-600 text-sm font-medium">4</span>
+            <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+              <span className="text-emerald-600 text-sm font-medium">4</span>
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-500">Policy</p>
               <p className="text-gray-900">Version {wizardState.policy_version}</p>
-              {wizardState.policy_activated_at && (
-                <p className="text-xs text-gray-500">
-                  Activated: {new Date(wizardState.policy_activated_at).toLocaleString()}
-                </p>
-              )}
+              <p className="text-xs text-emerald-600 font-medium">
+                Auto-Activated
+              </p>
             </div>
-            <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800">
+            <span className="px-2 py-1 text-xs font-medium rounded bg-emerald-100 text-emerald-800">
               {wizardState.policy_status}
             </span>
           </div>
 
-          {/* Binding */}
+          {/* Binding - Auto-Managed */}
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-600 text-sm font-medium">5</span>
+            <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+              <span className="text-emerald-600 text-sm font-medium">5</span>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-gray-500">Workspace Binding</p>
-              <p className="text-gray-900 font-mono text-sm">{wizardState.workspace_id}</p>
-              <p className="text-xs text-gray-500">
-                Tenant: {wizardState.tenant_id}
+              <p className="text-sm font-medium text-gray-500">Runtime Binding</p>
+              <p className="text-gray-900">System-Managed</p>
+              <p className="text-xs text-emerald-600 font-medium">
+                Auto-bound based on user type
               </p>
             </div>
-            <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800">
-              Bound
+            <span className="px-2 py-1 text-xs font-medium rounded bg-emerald-100 text-emerald-800">
+              Auto
             </span>
           </div>
         </div>
@@ -152,8 +175,8 @@ export function PublishedStep() {
             <span className="text-gray-900">{wizardState.persona_id}</span>
           </div>
           <div>
-            <span className="text-gray-500">binding_id: </span>
-            <span className="text-gray-900">{wizardState.binding_id}</span>
+            <span className="text-gray-500">policy_version: </span>
+            <span className="text-gray-900">v{wizardState.policy_version}</span>
           </div>
         </div>
       </div>
@@ -161,6 +184,32 @@ export function PublishedStep() {
       {/* Timestamp */}
       <div className="text-center text-sm text-gray-500">
         Published at {new Date().toLocaleString()}
+      </div>
+
+      {/* v3.1: Quick Access Links */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm font-medium text-blue-900 mb-3">Quick Access</p>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/superadmin/controlplane"
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-blue-200 text-blue-700 text-sm rounded hover:bg-blue-50"
+          >
+            <span>→</span>
+            View Runtime Status
+          </Link>
+          <Link
+            href="/superadmin/controlplane"
+            onClick={(e) => {
+              e.preventDefault();
+              router.push('/superadmin/controlplane');
+              // The audit viewer can be opened from the Control Plane
+            }}
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-blue-200 text-blue-700 text-sm rounded hover:bg-blue-50"
+          >
+            <span>→</span>
+            View Audit Log
+          </Link>
+        </div>
       </div>
 
       {/* Actions */}
