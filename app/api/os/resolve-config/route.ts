@@ -10,7 +10,8 @@
 import { validateSuperAdminSession } from '@/lib/superadmin-auth';
 
 const OS_BASE_URL = process.env.UPR_OS_BASE_URL || 'http://localhost:3001';
-const OS_TOKEN = process.env.UPR_OS_TOKEN;
+// VS1: Use PR_OS_TOKEN for SaaS→OS authentication (consistent with os-client.ts)
+const PR_OS_TOKEN = process.env.PR_OS_TOKEN || process.env.UPR_OS_API_KEY || '';
 
 export async function GET(request: Request) {
   // Require Super Admin session
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        ...(OS_TOKEN && { 'x-pr-os-token': OS_TOKEN }),
+        'x-pr-os-token': PR_OS_TOKEN,
       },
     });
 
