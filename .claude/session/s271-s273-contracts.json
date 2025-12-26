@@ -1,0 +1,262 @@
+{
+  "session_id": "s271-s273-runtime-intelligence",
+  "started_at": "2025-12-26T05:10:00Z",
+  "sprint_range": "S271-S273",
+  "mode": "continuous-execution",
+  "guardrails": {
+    "no_control_plane": true,
+    "no_wizard": true,
+    "no_mutations": true,
+    "read_only": true,
+    "derived_data_only": true
+  },
+  "feature_contracts": [
+    {
+      "sprint": "S271",
+      "feature_id": "S271-F1",
+      "feature_name": "Signal Card Rendering",
+      "existing_component": "components/dashboard/IntelligenceSignalList.tsx",
+      "action": "ENHANCE - Add workspace context and real-time indicators",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/RuntimeSignalCard.tsx",
+        "renders_at": "/dashboard/intelligence"
+      },
+      "wiring_checks": [
+        {
+          "type": "component_exists",
+          "path": "components/workspace/RuntimeSignalCard.tsx"
+        },
+        {
+          "type": "import_exists",
+          "from": "app/dashboard/intelligence/page.tsx",
+          "imports": "RuntimeSignalCard"
+        }
+      ]
+    },
+    {
+      "sprint": "S271",
+      "feature_id": "S271-F2",
+      "feature_name": "Signal Data Subscription",
+      "action": "NEW - Create polling-based data hook",
+      "ui_entrypoint": {
+        "type": "hook",
+        "path": "lib/workspace/useRuntimeSignals.ts"
+      },
+      "wiring_checks": [
+        {
+          "type": "hook_exists",
+          "path": "lib/workspace/useRuntimeSignals.ts"
+        }
+      ]
+    },
+    {
+      "sprint": "S271",
+      "feature_id": "S271-F3",
+      "feature_name": "Live Signal Feed Component",
+      "action": "NEW - Dedicated workspace signal feed",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/RuntimeSignalFeed.tsx",
+        "renders_at": "/dashboard/intelligence"
+      },
+      "wiring_checks": [
+        {
+          "type": "component_exists",
+          "path": "components/workspace/RuntimeSignalFeed.tsx"
+        }
+      ]
+    },
+    {
+      "sprint": "S271",
+      "feature_id": "S271-F4",
+      "feature_name": "Feed Filtering & Sorting",
+      "existing_component": "IntelligenceSignalList has basic filters",
+      "action": "ENHANCE - Add sorting, time range, source filters",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/RuntimeSignalFeed.tsx"
+      },
+      "wiring_checks": [
+        {
+          "type": "filter_state_exists",
+          "component": "RuntimeSignalFeed.tsx"
+        }
+      ]
+    },
+    {
+      "sprint": "S271",
+      "feature_id": "S271-F5",
+      "feature_name": "Empty State & Loading UX",
+      "existing_component": "IntelligenceSignalList has skeleton",
+      "action": "REUSE - Use existing patterns",
+      "wiring_checks": [
+        {
+          "type": "loading_state_exists",
+          "component": "RuntimeSignalFeed.tsx"
+        },
+        {
+          "type": "empty_state_exists",
+          "component": "RuntimeSignalFeed.tsx"
+        }
+      ]
+    },
+    {
+      "sprint": "S272",
+      "feature_id": "S272-F1",
+      "feature_name": "Blockers List Component",
+      "action": "NEW - Show what's blocking opportunity",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/OpportunityBlockers.tsx"
+      },
+      "wiring_checks": [
+        {
+          "type": "component_exists",
+          "path": "components/workspace/OpportunityBlockers.tsx"
+        }
+      ]
+    },
+    {
+      "sprint": "S272",
+      "feature_id": "S272-F2",
+      "feature_name": "Scoring API Integration",
+      "action": "REUSE - Use existing /api/dashboard/stats scores",
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/dashboard/stats",
+          "required_fields": ["scores"]
+        }
+      ]
+    },
+    {
+      "sprint": "S272",
+      "feature_id": "S272-F3",
+      "feature_name": "Score Breakdown Explainer",
+      "existing_component": "components/discovery/ScoreBreakdown.tsx",
+      "action": "REUSE - Already exists",
+      "wiring_checks": [
+        {
+          "type": "component_exists",
+          "path": "components/discovery/ScoreBreakdown.tsx"
+        }
+      ]
+    },
+    {
+      "sprint": "S272",
+      "feature_id": "S272-F4",
+      "feature_name": "Opportunity Score Card",
+      "action": "NEW - Per-opportunity score summary",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/OpportunityScoreCard.tsx"
+      },
+      "wiring_checks": [
+        {
+          "type": "component_exists",
+          "path": "components/workspace/OpportunityScoreCard.tsx"
+        }
+      ]
+    },
+    {
+      "sprint": "S272",
+      "feature_id": "S272-F5",
+      "feature_name": "Score History Trend",
+      "action": "NEW - Mini trend chart for score over time",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/ScoreHistoryTrend.tsx"
+      },
+      "wiring_checks": [
+        {
+          "type": "component_exists",
+          "path": "components/workspace/ScoreHistoryTrend.tsx"
+        }
+      ]
+    },
+    {
+      "sprint": "S272",
+      "feature_id": "S272-F6",
+      "feature_name": "Boosters List Component",
+      "action": "NEW - Show what's boosting opportunity",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/OpportunityBoosters.tsx"
+      },
+      "wiring_checks": [
+        {
+          "type": "component_exists",
+          "path": "components/workspace/OpportunityBoosters.tsx"
+        }
+      ]
+    },
+    {
+      "sprint": "S273",
+      "feature_id": "S273-F1",
+      "feature_name": "Messaging Angle Suggestion",
+      "action": "NEW - NBA-derived messaging angles",
+      "architecture": "NBA decides angle, SIVA explains why",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/MessagingAngle.tsx"
+      }
+    },
+    {
+      "sprint": "S273",
+      "feature_id": "S273-F2",
+      "feature_name": "Action API Integration",
+      "action": "NEW - NBA endpoint for next actions",
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/workspace/[workspaceId]/nba",
+          "purpose": "Next Best Action recommendations"
+        }
+      ]
+    },
+    {
+      "sprint": "S273",
+      "feature_id": "S273-F3",
+      "feature_name": "Next Best Action Card",
+      "action": "NEW - Primary action recommendation",
+      "architecture": "NBA decides, deterministic",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/NextBestAction.tsx"
+      }
+    },
+    {
+      "sprint": "S273",
+      "feature_id": "S273-F4",
+      "feature_name": "SIVA Reasoning Overlay",
+      "action": "NEW - Explanation layer",
+      "architecture": "SIVA explains NBA decision, does NOT decide",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/SIVAReasoningOverlay.tsx"
+      }
+    },
+    {
+      "sprint": "S273",
+      "feature_id": "S273-F5",
+      "feature_name": "Action History Log",
+      "action": "NEW - Past actions taken",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/ActionHistoryLog.tsx"
+      }
+    },
+    {
+      "sprint": "S273",
+      "feature_id": "S273-F6",
+      "feature_name": "Contact Recommendation",
+      "action": "NEW - Who to contact",
+      "architecture": "NBA decides contact, SIVA explains why",
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/workspace/ContactRecommendation.tsx"
+      }
+    }
+  ]
+}
