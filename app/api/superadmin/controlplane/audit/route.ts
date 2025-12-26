@@ -11,6 +11,8 @@
  * - offset: Pagination offset (default 0)
  * - action: Filter by action type
  * - target_type: Filter by target type
+ * - success: Filter by success status (true/false) - S275-F6
+ * - since_hours: Filter by time window (1, 24) - S275-F6
  */
 
 import { NextRequest } from 'next/server';
@@ -41,6 +43,9 @@ export async function GET(request: NextRequest) {
   const offset = parseInt(searchParams.get('offset') || '0', 10);
   const action = searchParams.get('action');
   const targetType = searchParams.get('target_type');
+  // S275-F6: Additional filters
+  const successParam = searchParams.get('success');
+  const sinceHours = searchParams.get('since_hours');
 
   try {
     // Build query with optional filters
@@ -56,6 +61,17 @@ export async function GET(request: NextRequest) {
     if (targetType) {
       whereClause += `${whereClause ? ' AND ' : 'WHERE '}target_type = $${paramIndex++}`;
       params.push(targetType);
+    }
+
+    // S275-F6: Filter by success status
+    if (successParam !== null && successParam !== '') {
+      whereClause += `${whereClause ? ' AND ' : 'WHERE '}success = $${paramIndex++}`;
+      params.push(successParam === 'true');
+    }
+
+    // S275-F6: Filter by time window (1 hour or 24 hours)
+    if (sinceHours && ['1', '24'].includes(sinceHours)) {
+      whereClause += `${whereClause ? ' AND ' : 'WHERE '}created_at >= NOW() - INTERVAL '${sinceHours} hours'`;
     }
 
     // Get total count

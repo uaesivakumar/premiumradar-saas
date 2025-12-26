@@ -8,6 +8,7 @@
  * or deactivating any control plane entity.
  *
  * Query params:
+ * - search: unified search across tenant_id, workspace_id, vertical_key, sub_vertical_key, persona_key (case-insensitive, partial match)
  * - vertical_id: filter by vertical
  * - sub_vertical_id: filter by sub-vertical
  * - persona_id: filter by persona
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
 
     // Parse filters
+    const search = url.searchParams.get('search')?.trim();
     const verticalId = url.searchParams.get('vertical_id');
     const subVerticalId = url.searchParams.get('sub_vertical_id');
     const personaId = url.searchParams.get('persona_id');
@@ -71,6 +73,23 @@ export async function GET(request: NextRequest) {
     const conditions: string[] = [];
     const values: unknown[] = [];
     let paramIndex = 1;
+
+    // S275-F5: Unified search across multiple fields (case-insensitive, partial match)
+    if (search && search.length > 0) {
+      const searchPattern = `%${search.toLowerCase()}%`;
+      conditions.push(`(
+        LOWER(wb.tenant_id::text) LIKE $${paramIndex} OR
+        LOWER(wb.workspace_id) LIKE $${paramIndex} OR
+        LOWER(v.key) LIKE $${paramIndex} OR
+        LOWER(sv.key) LIKE $${paramIndex} OR
+        LOWER(p.key) LIKE $${paramIndex} OR
+        LOWER(v.name) LIKE $${paramIndex} OR
+        LOWER(sv.name) LIKE $${paramIndex} OR
+        LOWER(p.name) LIKE $${paramIndex}
+      )`);
+      values.push(searchPattern);
+      paramIndex++;
+    }
 
     if (verticalId) {
       conditions.push(`wb.vertical_id = $${paramIndex++}`);
@@ -99,10 +118,13 @@ export async function GET(request: NextRequest) {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Get total count
+    // Get total count (need JOINs when search is active since it references joined columns)
     const countResult = await query<{ count: string }>(
       `SELECT COUNT(*) as count
        FROM os_workspace_bindings wb
+       JOIN os_verticals v ON wb.vertical_id = v.id
+       JOIN os_sub_verticals sv ON wb.sub_vertical_id = sv.id
+       JOIN os_personas p ON wb.persona_id = p.id
        ${whereClause}`,
       values
     );

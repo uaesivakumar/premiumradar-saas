@@ -287,6 +287,19 @@ export default function ControlPlanePage() {
   const [showAuditViewer, setShowAuditViewer] = useState(false);
   const [showBindingsViewer, setShowBindingsViewer] = useState(false);
 
+  // S275-F3: Pre-fill values for Runtime Config modal (set by binding row click)
+  const [runtimeConfigPreFill, setRuntimeConfigPreFill] = useState<{
+    tenantId: string;
+    workspaceId: string;
+  } | null>(null);
+
+  // S275-F4: Handler for binding row click -> open Runtime Config with pre-fill
+  const handleViewBindingConfig = (tenantId: string, workspaceId: string) => {
+    setShowBindingsViewer(false);
+    setRuntimeConfigPreFill({ tenantId, workspaceId });
+    setShowRuntimeConfig(true);
+  };
+
   // Load all data
   const loadData = useCallback(async () => {
     try {
@@ -520,9 +533,16 @@ export default function ControlPlanePage() {
       {/* S274: All creation modals removed - mutations are wizard-only */}
       {/* Wizard route: /superadmin/controlplane/wizard/new */}
 
-      {/* Runtime Config Modal (Rule 5) */}
+      {/* Runtime Config Modal (Rule 5) - S275-F3: Now supports pre-fill */}
       {showRuntimeConfig && (
-        <RuntimeConfigModal onClose={() => setShowRuntimeConfig(false)} />
+        <RuntimeConfigModal
+          onClose={() => {
+            setShowRuntimeConfig(false);
+            setRuntimeConfigPreFill(null);
+          }}
+          initialTenantId={runtimeConfigPreFill?.tenantId}
+          initialWorkspaceId={runtimeConfigPreFill?.workspaceId}
+        />
       )}
 
       {/* Audit Viewer Modal (Ops/Compliance) */}
@@ -532,9 +552,12 @@ export default function ControlPlanePage() {
 
       {/* S274: EditVerticalModal removed - no mutations from Control Plane */}
 
-      {/* Workspace Bindings Viewer (Read-only) */}
+      {/* Workspace Bindings Viewer (Read-only) - S275-F4: Now supports row click -> config */}
       {showBindingsViewer && (
-        <WorkspaceBindingsViewer onClose={() => setShowBindingsViewer(false)} />
+        <WorkspaceBindingsViewer
+          onClose={() => setShowBindingsViewer(false)}
+          onViewConfig={handleViewBindingConfig}
+        />
       )}
     </div>
   );
@@ -1031,12 +1054,29 @@ function RuntimeStatusPanel({ personaId }: { personaId: string }) {
 // RUNTIME CONFIG MODAL (Rule 5)
 // =============================================================================
 
-function RuntimeConfigModal({ onClose }: { onClose: () => void }) {
-  const [tenantId, setTenantId] = useState('');
-  const [workspaceId, setWorkspaceId] = useState('');
+// S275-F3: Accept initial values for pre-fill from binding row clicks
+function RuntimeConfigModal({
+  onClose,
+  initialTenantId,
+  initialWorkspaceId,
+}: {
+  onClose: () => void;
+  initialTenantId?: string;
+  initialWorkspaceId?: string;
+}) {
+  const [tenantId, setTenantId] = useState(initialTenantId || '');
+  const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId || '');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<ResolvedConfig | null>(null);
+
+  // S275-F3: Auto-resolve if initial values provided
+  useEffect(() => {
+    if (initialTenantId && initialWorkspaceId) {
+      handleResolve();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleResolve = async () => {
     if (!tenantId || !workspaceId) return;
@@ -1197,14 +1237,36 @@ function AuditViewer({ onClose }: { onClose: () => void }) {
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
-  const loadAuditLog = useCallback(async (newOffset: number = 0) => {
+  // S275-F6: Filter state
+  const [actionFilter, setActionFilter] = useState<string>('');
+  const [targetTypeFilter, setTargetTypeFilter] = useState<string>('');
+  const [successFilter, setSuccessFilter] = useState<string>(''); // '' = all, 'true' = OK, 'false' = failed
+  const [sinceHoursFilter, setSinceHoursFilter] = useState<string>(''); // '' = all, '1' = 1h, '24' = 24h
+  const [filterOptions, setFilterOptions] = useState<{ actions: string[]; targetTypes: string[] }>({
+    actions: [],
+    targetTypes: [],
+  });
+
+  const loadAuditLog = useCallback(async (
+    newOffset: number = 0,
+    filters?: { action?: string; target_type?: string; success?: string; since_hours?: string }
+  ) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const res = await fetch(
-        `/api/superadmin/controlplane/audit?limit=${limit}&offset=${newOffset}`
-      );
+      const params = new URLSearchParams({
+        limit: limit.toString(),
+        offset: newOffset.toString(),
+      });
+
+      // S275-F6: Apply filters
+      if (filters?.action) params.set('action', filters.action);
+      if (filters?.target_type) params.set('target_type', filters.target_type);
+      if (filters?.success) params.set('success', filters.success);
+      if (filters?.since_hours) params.set('since_hours', filters.since_hours);
+
+      const res = await fetch(`/api/superadmin/controlplane/audit?${params}`);
       const data = await res.json();
 
       if (!data.success) {
@@ -1214,6 +1276,11 @@ function AuditViewer({ onClose }: { onClose: () => void }) {
       setEntries(data.data.entries);
       setTotal(data.data.total);
       setOffset(newOffset);
+
+      // S275-F6: Store filter options for dropdowns
+      if (data.data.filters) {
+        setFilterOptions(data.data.filters);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
@@ -1221,9 +1288,13 @@ function AuditViewer({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
+  // S275-F6: Load with current filters
+  const currentFilters = { action: actionFilter, target_type: targetTypeFilter, success: successFilter, since_hours: sinceHoursFilter };
+
   useEffect(() => {
-    loadAuditLog(0);
-  }, [loadAuditLog]);
+    loadAuditLog(0, currentFilters);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadAuditLog, actionFilter, targetTypeFilter, successFilter, sinceHoursFilter]);
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -1234,26 +1305,109 @@ function AuditViewer({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-violet-400" />
-            <h2 className="text-sm font-medium text-white">Audit Log</h2>
-            <span className="text-xs text-neutral-500">({total} entries)</span>
+        <div className="p-4 border-b border-neutral-800 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-violet-400" />
+              <h2 className="text-sm font-medium text-white">Audit Log</h2>
+              <span className="text-xs text-neutral-500">({total} entries)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => loadAuditLog(offset, currentFilters)}
+                className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+                title="Refresh"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onClose}
+                className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => loadAuditLog(offset)}
-              className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
-              title="Refresh"
+
+          {/* S275-F6: Filter controls */}
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {/* Action Type Dropdown */}
+            <select
+              value={actionFilter}
+              onChange={(e) => setActionFilter(e.target.value)}
+              className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
             >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+              <option value="">All Actions</option>
+              {filterOptions.actions.map((action) => (
+                <option key={action} value={action}>{action}</option>
+              ))}
+            </select>
+
+            {/* Target Type Dropdown */}
+            <select
+              value={targetTypeFilter}
+              onChange={(e) => setTargetTypeFilter(e.target.value)}
+              className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
             >
-              <X className="w-4 h-4" />
-            </button>
+              <option value="">All Targets</option>
+              {filterOptions.targetTypes.map((targetType) => (
+                <option key={targetType} value={targetType}>{targetType}</option>
+              ))}
+            </select>
+
+            {/* Status Toggle */}
+            <div className="flex items-center gap-1 bg-neutral-800 border border-neutral-700 rounded p-0.5">
+              <button
+                onClick={() => setSuccessFilter('')}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  successFilter === '' ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setSuccessFilter('true')}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  successFilter === 'true' ? 'bg-emerald-600 text-white' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                OK
+              </button>
+              <button
+                onClick={() => setSuccessFilter('false')}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  successFilter === 'false' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                Failed
+              </button>
+            </div>
+
+            {/* Time Preset */}
+            <select
+              value={sinceHoursFilter}
+              onChange={(e) => setSinceHoursFilter(e.target.value)}
+              className="px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+            >
+              <option value="">All Time</option>
+              <option value="1">Last 1 hour</option>
+              <option value="24">Last 24 hours</option>
+            </select>
+
+            {/* Clear filters */}
+            {(actionFilter || targetTypeFilter || successFilter || sinceHoursFilter) && (
+              <button
+                onClick={() => {
+                  setActionFilter('');
+                  setTargetTypeFilter('');
+                  setSuccessFilter('');
+                  setSinceHoursFilter('');
+                }}
+                className="px-2 py-1.5 text-xs text-neutral-400 hover:text-white transition-colors"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         </div>
 
@@ -1333,17 +1487,20 @@ function AuditViewer({ onClose }: { onClose: () => void }) {
           <div className="p-3 border-t border-neutral-800 flex items-center justify-between flex-shrink-0">
             <span className="text-xs text-neutral-500">
               Showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
+              {(actionFilter || targetTypeFilter || successFilter || sinceHoursFilter) && (
+                <span className="ml-2 text-violet-400">(filtered)</span>
+              )}
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => loadAuditLog(Math.max(0, offset - limit))}
+                onClick={() => loadAuditLog(Math.max(0, offset - limit), currentFilters)}
                 disabled={offset === 0}
                 className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 text-white rounded disabled:opacity-50"
               >
                 Previous
               </button>
               <button
-                onClick={() => loadAuditLog(offset + limit)}
+                onClick={() => loadAuditLog(offset + limit, currentFilters)}
                 disabled={offset + limit >= total}
                 className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 text-white rounded disabled:opacity-50"
               >
@@ -1383,7 +1540,14 @@ interface WorkspaceBindingRow {
   updated_at: string;
 }
 
-function WorkspaceBindingsViewer({ onClose }: { onClose: () => void }) {
+// S275-F4: Accept onViewConfig callback for row hover action
+function WorkspaceBindingsViewer({
+  onClose,
+  onViewConfig,
+}: {
+  onClose: () => void;
+  onViewConfig?: (tenantId: string, workspaceId: string) => void;
+}) {
   const [bindings, setBindings] = useState<WorkspaceBindingRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1394,16 +1558,33 @@ function WorkspaceBindingsViewer({ onClose }: { onClose: () => void }) {
     active_bindings: number;
     bindings_with_warnings: number;
   } | null>(null);
+  // S275-F5: Unified search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const limit = 20;
 
-  const loadBindings = useCallback(async (newOffset: number = 0) => {
+  // S275-F5: Debounce search input (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const loadBindings = useCallback(async (newOffset: number = 0, search: string = '') => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const res = await fetch(
-        `/api/superadmin/controlplane/bindings?limit=${limit}&offset=${newOffset}`
-      );
+      const params = new URLSearchParams({
+        limit: limit.toString(),
+        offset: newOffset.toString(),
+      });
+      if (search.trim()) {
+        params.set('search', search.trim());
+      }
+
+      const res = await fetch(`/api/superadmin/controlplane/bindings?${params}`);
       const data = await res.json();
 
       if (!data.success) {
@@ -1421,51 +1602,64 @@ function WorkspaceBindingsViewer({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
+  // S275-F5: Reload when search changes
   useEffect(() => {
-    loadBindings(0);
-  }, [loadBindings]);
+    loadBindings(0, debouncedSearch);
+  }, [loadBindings, debouncedSearch]);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between flex-shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-violet-400" />
-              <h2 className="text-sm font-medium text-white">Workspace Bindings</h2>
-              <span className="text-xs text-neutral-500">({total} total)</span>
-            </div>
-            <p className="text-[10px] text-neutral-600 mt-0.5">
-              Read-only view of tenant/workspace configurations
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {summary && (
-              <div className="flex items-center gap-3 text-[10px]">
-                <span className="text-emerald-400">
-                  {summary.active_bindings} active
-                </span>
-                {summary.bindings_with_warnings > 0 && (
-                  <span className="text-amber-400">
-                    {summary.bindings_with_warnings} with warnings
-                  </span>
-                )}
+        <div className="p-4 border-b border-neutral-800 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-violet-400" />
+                <h2 className="text-sm font-medium text-white">Workspace Bindings</h2>
+                <span className="text-xs text-neutral-500">({total} total)</span>
               </div>
-            )}
-            <button
-              onClick={() => loadBindings(offset)}
-              className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
-              title="Refresh"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+              <p className="text-[10px] text-neutral-600 mt-0.5">
+                Read-only view of tenant/workspace configurations
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {summary && (
+                <div className="flex items-center gap-3 text-[10px]">
+                  <span className="text-emerald-400">
+                    {summary.active_bindings} active
+                  </span>
+                  {summary.bindings_with_warnings > 0 && (
+                    <span className="text-amber-400">
+                      {summary.bindings_with_warnings} with warnings
+                    </span>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={() => loadBindings(offset, debouncedSearch)}
+                className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+                title="Refresh"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onClose}
+                className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          {/* S275-F5: Unified search input */}
+          <div className="mt-3">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by tenant, workspace, vertical, sub-vertical, or persona..."
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
           </div>
         </div>
 
@@ -1496,13 +1690,15 @@ function WorkspaceBindingsViewer({ onClose }: { onClose: () => void }) {
                   <th className="px-4 py-2 font-medium">Persona</th>
                   <th className="px-4 py-2 font-medium">Status</th>
                   <th className="px-4 py-2 font-medium">Updated</th>
+                  {/* S275-F4: Action column */}
+                  <th className="px-4 py-2 font-medium w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
                 {bindings.map((binding) => (
                   <tr
                     key={binding.id}
-                    className={`hover:bg-neutral-800/30 ${
+                    className={`group hover:bg-neutral-800/30 ${
                       binding.has_warnings ? 'bg-amber-500/5' : ''
                     }`}
                   >
@@ -1549,6 +1745,18 @@ function WorkspaceBindingsViewer({ onClose }: { onClose: () => void }) {
                     <td className="px-4 py-2.5 text-neutral-500">
                       {new Date(binding.updated_at).toLocaleDateString()}
                     </td>
+                    {/* S275-F4: Hover action - View Runtime Config */}
+                    <td className="px-4 py-2.5">
+                      {onViewConfig && (
+                        <button
+                          onClick={() => onViewConfig(binding.tenant_id, binding.workspace_id)}
+                          className="p-1.5 text-neutral-600 hover:text-violet-400 hover:bg-violet-500/10 rounded transition-colors opacity-0 group-hover:opacity-100"
+                          title="View Runtime Config"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1561,17 +1769,18 @@ function WorkspaceBindingsViewer({ onClose }: { onClose: () => void }) {
           <div className="p-3 border-t border-neutral-800 flex items-center justify-between flex-shrink-0">
             <span className="text-xs text-neutral-500">
               Showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
+              {debouncedSearch && <span className="ml-2 text-violet-400">(filtered)</span>}
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => loadBindings(Math.max(0, offset - limit))}
+                onClick={() => loadBindings(Math.max(0, offset - limit), debouncedSearch)}
                 disabled={offset === 0}
                 className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 text-white rounded disabled:opacity-50"
               >
                 Previous
               </button>
               <button
-                onClick={() => loadBindings(offset + limit)}
+                onClick={() => loadBindings(offset + limit, debouncedSearch)}
                 disabled={offset + limit >= total}
                 className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 text-white rounded disabled:opacity-50"
               >
