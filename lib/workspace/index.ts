@@ -56,3 +56,13 @@ export {
   createMockWorkspace,
   createMockMember,
 } from './workspace-store';
+
+// S278: Workspace Intelligence Hooks
+export { useRuntimeSignals, SIGNAL_TYPE_OPTIONS, PRIORITY_OPTIONS } from './useRuntimeSignals';
+export { useOpportunityScore } from './useOpportunityScore';
+export { useBlockersAndBoosters } from './useBlockersAndBoosters';
+export { useWorkspaceIntelligence } from './useWorkspaceIntelligence';
+
+export type { DerivedScore } from './useOpportunityScore';
+export type { DerivedBlocker, DerivedBooster } from './useBlockersAndBoosters';
+export type { WorkspaceIntelligenceConfig, WorkspaceIntelligenceResult } from './useWorkspaceIntelligence';

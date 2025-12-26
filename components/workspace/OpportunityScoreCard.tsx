@@ -28,14 +28,15 @@ export interface OpportunityScore {
   engagement: number;
   trend?: 'up' | 'down' | 'stable';
   trendDelta?: number;
-  lastUpdated: string;
+  lastUpdated?: string;
 }
 
 interface OpportunityScoreCardProps {
-  score: OpportunityScore;
+  score: OpportunityScore | null;
   companyName?: string;
   compact?: boolean;
   showBreakdown?: boolean;
+  isLoading?: boolean;
 }
 
 // =============================================================================
@@ -47,7 +48,30 @@ export function OpportunityScoreCard({
   companyName,
   compact = false,
   showBreakdown = true,
+  isLoading = false,
 }: OpportunityScoreCardProps) {
+  // Handle loading state
+  if (isLoading) {
+    return <OpportunityScoreCardSkeleton compact={compact} />;
+  }
+
+  // Handle null score
+  if (!score) {
+    return (
+      <div className="bg-white rounded-lg border border-neutral-200 p-6">
+        <div className="text-center py-4">
+          <div className="w-12 h-12 rounded-full bg-neutral-100 mx-auto mb-3 flex items-center justify-center">
+            <span className="text-2xl font-bold text-neutral-300">?</span>
+          </div>
+          <h4 className="font-medium text-neutral-900 mb-1">No Score Available</h4>
+          <p className="text-sm text-neutral-500">
+            Select a company to see opportunity scoring.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const strength = getStrengthLabel(score.total);
   const TrendIcon = score.trend === 'up' ? TrendingUp :
                     score.trend === 'down' ? TrendingDown : Minus;
@@ -115,7 +139,7 @@ export function OpportunityScoreCard({
 
       {/* Footer */}
       <div className="px-4 py-2 bg-neutral-50 text-xs text-neutral-500">
-        Last calculated: {formatTime(score.lastUpdated)}
+        {score.lastUpdated ? `Last calculated: ${formatTime(score.lastUpdated)}` : 'Derived from signals'}
       </div>
     </div>
   );
