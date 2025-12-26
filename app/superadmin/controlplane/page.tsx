@@ -414,15 +414,8 @@ export default function ControlPlanePage() {
             Single source of truth for system readiness and runtime configuration
           </p>
         </div>
+        {/* S276-F1: Blueprints link removed - available in nav bar */}
         <div className="flex items-center gap-2">
-          <Link
-            href="/superadmin/verticals"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-400 text-sm rounded transition-colors"
-            title="Read-only view of blueprints"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            Blueprints (Read-Only)
-          </Link>
           <button
             onClick={() => setShowBindingsViewer(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
@@ -679,7 +672,11 @@ function VerticalItem({
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-neutral-600">
+                  {/* S276-F3: SIVA tooltip for clarity */}
+                  <span
+                    className="text-[10px] text-neutral-600 cursor-help"
+                    title={sv.default_agent === 'SIVA' ? 'SIVA = Sales Intelligence Virtual Assistant' : undefined}
+                  >
                     {sv.default_agent}
                   </span>
                 </div>
@@ -715,16 +712,7 @@ function VerticalItem({
                         </div>
                         <Users className="w-3 h-3 text-neutral-600" />
                       </button>
-                      {/* v3.0: Inline bindings (VIEW ONLY) */}
-                      {personaStatus?.has_binding && (
-                        <div className="ml-4 pl-2 border-l border-neutral-700 text-[9px] text-neutral-500">
-                          <div className="flex items-center gap-1">
-                            <Lock className="w-2.5 h-2.5" />
-                            <span>Bindings: Active</span>
-                            <span className="text-emerald-400">✓</span>
-                          </div>
-                        </div>
-                      )}
+                      {/* S276-F4: Removed redundant "Bindings: Active" - reduces visual noise */}
                     </div>
                   );
                 })}
