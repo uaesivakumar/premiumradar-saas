@@ -30,8 +30,11 @@ import {
   Clock,
   Lock,
   ExternalLink,
+  Plus,
+  History,
 } from 'lucide-react';
-// S274: Removed Plus, Edit2, Save - no mutation affordances in read-only view
+// S274: Removed Edit2, Save - no mutation affordances in read-only view
+// Phase1A: Added Plus, History for policy versioning
 
 // =============================================================================
 // TYPES (Match DB schema exactly)
@@ -84,6 +87,7 @@ interface OSPersonaPolicy {
   id: string;
   persona_id: string;
   policy_version: number;
+  status?: string;  // Phase1A: DRAFT | STAGED | ACTIVE | DEPRECATED
   allowed_intents: string[];
   forbidden_outputs: string[];
   allowed_tools: string[];
@@ -93,9 +97,23 @@ interface OSPersonaPolicy {
   latency_budget: Record<string, unknown>;
   escalation_rules: Record<string, unknown>;
   disclaimer_rules: Record<string, unknown>;
+  staged_at?: string | null;  // Phase1A
+  activated_at?: string | null;  // Phase1A
+  deprecated_at?: string | null;  // Phase1A
   created_at: string;
   updated_at: string;
   persona_key?: string;
+}
+
+// Phase1A: Policy versions response
+interface PolicyVersionsResponse {
+  persona_id: string;
+  persona_key: string;
+  persona_name: string;
+  versions: OSPersonaPolicy[];
+  total_versions: number;
+  active_version: number | null;
+  draft_version: number | null;
 }
 
 interface ResolvedConfig {
@@ -165,6 +183,30 @@ async function fetchPersonaPolicy(personaId: string): Promise<OSPersonaPolicy> {
   const res = await fetch(`/api/superadmin/controlplane/personas/${personaId}/policy`);
   const data = await res.json();
   if (!data.success) throw new Error(data.error || 'Failed to fetch policy');
+  return data.data;
+}
+
+// Phase1A: Fetch all policy versions for a persona
+async function fetchPolicyVersions(personaId: string): Promise<PolicyVersionsResponse> {
+  const res = await fetch(`/api/superadmin/controlplane/personas/${personaId}/policy/version`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Failed to fetch policy versions');
+  return data.data;
+}
+
+// Phase1A: Create a new policy version (DRAFT)
+async function createPolicyVersion(personaId: string): Promise<{
+  id: string;
+  policy_version: number;
+  status: string;
+  source_version: number;
+}> {
+  const res = await fetch(`/api/superadmin/controlplane/personas/${personaId}/policy/version`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || data.error || 'Failed to create policy version');
   return data.data;
 }
 
@@ -716,17 +758,24 @@ function VerticalItem({
                     </div>
                   );
                 })}
-{/* S274: Add Persona button removed - use wizard for mutations */}
+                {/* Phase 1A: Add Persona link per sub-vertical */}
+                <Link
+                  href={`/superadmin/controlplane/wizard?extend=persona&vertical_id=${vertical.id}&vertical_name=${encodeURIComponent(vertical.name)}&sub_vertical_id=${sv.id}&sub_vertical_name=${encodeURIComponent(sv.name)}`}
+                  className="mt-2 flex items-center justify-center gap-1.5 py-1.5 text-[10px] text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 rounded border border-dashed border-violet-500/30 transition-colors"
+                >
+                  <Users className="w-3 h-3" />
+                  Add Persona
+                </Link>
               </div>
             );
           })}
-          {/* S274: Extend link - navigates to wizard with vertical context */}
+          {/* Phase 1A: Extend link - navigates to wizard hub */}
           <Link
-            href={`/superadmin/controlplane/wizard/new?mode=extend&vertical_id=${vertical.id}&vertical_name=${encodeURIComponent(vertical.name)}`}
+            href={`/superadmin/controlplane/wizard?extend=sub-vertical&vertical_id=${vertical.id}&vertical_name=${encodeURIComponent(vertical.name)}`}
             className="mt-3 flex items-center justify-center gap-1.5 py-1.5 text-[10px] text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 rounded border border-dashed border-violet-500/30 transition-colors"
           >
             <ExternalLink className="w-3 h-3" />
-            Extend in Wizard
+            Add Sub-Vertical
           </Link>
         </div>
       )}
@@ -783,11 +832,14 @@ function PolicyEditor({
             Policy v{policy.policy_version}
           </p>
         </div>
-        {/* S274: No edit buttons - read-only view */}
-        <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
-          <Lock className="w-3 h-3" />
-          <span>View Only</span>
-        </div>
+        {/* Phase 1A: Policy versioning link */}
+        <Link
+          href={`/superadmin/controlplane/wizard?extend=policy&persona_id=${persona.id}&persona_name=${encodeURIComponent(persona.name)}`}
+          className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 rounded transition-colors"
+        >
+          <FileText className="w-3 h-3" />
+          Create v{(policy.policy_version || 0) + 1}
+        </Link>
       </div>
 
       {/* Persona Info */}

@@ -55,7 +55,7 @@ const navItems = [
   { type: 'divider' },
   // S274: Control Plane = read-only monitoring, Wizard = mutations
   { label: 'Control Plane', href: '/superadmin/controlplane', icon: Shield },
-  { label: 'CP Wizard', href: '/superadmin/controlplane/wizard/new', icon: Wand2, isMutation: true },
+  { label: 'CP Wizard', href: '/superadmin/controlplane/wizard', icon: Wand2, isMutation: true },
   { label: 'Blueprints', href: '/superadmin/verticals', icon: Layers, readOnly: true },
   { label: 'OS Config', href: '/superadmin/os', icon: Server },
   { label: 'Settings', href: '/superadmin/settings', icon: Settings },
