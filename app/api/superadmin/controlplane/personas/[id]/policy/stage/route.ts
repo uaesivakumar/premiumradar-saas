@@ -88,6 +88,51 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return notFoundError('Policy');
     }
 
+    // GOVERNANCE HARDENING: Empty policy hard-block (EMP-001, EMP-002, EMP-003)
+    // Min 1 intent + Min 1 tool required before staging
+    const intents = Array.isArray(existingPolicy.allowed_intents) ? existingPolicy.allowed_intents : [];
+    const tools = Array.isArray(existingPolicy.allowed_tools) ? existingPolicy.allowed_tools : [];
+
+    if (intents.length === 0) {
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'stage_policy',
+        targetType: 'policy',
+        targetId: existingPolicy.id,
+        requestJson: {},
+        success: false,
+        errorMessage: 'Policy must have at least one allowed intent',
+      });
+      return Response.json({
+        success: false,
+        error: 'EMPTY_POLICY',
+        code: 'EMP-001',
+        message: 'Policy must have at least one allowed intent before staging.',
+        field: 'allowed_intents',
+        current_count: 0,
+      }, { status: 400 });
+    }
+
+    if (tools.length === 0) {
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'stage_policy',
+        targetType: 'policy',
+        targetId: existingPolicy.id,
+        requestJson: {},
+        success: false,
+        errorMessage: 'Policy must have at least one allowed tool',
+      });
+      return Response.json({
+        success: false,
+        error: 'EMPTY_POLICY',
+        code: 'EMP-002',
+        message: 'Policy must have at least one allowed tool before staging.',
+        field: 'allowed_tools',
+        current_count: 0,
+      }, { status: 400 });
+    }
+
     // Validate current status allows staging
     if (existingPolicy.status === 'ACTIVE') {
       await logControlPlaneAudit({

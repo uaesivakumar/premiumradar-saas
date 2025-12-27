@@ -1,17 +1,16 @@
 'use client';
 
 /**
- * Step 4: Persona Policy (Zero-Manual-Ops v3.1)
+ * Step 4: Persona Policy (Governance Hardening v1.0)
+ *
+ * GOVERNANCE ENFORCEMENT:
+ * - Policy Lifecycle: DRAFT → STAGED → ACTIVE → DEPRECATED
+ * - Empty Policy Block: Min 1 intent + Min 1 tool required before staging
+ * - No direct DRAFT → ACTIVE (POL-001)
  *
  * Layout: Two columns
  * - Left: Policy fields editor
- * - Right: Status panel (read-only status, auto-activation indicator)
- *
- * v3.1 CHANGES:
- * - REMOVED: "Activate Policy" button
- * - REMOVED: "Stage for Review" button
- * - ADDED: Auto-activation on save
- * - Policy activation is AUTO-MANAGED by system
+ * - Right: Status panel with lifecycle actions
  */
 
 import { useState, useCallback, useEffect } from 'react';
@@ -24,6 +23,15 @@ interface PolicyData {
   evidence_scope: Record<string, unknown>;
   escalation_rules: Record<string, unknown>;
 }
+
+type PolicyStatus = 'DRAFT' | 'STAGED' | 'ACTIVE' | 'DEPRECATED';
+
+const STATUS_CONFIG: Record<PolicyStatus, { color: string; bg: string; label: string }> = {
+  DRAFT: { color: 'text-yellow-800', bg: 'bg-yellow-100', label: 'Draft' },
+  STAGED: { color: 'text-blue-800', bg: 'bg-blue-100', label: 'Staged' },
+  ACTIVE: { color: 'text-green-800', bg: 'bg-green-100', label: 'Active' },
+  DEPRECATED: { color: 'text-gray-800', bg: 'bg-gray-100', label: 'Deprecated' },
+};
 
 export function PolicyStep() {
   const { wizardState, updateWizardState, markStepComplete } = useWizard();
@@ -41,9 +49,19 @@ export function PolicyStep() {
   const [newForbidden, setNewForbidden] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isStaging, setIsStaging] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isActive = wizardState.policy_status === 'ACTIVE';
+  const currentStatus = (wizardState.policy_status as PolicyStatus) || 'DRAFT';
+  const isActive = currentStatus === 'ACTIVE';
+  const isDeprecated = currentStatus === 'DEPRECATED';
+  const isStaged = currentStatus === 'STAGED';
+
+  // GOVERNANCE: Empty policy detection
+  const hasMinimumRequirements = policyData.allowed_intents.length >= 1 && policyData.allowed_tools.length >= 1;
+  const canStage = currentStatus === 'DRAFT' && hasMinimumRequirements;
+  const canActivate = currentStatus === 'STAGED';
 
   // Fetch current policy on mount
   useEffect(() => {
@@ -62,70 +80,144 @@ export function PolicyStep() {
             evidence_scope: data.data.evidence_scope || {},
             escalation_rules: data.data.escalation_rules || {},
           });
+          // Update status from server
+          if (data.data.status) {
+            updateWizardState({ policy_status: data.data.status });
+          }
         }
       } catch (error) {
         console.error('Failed to fetch policy:', error);
       }
     }
     fetchPolicy();
-  }, [wizardState.persona_id]);
+  }, [wizardState.persona_id, updateWizardState]);
 
   /**
-   * v3.1: Save and Auto-Activate Policy
-   * Single action that saves policy AND activates it automatically.
-   * No manual activation step required.
+   * Save policy (keeps in DRAFT status)
    */
-  const handleSaveAndActivate = useCallback(async () => {
+  const handleSave = useCallback(async () => {
     if (!wizardState.persona_id) return;
 
     setIsSaving(true);
     setError(null);
 
     try {
-      // Step 1: Save the policy
-      const saveResponse = await fetch(
+      const response = await fetch(
         `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...policyData,
-            status: 'DRAFT',
-          }),
+          body: JSON.stringify(policyData),
         }
       );
 
-      const saveData = await saveResponse.json();
-      if (!saveData.success) {
-        setError(saveData.message || 'Failed to save policy');
+      const data = await response.json();
+      if (!data.success) {
+        setError(data.message || 'Failed to save policy');
         return;
       }
 
-      // Step 2: Auto-activate the policy (system-managed)
-      const activateResponse = await fetch(
-        `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy/activate`,
-        { method: 'POST' }
-      );
-
-      const activateData = await activateResponse.json();
-      if (!activateData.success) {
-        setError(activateData.message || 'Failed to auto-activate policy');
-        return;
-      }
-
-      // Success - update wizard state
+      // Saved successfully
       updateWizardState({
-        policy_status: 'ACTIVE',
-        policy_version: activateData.policy.policy_version,
-        policy_activated_at: activateData.policy.activated_at,
+        policy_version: data.data.policy_version,
       });
-      markStepComplete(4);
     } catch (error) {
       setError('Network error. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  }, [wizardState.persona_id, policyData, updateWizardState, markStepComplete]);
+  }, [wizardState.persona_id, policyData, updateWizardState]);
+
+  /**
+   * Stage policy for review (DRAFT → STAGED)
+   * Enforces EMP-001, EMP-002 on backend
+   */
+  const handleStage = useCallback(async () => {
+    if (!wizardState.persona_id || !canStage) return;
+
+    setIsStaging(true);
+    setError(null);
+
+    try {
+      // First save current changes
+      await fetch(
+        `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(policyData),
+        }
+      );
+
+      // Then stage
+      const response = await fetch(
+        `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy/stage`,
+        { method: 'POST' }
+      );
+
+      const data = await response.json();
+      if (!data.success) {
+        // Handle governance errors
+        if (data.code === 'EMP-001') {
+          setError('Add at least one allowed intent before staging.');
+        } else if (data.code === 'EMP-002') {
+          setError('Add at least one allowed tool before staging.');
+        } else {
+          setError(data.message || 'Failed to stage policy');
+        }
+        return;
+      }
+
+      updateWizardState({
+        policy_status: 'STAGED',
+        policy_version: data.policy.policy_version,
+      });
+    } catch (error) {
+      setError('Network error. Please try again.');
+    } finally {
+      setIsStaging(false);
+    }
+  }, [wizardState.persona_id, policyData, canStage, updateWizardState]);
+
+  /**
+   * Activate policy (STAGED → ACTIVE)
+   * Enforces POL-001 on backend (must be STAGED)
+   */
+  const handleActivate = useCallback(async () => {
+    if (!wizardState.persona_id || !canActivate) return;
+
+    setIsActivating(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy/activate`,
+        { method: 'POST' }
+      );
+
+      const data = await response.json();
+      if (!data.success) {
+        // Handle governance errors
+        if (data.code === 'POL-001') {
+          setError('Policy must be staged before activation.');
+        } else {
+          setError(data.message || 'Failed to activate policy');
+        }
+        return;
+      }
+
+      updateWizardState({
+        policy_status: 'ACTIVE',
+        policy_version: data.policy.policy_version,
+        policy_activated_at: data.policy.activated_at,
+      });
+      markStepComplete(4);
+    } catch (error) {
+      setError('Network error. Please try again.');
+    } finally {
+      setIsActivating(false);
+    }
+  }, [wizardState.persona_id, canActivate, updateWizardState, markStepComplete]);
 
   const addTag = useCallback(
     (field: 'allowed_intents' | 'allowed_tools' | 'forbidden_outputs', value: string) => {
@@ -148,20 +240,32 @@ export function PolicyStep() {
     []
   );
 
-  if (isActive) {
+  // ACTIVE or DEPRECATED - show read-only summary
+  if (isActive || isDeprecated) {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Policy Complete</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            Policy {isActive ? 'Active' : 'Deprecated'}
+          </h2>
           <p className="text-sm text-gray-500 mt-1">
-            Policy has been saved and auto-activated. Proceed to verification.
+            {isActive
+              ? 'Policy is active. Proceed to verification.'
+              : 'This policy has been deprecated.'}
           </p>
         </div>
 
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className={`${isActive ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4`}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-green-600 text-lg">✓</span>
-            <span className="font-medium text-green-900">Policy Auto-Activated</span>
+            <span className={isActive ? 'text-green-600 text-lg' : 'text-gray-600 text-lg'}>
+              {isActive ? '✓' : '○'}
+            </span>
+            <span className={`font-medium ${isActive ? 'text-green-900' : 'text-gray-900'}`}>
+              Policy {currentStatus}
+            </span>
+            <span className={`px-2 py-0.5 text-xs font-medium rounded ${STATUS_CONFIG[currentStatus].bg} ${STATUS_CONFIG[currentStatus].color}`}>
+              {STATUS_CONFIG[currentStatus].label}
+            </span>
           </div>
           <dl className="grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -169,17 +273,24 @@ export function PolicyStep() {
               <dd className="text-gray-900">v{wizardState.policy_version}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Activated</dt>
+              <dt className="text-gray-500">
+                {isActive ? 'Activated' : 'Deprecated'}
+              </dt>
               <dd className="text-gray-900">
                 {wizardState.policy_activated_at
                   ? new Date(wizardState.policy_activated_at).toLocaleString()
                   : 'Just now'}
               </dd>
             </div>
+            <div>
+              <dt className="text-gray-500">Intents</dt>
+              <dd className="text-gray-900">{policyData.allowed_intents.length}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-500">Tools</dt>
+              <dd className="text-gray-900">{policyData.allowed_tools.length}</dd>
+            </div>
           </dl>
-          <p className="text-xs text-green-700 mt-3">
-            Activation: Auto-managed by system
-          </p>
         </div>
       </div>
     );
@@ -200,20 +311,43 @@ export function PolicyStep() {
         </div>
       )}
 
+      {/* Governance: Empty policy warning */}
+      {!hasMinimumRequirements && currentStatus === 'DRAFT' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-600">⚠</span>
+            <div>
+              <p className="font-medium text-amber-800">Minimum Requirements</p>
+              <ul className="mt-1 text-amber-700 space-y-1">
+                {policyData.allowed_intents.length === 0 && (
+                  <li>• Add at least 1 allowed intent (EMP-001)</li>
+                )}
+                {policyData.allowed_tools.length === 0 && (
+                  <li>• Add at least 1 allowed tool (EMP-002)</li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-6">
         {/* Left: Policy Fields */}
         <div className="col-span-2 space-y-4">
           {/* Allowed Intents */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Allowed Intents
+              Allowed Intents <span className="text-red-500">*</span>
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                ({policyData.allowed_intents.length} added)
+              </span>
             </label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={newIntent}
                 onChange={(e) => setNewIntent(e.target.value)}
-                placeholder="Add intent..."
+                placeholder="e.g., score_lead, rank_companies"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -222,6 +356,7 @@ export function PolicyStep() {
                     setNewIntent('');
                   }
                 }}
+                disabled={isStaged}
               />
               <button
                 type="button"
@@ -229,7 +364,8 @@ export function PolicyStep() {
                   addTag('allowed_intents', newIntent);
                   setNewIntent('');
                 }}
-                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
+                disabled={isStaged}
               >
                 Add
               </button>
@@ -241,16 +377,18 @@ export function PolicyStep() {
                   className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm"
                 >
                   {intent}
-                  <button
-                    onClick={() => removeTag('allowed_intents', i)}
-                    className="text-green-600 hover:text-green-800"
-                  >
-                    ×
-                  </button>
+                  {!isStaged && (
+                    <button
+                      onClick={() => removeTag('allowed_intents', i)}
+                      className="text-green-600 hover:text-green-800"
+                    >
+                      ×
+                    </button>
+                  )}
                 </span>
               ))}
               {policyData.allowed_intents.length === 0 && (
-                <span className="text-gray-400 text-sm italic">No intents configured</span>
+                <span className="text-red-500 text-sm italic">Required: Add at least one intent</span>
               )}
             </div>
           </div>
@@ -258,14 +396,17 @@ export function PolicyStep() {
           {/* Allowed Tools */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Allowed Tools
+              Allowed Tools <span className="text-red-500">*</span>
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                ({policyData.allowed_tools.length} added)
+              </span>
             </label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={newTool}
                 onChange={(e) => setNewTool(e.target.value)}
-                placeholder="Add tool..."
+                placeholder="e.g., qtle_score, pattern_match"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -274,6 +415,7 @@ export function PolicyStep() {
                     setNewTool('');
                   }
                 }}
+                disabled={isStaged}
               />
               <button
                 type="button"
@@ -281,7 +423,8 @@ export function PolicyStep() {
                   addTag('allowed_tools', newTool);
                   setNewTool('');
                 }}
-                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
+                disabled={isStaged}
               >
                 Add
               </button>
@@ -293,16 +436,18 @@ export function PolicyStep() {
                   className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                 >
                   {tool}
-                  <button
-                    onClick={() => removeTag('allowed_tools', i)}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    ×
-                  </button>
+                  {!isStaged && (
+                    <button
+                      onClick={() => removeTag('allowed_tools', i)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      ×
+                    </button>
+                  )}
                 </span>
               ))}
               {policyData.allowed_tools.length === 0 && (
-                <span className="text-gray-400 text-sm italic">No tools configured</span>
+                <span className="text-red-500 text-sm italic">Required: Add at least one tool</span>
               )}
             </div>
           </div>
@@ -311,13 +456,16 @@ export function PolicyStep() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Forbidden Outputs
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                ({policyData.forbidden_outputs.length} added)
+              </span>
             </label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={newForbidden}
                 onChange={(e) => setNewForbidden(e.target.value)}
-                placeholder="Add forbidden pattern..."
+                placeholder="e.g., pii_data, competitor_names"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -326,6 +474,7 @@ export function PolicyStep() {
                     setNewForbidden('');
                   }
                 }}
+                disabled={isStaged}
               />
               <button
                 type="button"
@@ -333,7 +482,8 @@ export function PolicyStep() {
                   addTag('forbidden_outputs', newForbidden);
                   setNewForbidden('');
                 }}
-                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
+                disabled={isStaged}
               >
                 Add
               </button>
@@ -345,28 +495,32 @@ export function PolicyStep() {
                   className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm"
                 >
                   {output}
-                  <button
-                    onClick={() => removeTag('forbidden_outputs', i)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    ×
-                  </button>
+                  {!isStaged && (
+                    <button
+                      onClick={() => removeTag('forbidden_outputs', i)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      ×
+                    </button>
+                  )}
                 </span>
               ))}
               {policyData.forbidden_outputs.length === 0 && (
-                <span className="text-gray-400 text-sm italic">No forbidden patterns</span>
+                <span className="text-gray-400 text-sm italic">No forbidden patterns (optional)</span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Right: Status Panel (Read-Only) */}
+        {/* Right: Status Panel with Lifecycle Actions */}
         <div className="col-span-1">
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-            {/* v3.1: Auto-managed indicator */}
-            <div className="flex items-center gap-2 text-emerald-600 text-sm">
-              <span>✓</span>
-              <span className="font-medium">Activation: Auto-managed</span>
+            {/* Current Status */}
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1">Policy Status</p>
+              <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded ${STATUS_CONFIG[currentStatus].bg} ${STATUS_CONFIG[currentStatus].color}`}>
+                {STATUS_CONFIG[currentStatus].label}
+              </span>
             </div>
 
             <div>
@@ -374,18 +528,71 @@ export function PolicyStep() {
               <p className="text-gray-900">v{wizardState.policy_version || 1}</p>
             </div>
 
+            {/* Lifecycle Diagram */}
             <div className="pt-2 border-t border-gray-200">
-              {/* v3.1: Single save action - activation is automatic */}
-              <button
-                onClick={handleSaveAndActivate}
-                disabled={isSaving}
-                className="w-full px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {isSaving ? 'Saving & Activating...' : 'Save Policy'}
-              </button>
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                Policy will be auto-activated on save
-              </p>
+              <p className="text-xs font-medium text-gray-500 mb-2">Lifecycle</p>
+              <div className="flex items-center gap-1 text-xs">
+                <span className={currentStatus === 'DRAFT' ? 'font-bold text-yellow-700' : 'text-gray-400'}>
+                  DRAFT
+                </span>
+                <span className="text-gray-300">→</span>
+                <span className={currentStatus === 'STAGED' ? 'font-bold text-blue-700' : 'text-gray-400'}>
+                  STAGED
+                </span>
+                <span className="text-gray-300">→</span>
+                <span className="text-gray-400">
+                  ACTIVE
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2 border-t border-gray-200 space-y-2">
+              {currentStatus === 'DRAFT' && (
+                <>
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="w-full px-3 py-2 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {isSaving ? 'Saving...' : 'Save Draft'}
+                  </button>
+                  <button
+                    onClick={handleStage}
+                    disabled={isStaging || !canStage}
+                    className={`w-full px-3 py-2 text-sm font-medium rounded-lg ${
+                      canStage
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    } disabled:opacity-50`}
+                    title={!hasMinimumRequirements ? 'Add at least 1 intent and 1 tool' : ''}
+                  >
+                    {isStaging ? 'Staging...' : 'Stage for Review'}
+                  </button>
+                  {!hasMinimumRequirements && (
+                    <p className="text-xs text-amber-600 text-center">
+                      Min 1 intent + 1 tool required
+                    </p>
+                  )}
+                </>
+              )}
+
+              {currentStatus === 'STAGED' && (
+                <>
+                  <div className="text-center py-2">
+                    <span className="text-blue-600 text-lg">✓</span>
+                    <p className="text-sm text-blue-800 font-medium">Policy Staged</p>
+                    <p className="text-xs text-gray-500 mt-1">Ready for activation</p>
+                  </div>
+                  <button
+                    onClick={handleActivate}
+                    disabled={isActivating}
+                    className="w-full px-3 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {isActivating ? 'Activating...' : 'Activate Policy'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
