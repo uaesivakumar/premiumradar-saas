@@ -1,17 +1,15 @@
 /**
- * OS Control Plane Policy Activate API
+ * OS Control Plane Policy Deprecate API
  *
- * POST /api/superadmin/controlplane/personas/:id/policy/activate
+ * POST /api/superadmin/controlplane/personas/:id/policy/deprecate
  *
- * Activates a staged policy. This completes the
- * DRAFT → STAGED → ACTIVE lifecycle.
+ * Deprecates an active policy. This completes the
+ * DRAFT → STAGED → ACTIVE → DEPRECATED lifecycle.
  *
- * Activation:
- * - Sets status to ACTIVE
- * - Sets activated_at timestamp
- * - Policy is now live for runtime resolution
- *
- * Hard rule: if activation fails, return explicit error codes.
+ * Deprecation:
+ * - Sets status to DEPRECATED
+ * - Sets deprecated_at timestamp
+ * - Policy is no longer used for runtime resolution
  */
 
 import { NextRequest } from 'next/server';
@@ -32,12 +30,12 @@ interface OSPersonaPolicy {
   persona_id: string;
   policy_version: number;
   status: string;
-  activated_at: string | null;
+  deprecated_at: string | null;
 }
 
 /**
- * POST /api/superadmin/controlplane/personas/:id/policy/activate
- * Activate a staged policy
+ * POST /api/superadmin/controlplane/personas/:id/policy/deprecate
+ * Deprecate an active policy
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const sessionResult = await validateSuperAdminSession();
@@ -58,7 +56,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (!persona) {
       await logControlPlaneAudit({
         actorUser,
-        action: 'activate_policy',
+        action: 'deprecate_policy',
         targetType: 'policy',
         targetId: id,
         requestJson: {},
@@ -70,7 +68,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Check policy exists and get current status
     const existingPolicy = await queryOne<OSPersonaPolicy>(
-      `SELECT id, persona_id, policy_version, status, activated_at
+      `SELECT id, persona_id, policy_version, status, deprecated_at
        FROM os_persona_policies WHERE persona_id = $1`,
       [id]
     );
@@ -78,7 +76,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (!existingPolicy) {
       await logControlPlaneAudit({
         actorUser,
-        action: 'activate_policy',
+        action: 'deprecate_policy',
         targetType: 'policy',
         targetId: id,
         requestJson: {},
@@ -88,101 +86,61 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return notFoundError('Policy');
     }
 
-    // Already active - no-op but not an error
-    if (existingPolicy.status === 'ACTIVE') {
+    // Already deprecated - no-op but not an error
+    if (existingPolicy.status === 'DEPRECATED') {
       return Response.json({
         success: true,
-        message: 'Policy is already ACTIVE',
+        message: 'Policy is already DEPRECATED',
         policy: {
           id: existingPolicy.id,
           status: existingPolicy.status,
           policy_version: existingPolicy.policy_version,
-          activated_at: existingPolicy.activated_at,
+          deprecated_at: existingPolicy.deprecated_at,
           persona_key: persona.key,
         },
       });
     }
 
-    // Cannot activate deprecated policy
-    if (existingPolicy.status === 'DEPRECATED') {
+    // Can only deprecate ACTIVE policies
+    if (existingPolicy.status !== 'ACTIVE') {
       await logControlPlaneAudit({
         actorUser,
-        action: 'activate_policy',
+        action: 'deprecate_policy',
         targetType: 'policy',
         targetId: existingPolicy.id,
         requestJson: {},
         success: false,
-        errorMessage: 'Cannot activate a DEPRECATED policy',
+        errorMessage: `Cannot deprecate policy in ${existingPolicy.status} status`,
       });
       return Response.json({
         success: false,
         error: 'INVALID_STATUS_TRANSITION',
-        message: 'Cannot activate a DEPRECATED policy. Create a new policy version.',
+        message: `Cannot deprecate policy in ${existingPolicy.status} status. Only ACTIVE policies can be deprecated.`,
         current_status: existingPolicy.status,
+        required_status: 'ACTIVE',
       }, { status: 400 });
     }
 
-    // GOVERNANCE HARDENING: Policy lifecycle enforcement (POL-001)
-    // Must go through STAGED before ACTIVE - no direct DRAFT → ACTIVE
-    if (existingPolicy.status === 'DRAFT') {
-      await logControlPlaneAudit({
-        actorUser,
-        action: 'activate_policy',
-        targetType: 'policy',
-        targetId: existingPolicy.id,
-        requestJson: {},
-        success: false,
-        errorMessage: 'Cannot activate directly from DRAFT. Must stage first.',
-      });
-      return Response.json({
-        success: false,
-        error: 'INVALID_STATUS_TRANSITION',
-        code: 'POL-001',
-        message: 'Policy must be staged before activation. Use "Stage for Review" first.',
-        current_status: existingPolicy.status,
-        required_status: 'STAGED',
-      }, { status: 400 });
-    }
-
-    if (existingPolicy.status !== 'STAGED') {
-      await logControlPlaneAudit({
-        actorUser,
-        action: 'activate_policy',
-        targetType: 'policy',
-        targetId: existingPolicy.id,
-        requestJson: {},
-        success: false,
-        errorMessage: `Cannot activate policy in ${existingPolicy.status} status`,
-      });
-      return Response.json({
-        success: false,
-        error: 'INVALID_STATUS_TRANSITION',
-        message: `Cannot activate policy in ${existingPolicy.status} status. Policy must be in STAGED status.`,
-        current_status: existingPolicy.status,
-        required_status: 'STAGED',
-      }, { status: 400 });
-    }
-
-    // Update status to ACTIVE and set activated_at
+    // Update status to DEPRECATED and set deprecated_at
     const result = await queryOne<OSPersonaPolicy>(
       `UPDATE os_persona_policies
-       SET status = 'ACTIVE', activated_at = NOW()
+       SET status = 'DEPRECATED', deprecated_at = NOW()
        WHERE persona_id = $1
-       RETURNING id, persona_id, policy_version, status, activated_at`,
+       RETURNING id, persona_id, policy_version, status, deprecated_at`,
       [id]
     );
 
     // Audit log success
     await logControlPlaneAudit({
       actorUser,
-      action: 'activate_policy',
+      action: 'deprecate_policy',
       targetType: 'policy',
       targetId: result?.id,
       requestJson: {},
       resultJson: {
         policy_version: result?.policy_version,
         status: result?.status,
-        activated_at: result?.activated_at,
+        deprecated_at: result?.deprecated_at,
         persona_key: persona.key
       },
       success: true,
@@ -194,13 +152,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         id: result?.id,
         status: result?.status,
         policy_version: result?.policy_version,
-        activated_at: result?.activated_at,
+        deprecated_at: result?.deprecated_at,
         persona_key: persona.key,
       },
     });
 
   } catch (error) {
-    console.error('[ControlPlane:Policy Activate] Error:', error);
-    return serverError('Failed to activate policy');
+    console.error('[ControlPlane:Policy Deprecate] Error:', error);
+    return serverError('Failed to deprecate policy');
   }
 }

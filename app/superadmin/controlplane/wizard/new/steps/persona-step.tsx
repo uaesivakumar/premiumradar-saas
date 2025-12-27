@@ -1,30 +1,64 @@
 'use client';
 
 /**
- * Step 3: Persona & Region Scope
+ * Step 3: Persona & Region Scope (Governance Hardening v1.0)
+ *
+ * GOVERNANCE ENFORCEMENT:
+ * - Region codes must come from hierarchy (no free-text) - REG-001
+ * - LOCAL scope requires LOCAL-level region - REG-002
+ * - REGIONAL scope requires REGIONAL-level region - REG-003
+ * - GLOBAL scope must have NULL region_code - REG-004
  *
  * Fields:
  * - persona_key (snake_case)
  * - persona_name
  * - scope (required dropdown: GLOBAL | REGIONAL | LOCAL)
- * - region_code (conditional - show only if scope != GLOBAL)
+ * - region_code (dropdown from hierarchy, conditional on scope)
  * - mission (textarea)
  * - decision_lens (textarea)
- *
- * Validation:
- * - GLOBAL must NOT have region_code
- * - REGIONAL/LOCAL must have region_code
- *
- * On success: POST /api/superadmin/controlplane/personas, store persona_id
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useWizard } from '../wizard-context';
+
+// Region hierarchy types and data
+interface RegionOption {
+  code: string;
+  name: string;
+  level: 'GLOBAL' | 'REGIONAL' | 'LOCAL';
+}
+
+// GOVERNANCE: Canonical region hierarchy (no free-text allowed)
+const REGION_HIERARCHY: RegionOption[] = [
+  // REGIONAL level
+  { code: 'EMEA', name: 'Europe, Middle East & Africa', level: 'REGIONAL' },
+  { code: 'APAC', name: 'Asia Pacific', level: 'REGIONAL' },
+  { code: 'AMER', name: 'Americas', level: 'REGIONAL' },
+  // LOCAL level - EMEA
+  { code: 'UAE', name: 'United Arab Emirates', level: 'LOCAL' },
+  { code: 'SA', name: 'Saudi Arabia', level: 'LOCAL' },
+  { code: 'EG', name: 'Egypt', level: 'LOCAL' },
+  { code: 'UK', name: 'United Kingdom', level: 'LOCAL' },
+  { code: 'DE', name: 'Germany', level: 'LOCAL' },
+  // LOCAL level - APAC
+  { code: 'IN', name: 'India', level: 'LOCAL' },
+  { code: 'SG', name: 'Singapore', level: 'LOCAL' },
+  { code: 'AU', name: 'Australia', level: 'LOCAL' },
+  { code: 'JP', name: 'Japan', level: 'LOCAL' },
+  // LOCAL level - AMER
+  { code: 'US', name: 'United States', level: 'LOCAL' },
+  { code: 'US-CA', name: 'California, USA', level: 'LOCAL' },
+  { code: 'US-NY', name: 'New York, USA', level: 'LOCAL' },
+  { code: 'US-TX', name: 'Texas, USA', level: 'LOCAL' },
+  { code: 'CA', name: 'Canada', level: 'LOCAL' },
+  { code: 'BR', name: 'Brazil', level: 'LOCAL' },
+  { code: 'MX', name: 'Mexico', level: 'LOCAL' },
+];
 
 const SCOPES = [
   { value: 'GLOBAL', label: 'Global', description: 'Default fallback for all regions' },
-  { value: 'REGIONAL', label: 'Regional', description: 'Covers a region family (e.g., GCC)' },
-  { value: 'LOCAL', label: 'Local', description: 'Specific to one region (e.g., UAE)' },
+  { value: 'REGIONAL', label: 'Regional', description: 'Covers a region family (e.g., EMEA, APAC)' },
+  { value: 'LOCAL', label: 'Local', description: 'Specific to one region (e.g., UAE, US)' },
 ];
 
 export function PersonaStep() {
@@ -32,7 +66,9 @@ export function PersonaStep() {
 
   const [key, setKey] = useState(wizardState.persona_key || '');
   const [name, setName] = useState(wizardState.persona_name || '');
-  const [scope, setScope] = useState(wizardState.scope || 'GLOBAL');
+  const [scope, setScope] = useState<'GLOBAL' | 'REGIONAL' | 'LOCAL'>(
+    (wizardState.scope as 'GLOBAL' | 'REGIONAL' | 'LOCAL') || 'GLOBAL'
+  );
   const [regionCode, setRegionCode] = useState(wizardState.region_code || '');
   const [mission, setMission] = useState('');
   const [decisionLens, setDecisionLens] = useState('');
@@ -46,13 +82,27 @@ export function PersonaStep() {
   const isCreated = !!wizardState.persona_id;
   const showRegionCode = scope !== 'GLOBAL';
 
-  // Clear region code when switching to GLOBAL
+  // GOVERNANCE: Filter regions by scope level (REG-002, REG-003)
+  const availableRegions = useMemo(() => {
+    if (scope === 'GLOBAL') return [];
+    if (scope === 'REGIONAL') return REGION_HIERARCHY.filter(r => r.level === 'REGIONAL');
+    if (scope === 'LOCAL') return REGION_HIERARCHY.filter(r => r.level === 'LOCAL');
+    return [];
+  }, [scope]);
+
+  // Clear region code when switching scope
   useEffect(() => {
     if (scope === 'GLOBAL') {
       setRegionCode('');
       setRegionError(null);
+    } else {
+      // Validate current region code is valid for new scope
+      const isValidForScope = availableRegions.some(r => r.code === regionCode);
+      if (regionCode && !isValidForScope) {
+        setRegionCode('');
+      }
     }
-  }, [scope]);
+  }, [scope, availableRegions, regionCode]);
 
   const validateKey = useCallback((value: string) => {
     if (!value) {
@@ -77,13 +127,32 @@ export function PersonaStep() {
   }, []);
 
   const validateRegion = useCallback(() => {
-    if (scope !== 'GLOBAL' && !regionCode.trim()) {
-      setRegionError('Region code is required for REGIONAL/LOCAL scope');
+    // REG-004: GLOBAL must have NULL region_code
+    if (scope === 'GLOBAL') {
+      if (regionCode) {
+        setRegionError('GLOBAL scope cannot have a region code (REG-004)');
+        return false;
+      }
+      setRegionError(null);
+      return true;
+    }
+
+    // REG-002/REG-003: Non-GLOBAL must have valid region code
+    if (!regionCode) {
+      setRegionError(`${scope} scope requires a region code`);
       return false;
     }
+
+    // REG-001: Must be from hierarchy
+    const region = availableRegions.find(r => r.code === regionCode);
+    if (!region) {
+      setRegionError(`Invalid region code for ${scope} scope (REG-001)`);
+      return false;
+    }
+
     setRegionError(null);
     return true;
-  }, [scope, regionCode]);
+  }, [scope, regionCode, availableRegions]);
 
   const handleSubmit = useCallback(async () => {
     const keyValid = validateKey(key);
@@ -197,7 +266,7 @@ export function PersonaStep() {
                   {wizardState.policy_status}
                 </span>
                 <span className="text-xs text-gray-500">
-                  (activate in next step)
+                  (configure in next step)
                 </span>
               </dd>
             </div>
@@ -214,6 +283,20 @@ export function PersonaStep() {
         <p className="text-sm text-gray-500 mt-1">
           Define the persona for {wizardState.sub_vertical_name || 'this sub-vertical'}.
         </p>
+      </div>
+
+      {/* Governance Notice */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+        <div className="flex items-start gap-2">
+          <span className="text-blue-600">ℹ</span>
+          <div>
+            <p className="font-medium text-blue-800">Region Hierarchy Enforced</p>
+            <p className="text-blue-700 mt-1">
+              Regions must be selected from the predefined hierarchy.
+              GLOBAL scope serves as fallback when no regional/local persona matches.
+            </p>
+          </div>
+        </div>
       </div>
 
       {serverError && (
@@ -275,7 +358,7 @@ export function PersonaStep() {
             <select
               id="scope"
               value={scope}
-              onChange={(e) => setScope(e.target.value)}
+              onChange={(e) => setScope(e.target.value as 'GLOBAL' | 'REGIONAL' | 'LOCAL')}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isSubmitting}
             >
@@ -293,23 +376,33 @@ export function PersonaStep() {
           {showRegionCode && (
             <div>
               <label htmlFor="region_code" className="block text-sm font-medium text-gray-700 mb-1">
-                Region Code <span className="text-red-500">*</span>
+                Region <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
+              {/* GOVERNANCE: Dropdown instead of free-text (REG-001) */}
+              <select
                 id="region_code"
                 value={regionCode}
                 onChange={(e) => {
-                  setRegionCode(e.target.value.toUpperCase());
+                  setRegionCode(e.target.value);
                   setRegionError(null);
                 }}
-                placeholder="UAE, IN, US-CA"
-                className={`w-full px-3 py-2 border rounded-lg text-sm ${
+                className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 ${
                   regionError ? 'border-red-300' : 'border-gray-300'
                 } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 disabled={isSubmitting}
-              />
+              >
+                <option value="">Select {scope.toLowerCase()} region...</option>
+                {availableRegions.map((region) => (
+                  <option key={region.code} value={region.code}>
+                    {region.code} - {region.name}
+                  </option>
+                ))}
+              </select>
               {regionError && <p className="mt-1 text-xs text-red-600">{regionError}</p>}
+              <p className="mt-1 text-xs text-gray-500">
+                {scope === 'REGIONAL' && 'Select a regional grouping (e.g., EMEA, APAC)'}
+                {scope === 'LOCAL' && 'Select a specific country/territory'}
+              </p>
             </div>
           )}
         </div>

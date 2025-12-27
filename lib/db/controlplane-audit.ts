@@ -24,6 +24,7 @@ export type AuditAction =
   | 'update_policy'
   | 'stage_policy'
   | 'activate_policy'
+  | 'deprecate_policy'
   | 'create_binding'
   | 'update_binding'
   | 'delete_binding';
