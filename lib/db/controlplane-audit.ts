@@ -24,6 +24,7 @@ export type AuditAction =
   | 'update_policy'
   | 'stage_policy'
   | 'activate_policy'
+  | 'create_policy_version'  // Phase 1A: Policy versioning
   | 'create_binding'
   | 'update_binding'
   | 'delete_binding';

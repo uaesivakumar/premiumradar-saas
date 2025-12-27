@@ -498,6 +498,13 @@ export default function ControlPlanePage() {
                 setSelectedPolicy(result);
                 return result;
               }}
+              onVersionCreated={async () => {
+                // Phase1A: Refresh policy after version created
+                if (selectedPersona) {
+                  const policy = await fetchPersonaPolicy(selectedPersona.id);
+                  setSelectedPolicy(policy);
+                }
+              }}
             />
           ) : selectedPersona ? (
             <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-8 text-center">
@@ -739,21 +746,67 @@ function VerticalItem({
 // =============================================================================
 
 // S274: PolicyEditor renamed to PolicyViewer - read-only, no mutations
+// Phase1A: Added policy versioning support
 function PolicyEditor({
   persona,
   policy,
+  onVersionCreated,
 }: {
   persona: OSPersona;
   policy: OSPersonaPolicy;
   onSave?: (policy: Partial<OSPersonaPolicy>) => Promise<OSPersonaPolicy>; // Kept for compatibility
+  onVersionCreated?: () => void;  // Phase1A: Callback when new version created
 }) {
   // S274: All editing state removed - this is now a read-only viewer
   const currentAllowedIntents = policy.allowed_intents;
   const currentForbiddenOutputs = policy.forbidden_outputs;
   const currentAllowedTools = policy.allowed_tools;
 
+  // Phase1A: Policy versioning state
+  const [showVersions, setShowVersions] = useState(false);
+  const [versions, setVersions] = useState<OSPersonaPolicy[]>([]);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+  const [isCreatingVersion, setIsCreatingVersion] = useState(false);
+  const [versionError, setVersionError] = useState<string | null>(null);
+
+  // Phase1A: Load policy versions
+  const loadVersions = useCallback(async () => {
+    setIsLoadingVersions(true);
+    setVersionError(null);
+    try {
+      const data = await fetchPolicyVersions(persona.id);
+      setVersions(data.versions);
+    } catch (err) {
+      setVersionError(err instanceof Error ? err.message : 'Failed to load versions');
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  }, [persona.id]);
+
+  // Phase1A: Create new policy version
+  const handleCreateVersion = async () => {
+    setIsCreatingVersion(true);
+    setVersionError(null);
+    try {
+      await createPolicyVersion(persona.id);
+      await loadVersions();  // Refresh version list
+      onVersionCreated?.();  // Notify parent to refresh
+    } catch (err) {
+      setVersionError(err instanceof Error ? err.message : 'Failed to create version');
+    } finally {
+      setIsCreatingVersion(false);
+    }
+  };
+
+  // Load versions when panel opened
+  useEffect(() => {
+    if (showVersions) {
+      loadVersions();
+    }
+  }, [showVersions, loadVersions]);
+
   // S274: PolicyEditor converted to read-only PolicyViewer
-  // No editing functionality - mutations via wizard only
+  // Phase1A: Added versioning UI
   return (
     <div className="bg-neutral-900/50 rounded-lg border border-neutral-800">
       {/* S274: Read-only status header */}
@@ -771,7 +824,7 @@ function PolicyEditor({
         </div>
       </div>
 
-      {/* Header */}
+      {/* Header with Version Actions */}
       <div className="p-3 border-b border-neutral-800 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-medium text-white flex items-center gap-2">
@@ -779,16 +832,108 @@ function PolicyEditor({
             {persona.name}
             <span className="text-[10px] text-neutral-600 font-mono">({persona.key})</span>
           </h2>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            Policy v{policy.policy_version}
+          <p className="text-xs text-neutral-500 mt-0.5 flex items-center gap-2">
+            <span>Policy v{policy.policy_version}</span>
+            {policy.status && (
+              <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                policy.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' :
+                policy.status === 'DRAFT' ? 'bg-amber-500/20 text-amber-400' :
+                policy.status === 'DEPRECATED' ? 'bg-neutral-500/20 text-neutral-400' :
+                'bg-blue-500/20 text-blue-400'
+              }`}>
+                {policy.status}
+              </span>
+            )}
           </p>
         </div>
-        {/* S274: No edit buttons - read-only view */}
-        <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
-          <Lock className="w-3 h-3" />
-          <span>View Only</span>
+        {/* Phase1A: Version Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowVersions(!showVersions)}
+            className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 rounded transition-colors"
+          >
+            <History className="w-3 h-3" />
+            {showVersions ? 'Hide' : 'View'} Versions
+          </button>
+          <button
+            onClick={handleCreateVersion}
+            disabled={isCreatingVersion}
+            className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 rounded transition-colors disabled:opacity-50"
+          >
+            {isCreatingVersion ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Plus className="w-3 h-3" />
+            )}
+            Create v{(policy.policy_version || 0) + 1}
+          </button>
         </div>
       </div>
+
+      {/* Phase1A: Version List Panel */}
+      {showVersions && (
+        <div className="p-3 border-b border-neutral-800 bg-neutral-800/20">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-medium text-neutral-400 flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" />
+              Policy Version History
+            </h3>
+            <button
+              onClick={loadVersions}
+              disabled={isLoadingVersions}
+              className="text-[10px] text-neutral-500 hover:text-neutral-400"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoadingVersions ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {versionError && (
+            <div className="mb-2 px-2 py-1 bg-red-500/10 border border-red-500/20 rounded text-[10px] text-red-400">
+              {versionError}
+            </div>
+          )}
+
+          {isLoadingVersions ? (
+            <div className="flex items-center gap-2 text-neutral-500 text-xs">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Loading versions...
+            </div>
+          ) : versions.length === 0 ? (
+            <p className="text-[10px] text-neutral-600">No version history found</p>
+          ) : (
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {versions.map((v) => (
+                <div
+                  key={v.id}
+                  className={`flex items-center justify-between px-2 py-1.5 rounded text-[10px] ${
+                    v.id === policy.id
+                      ? 'bg-violet-500/20 border border-violet-500/30'
+                      : 'bg-neutral-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-white">v{v.policy_version}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] ${
+                      v.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' :
+                      v.status === 'DRAFT' ? 'bg-amber-500/20 text-amber-400' :
+                      v.status === 'DEPRECATED' ? 'bg-neutral-500/20 text-neutral-400' :
+                      'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {v.status || 'UNKNOWN'}
+                    </span>
+                    {v.id === policy.id && (
+                      <span className="text-violet-400">(viewing)</span>
+                    )}
+                  </div>
+                  <span className="text-neutral-600">
+                    {new Date(v.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Persona Info */}
       <div className="p-3 border-b border-neutral-800 bg-neutral-800/30">
