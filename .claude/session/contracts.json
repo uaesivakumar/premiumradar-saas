@@ -1,0 +1,223 @@
+{
+  "sprint_name": "PHASE1B_GOVERNANCE_INTEGRATION",
+  "generated_at": "2025-12-27T00:00:00Z",
+  "contracts": [
+    {
+      "feature_id": "P1B-F1",
+      "feature_name": "Policy Lifecycle Enforcement",
+      "governance_codes": ["POL-001", "POL-002"],
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "app/superadmin/controlplane/wizard/new/steps/policy-step.tsx",
+        "renders_at": "/superadmin/controlplane/wizard/new"
+      },
+      "api_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/personas/[id]/policy/stage",
+          "expected_response_shape": {
+            "success_status": 200,
+            "error_statuses": [400, 404],
+            "required_fields": ["success", "data.status"]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/personas/[id]/policy/activate",
+          "expected_response_shape": {
+            "success_status": 200,
+            "error_statuses": [400, 404],
+            "required_fields": ["success", "data.status"]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/personas/[id]/policy/deprecate",
+          "expected_response_shape": {
+            "success_status": 200,
+            "error_statuses": [400, 404],
+            "required_fields": ["success", "data.status"]
+          }
+        }
+      ],
+      "wiring_checks": [
+        {
+          "type": "file_exists",
+          "path": "app/api/superadmin/controlplane/personas/[id]/policy/deprecate/route.ts"
+        },
+        {
+          "type": "import_exists",
+          "from": "app/superadmin/controlplane/wizard/new/steps/policy-step.tsx",
+          "imports": "useWizard"
+        },
+        {
+          "type": "code_pattern",
+          "file": "app/api/superadmin/controlplane/personas/[id]/policy/stage/route.ts",
+          "pattern": "EMPTY_POLICY"
+        },
+        {
+          "type": "code_pattern",
+          "file": "app/api/superadmin/controlplane/personas/[id]/policy/activate/route.ts",
+          "pattern": "INVALID_STATUS_TRANSITION"
+        },
+        {
+          "type": "audit_action_exists",
+          "file": "lib/db/controlplane-audit.ts",
+          "action": "deprecate_policy"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "typescript_compiles",
+          "files": [
+            "app/api/superadmin/controlplane/personas/[id]/policy/stage/route.ts",
+            "app/api/superadmin/controlplane/personas/[id]/policy/activate/route.ts",
+            "app/api/superadmin/controlplane/personas/[id]/policy/deprecate/route.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "feature_id": "P1B-F2",
+      "feature_name": "Region Hierarchy Enforcement",
+      "governance_codes": ["REG-001", "REG-002", "REG-003", "REG-004"],
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "app/superadmin/controlplane/wizard/new/steps/persona-step.tsx",
+        "renders_at": "/superadmin/controlplane/wizard/new"
+      },
+      "api_endpoints": [],
+      "wiring_checks": [
+        {
+          "type": "file_exists",
+          "path": "lib/controlplane/region-hierarchy.ts"
+        },
+        {
+          "type": "export_exists",
+          "file": "lib/controlplane/region-hierarchy.ts",
+          "exports": ["REGION_HIERARCHY", "isValidRegionCode", "validateRegionForScope", "getRegionsForScope"]
+        },
+        {
+          "type": "code_pattern",
+          "file": "app/superadmin/controlplane/wizard/new/steps/persona-step.tsx",
+          "pattern": "REGION_HIERARCHY"
+        },
+        {
+          "type": "no_free_text",
+          "file": "app/superadmin/controlplane/wizard/new/steps/persona-step.tsx",
+          "field": "region_code",
+          "must_use": "dropdown"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "proof_test",
+          "test_file": "scripts/validation/governance-hardening-proof.ts",
+          "test_names": ["REG-001", "REG-002", "REG-003", "REG-004"]
+        }
+      ]
+    },
+    {
+      "feature_id": "P1B-F3",
+      "feature_name": "Binding Failure Visibility",
+      "governance_codes": ["BND-001", "BND-002", "BND-003", "BND-004", "BND-005", "BND-006", "BND-007"],
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "app/superadmin/controlplane/wizard/new/steps/binding-step.tsx",
+        "renders_at": "/superadmin/controlplane/wizard/new"
+      },
+      "api_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/personas/[id]/auto-bind",
+          "expected_response_shape": {
+            "success_status": 200,
+            "error_statuses": [400, 404],
+            "required_fields": ["success", "data.id"]
+          }
+        }
+      ],
+      "wiring_checks": [
+        {
+          "type": "code_pattern",
+          "file": "app/superadmin/controlplane/wizard/new/steps/binding-step.tsx",
+          "pattern": "hasValidBinding"
+        },
+        {
+          "type": "code_pattern",
+          "file": "app/superadmin/controlplane/wizard/new/steps/binding-step.tsx",
+          "pattern": "auto-managed"
+        },
+        {
+          "type": "uuid_validation",
+          "file": "app/superadmin/controlplane/wizard/new/steps/binding-step.tsx",
+          "field": "binding_id"
+        },
+        {
+          "type": "error_display",
+          "file": "app/superadmin/controlplane/wizard/new/steps/binding-step.tsx",
+          "requires": ["error_code", "error_message", "retry_button"]
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "proof_test",
+          "test_file": "scripts/validation/governance-hardening-proof.ts",
+          "test_names": ["BND-003"]
+        }
+      ]
+    },
+    {
+      "feature_id": "P1B-F4",
+      "feature_name": "Empty Policy Hard-Block",
+      "governance_codes": ["EMP-001", "EMP-002", "EMP-003"],
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "app/superadmin/controlplane/wizard/new/steps/policy-step.tsx",
+        "renders_at": "/superadmin/controlplane/wizard/new"
+      },
+      "api_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/personas/[id]/policy/stage",
+          "expected_response_shape": {
+            "success_status": 200,
+            "error_statuses": [400],
+            "required_fields": ["success"]
+          }
+        }
+      ],
+      "wiring_checks": [
+        {
+          "type": "code_pattern",
+          "file": "app/api/superadmin/controlplane/personas/[id]/policy/stage/route.ts",
+          "pattern": "EMP-001"
+        },
+        {
+          "type": "code_pattern",
+          "file": "app/api/superadmin/controlplane/personas/[id]/policy/stage/route.ts",
+          "pattern": "EMP-002"
+        },
+        {
+          "type": "code_pattern",
+          "file": "app/superadmin/controlplane/wizard/new/steps/policy-step.tsx",
+          "pattern": "hasMinimumRequirements"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "api_returns_error",
+          "endpoint": "/api/superadmin/controlplane/personas/[id]/policy/stage",
+          "when": "policy has 0 intents",
+          "expected_error": "EMP-001"
+        },
+        {
+          "type": "api_returns_error",
+          "endpoint": "/api/superadmin/controlplane/personas/[id]/policy/stage",
+          "when": "policy has 0 tools",
+          "expected_error": "EMP-002"
+        }
+      ]
+    }
+  ]
+}
