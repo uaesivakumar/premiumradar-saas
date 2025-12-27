@@ -15,8 +15,24 @@ export interface UserSession {
     role?: string;
     permissions?: string[];
   };
+
+  // Enterprise (new - spec v1.1)
+  enterpriseId: string;
+  enterpriseName?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+
+  // Demo flags (new - spec v1.1)
+  isDemo?: boolean;
+  demoType?: 'SYSTEM' | 'ENTERPRISE';
+  demoExpiresAt?: Date;
+
+  // Legacy tenant fields (for backward compatibility)
+  /** @deprecated Use enterpriseId instead */
   tenantId: string;
+  /** @deprecated Use enterpriseName instead */
   tenantName?: string;
+
   expiresAt: Date;
 }
 
@@ -36,6 +52,10 @@ export async function getServerSession(): Promise<UserSession | null> {
   // Get additional user data from DB if needed
   const userWithProfile = await getUserWithProfile(session.user_id);
 
+  // Resolve enterprise ID (prefer new field, fallback to legacy)
+  const enterpriseId = session.enterprise_id || session.tenant_id;
+  const enterpriseName = session.enterprise_name || session.tenant_name || userWithProfile?.tenant?.name;
+
   return {
     user: {
       id: session.user_id,
@@ -44,8 +64,22 @@ export async function getServerSession(): Promise<UserSession | null> {
       role: session.role,
       permissions: [], // Can be extended from DB
     },
-    tenantId: session.tenant_id,
-    tenantName: session.tenant_name || userWithProfile?.tenant?.name,
+
+    // Enterprise fields (new)
+    enterpriseId,
+    enterpriseName,
+    workspaceId: session.workspace_id,
+    workspaceName: session.workspace_name,
+
+    // Demo flags
+    isDemo: session.is_demo,
+    demoType: session.demo_type,
+    demoExpiresAt: session.demo_expires_at ? new Date(session.demo_expires_at) : undefined,
+
+    // Legacy tenant fields (for backward compatibility)
+    tenantId: enterpriseId,
+    tenantName: enterpriseName,
+
     expiresAt: new Date(session.exp * 1000),
   };
 }

@@ -34,9 +34,28 @@ export interface CreateSessionInput {
   userId: string;
   email: string;
   name?: string;
-  tenantId: string;
+
+  // Enterprise (new - spec v1.1)
+  // Either enterpriseId or tenantId must be provided
+  enterpriseId?: string;
+  enterpriseName?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+
+  // Legacy tenant fields (for backward compatibility)
+  // Either tenantId or enterpriseId must be provided
+  /** @deprecated Use enterpriseId instead */
+  tenantId?: string;
+  /** @deprecated Use enterpriseName instead */
   tenantName?: string;
+
   role: UserRole;
+
+  // Demo flags (new - spec v1.1)
+  isDemo?: boolean;
+  demoType?: 'SYSTEM' | 'ENTERPRISE';
+  demoExpiresAt?: string;
+
   mfaEnabled: boolean;
   mfaVerified: boolean;
   plan: PlanType;
@@ -74,15 +93,37 @@ const lastLoginInfo = new Map<string, { ip?: string; userAgent?: string; region?
  */
 export async function createSession(input: CreateSessionInput): Promise<SessionResult> {
   const now = Math.floor(Date.now() / 1000);
-  const mfaRequired = input.role === 'SUPER_ADMIN' || input.role === 'TENANT_ADMIN';
+  // MFA required for admin roles (both legacy and new)
+  const mfaRequired = input.role === 'SUPER_ADMIN' ||
+    input.role === 'TENANT_ADMIN' ||
+    input.role === 'ENTERPRISE_ADMIN';
+
+  // Resolve enterprise ID (prefer new field, fallback to legacy)
+  const enterpriseId = input.enterpriseId || input.tenantId || '';
+  const enterpriseName = input.enterpriseName || input.tenantName;
 
   const payload: EnhancedSessionPayload = {
     user_id: input.userId,
     email: input.email,
     name: input.name,
-    tenant_id: input.tenantId,
-    tenant_name: input.tenantName,
+
+    // Enterprise fields (new)
+    enterprise_id: enterpriseId,
+    enterprise_name: enterpriseName,
+    workspace_id: input.workspaceId,
+    workspace_name: input.workspaceName,
+
+    // Tenant fields (legacy - for backward compatibility)
+    tenant_id: enterpriseId,  // Mirror enterprise_id for backward compat
+    tenant_name: enterpriseName,
+
     role: input.role,
+
+    // Demo flags
+    is_demo: input.isDemo,
+    demo_type: input.demoType,
+    demo_expires_at: input.demoExpiresAt,
+
     mfa_enabled: input.mfaEnabled,
     mfa_verified: input.mfaVerified,
     mfa_required: mfaRequired,
@@ -109,7 +150,8 @@ export async function createSession(input: CreateSessionInput): Promise<SessionR
     // Create refresh token (longer lived, minimal payload)
     const refreshPayload = {
       user_id: input.userId,
-      tenant_id: input.tenantId,
+      enterprise_id: enterpriseId,
+      tenant_id: enterpriseId,  // Legacy field for backward compat
       type: 'refresh',
     };
 
@@ -237,13 +279,20 @@ export async function updateSessionMFA(
   }
 
   // Create new session with MFA status updated
-  const input: CreateSessionInput = {
+  const sessionInput: CreateSessionInput = {
     userId: result.session.user_id,
     email: result.session.email,
     name: result.session.name,
-    tenantId: result.session.tenant_id,
-    tenantName: result.session.tenant_name,
+    // Enterprise fields (new)
+    enterpriseId: result.session.enterprise_id || result.session.tenant_id,
+    enterpriseName: result.session.enterprise_name || result.session.tenant_name,
+    workspaceId: result.session.workspace_id,
+    workspaceName: result.session.workspace_name,
     role: result.session.role,
+    // Demo flags
+    isDemo: result.session.is_demo,
+    demoType: result.session.demo_type,
+    demoExpiresAt: result.session.demo_expires_at,
     mfaEnabled: result.session.mfa_enabled,
     mfaVerified,
     plan: result.session.plan,
@@ -252,7 +301,7 @@ export async function updateSessionMFA(
     userAgent: result.session.user_agent,
   };
 
-  return createSession(input);
+  return createSession(sessionInput);
 }
 
 /**
@@ -269,13 +318,20 @@ export async function updateSessionSubscription(
     return result;
   }
 
-  const input: CreateSessionInput = {
+  const sessionInput: CreateSessionInput = {
     userId: result.session.user_id,
     email: result.session.email,
     name: result.session.name,
-    tenantId: result.session.tenant_id,
-    tenantName: result.session.tenant_name,
+    // Enterprise fields (new)
+    enterpriseId: result.session.enterprise_id || result.session.tenant_id,
+    enterpriseName: result.session.enterprise_name || result.session.tenant_name,
+    workspaceId: result.session.workspace_id,
+    workspaceName: result.session.workspace_name,
     role: result.session.role,
+    // Demo flags
+    isDemo: result.session.is_demo,
+    demoType: result.session.demo_type,
+    demoExpiresAt: result.session.demo_expires_at,
     mfaEnabled: result.session.mfa_enabled,
     mfaVerified: result.session.mfa_verified,
     plan,
@@ -284,7 +340,7 @@ export async function updateSessionSubscription(
     userAgent: result.session.user_agent,
   };
 
-  return createSession(input);
+  return createSession(sessionInput);
 }
 
 // ============================================================
