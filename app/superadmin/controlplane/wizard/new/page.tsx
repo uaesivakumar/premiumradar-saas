@@ -49,6 +49,8 @@ interface WizardContentProps {
   extendContext?: {
     verticalName?: string | null;
     subVerticalName?: string | null;
+    personaName?: string | null;
+    isPolicyVersioning?: boolean;
   };
 }
 
@@ -72,15 +74,19 @@ function WizardContent({ isExtendMode = false, extendContext }: WizardContentPro
 
   // Dynamic title based on mode
   const wizardTitle = isExtendMode
-    ? extendContext?.subVerticalName
-      ? `Add Persona to ${extendContext.subVerticalName}`
-      : extendContext?.verticalName
-        ? `Add Sub-Vertical to ${extendContext.verticalName}`
-        : 'Extend Vertical Stack'
+    ? extendContext?.isPolicyVersioning && extendContext?.personaName
+      ? `Create Policy for ${extendContext.personaName}`
+      : extendContext?.subVerticalName
+        ? `Add Persona to ${extendContext.subVerticalName}`
+        : extendContext?.verticalName
+          ? `Add Sub-Vertical to ${extendContext.verticalName}`
+          : 'Extend Vertical Stack'
     : 'Create Vertical Stack';
 
   const wizardSubtitle = isExtendMode
-    ? 'Adding to an existing vertical stack'
+    ? extendContext?.isPolicyVersioning
+      ? 'Creating a new policy version for an existing persona'
+      : 'Adding to an existing vertical stack'
     : 'Guided creation of a complete, runnable vertical configuration';
 
   const renderStep = () => {
@@ -305,6 +311,9 @@ function WizardContent({ isExtendMode = false, extendContext }: WizardContentPro
  * - sub_vertical_id: string - pre-selected sub-vertical UUID (for extend mode)
  * - sub_vertical_key: string - pre-selected sub-vertical key
  * - sub_vertical_name: string - pre-selected sub-vertical name
+ * - persona_id: string - pre-selected persona UUID (for policy versioning)
+ * - persona_name: string - pre-selected persona name
+ * - target: 'policy' - target for policy versioning
  */
 function WizardWithParams() {
   const searchParams = useSearchParams();
@@ -320,8 +329,13 @@ function WizardWithParams() {
   const subVerticalId = searchParams?.get('sub_vertical_id') || null;
   const subVerticalKey = searchParams?.get('sub_vertical_key') || null;
   const subVerticalName = searchParams?.get('sub_vertical_name') || null;
+  // Phase 1A: Policy versioning params
+  const personaId = searchParams?.get('persona_id') || null;
+  const personaName = searchParams?.get('persona_name') || null;
+  const target = searchParams?.get('target') || null;
 
   // Auto-compute starting step for extend mode:
+  // - If target=policy + persona_id provided → start at step 4 (policy versioning)
   // - If sub_vertical_id provided → start at step 3 (add persona)
   // - If only vertical_id provided → start at step 2 (add sub-vertical)
   // - Otherwise → start at step 1
@@ -329,7 +343,9 @@ function WizardWithParams() {
   if (startStepParam >= 1 && startStepParam <= 7) {
     initialStep = startStepParam;
   } else if (isExtendMode) {
-    if (subVerticalId) {
+    if (target === 'policy' && personaId) {
+      initialStep = 4; // Policy versioning for existing persona
+    } else if (subVerticalId) {
       initialStep = 3; // Add persona to existing sub-vertical
     } else if (verticalId) {
       initialStep = 2; // Add sub-vertical to existing vertical
@@ -344,11 +360,16 @@ function WizardWithParams() {
   if (subVerticalId) initialState.sub_vertical_id = subVerticalId;
   if (subVerticalKey) initialState.sub_vertical_key = subVerticalKey;
   if (subVerticalName) initialState.sub_vertical_name = decodeURIComponent(subVerticalName);
+  // Phase 1A: Persona params for policy versioning
+  if (personaId) initialState.persona_id = personaId;
+  if (personaName) initialState.persona_name = decodeURIComponent(personaName);
 
   // Context for dynamic title
   const extendContext = {
     verticalName: verticalName ? decodeURIComponent(verticalName) : null,
     subVerticalName: subVerticalName ? decodeURIComponent(subVerticalName) : null,
+    personaName: personaName ? decodeURIComponent(personaName) : null,
+    isPolicyVersioning: target === 'policy',
   };
 
   return (
