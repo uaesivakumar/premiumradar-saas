@@ -30,8 +30,11 @@ import {
   Clock,
   Lock,
   ExternalLink,
+  History,  // Phase1A: Policy version history
+  Plus,     // Phase1A: Create new version
 } from 'lucide-react';
-// S274: Removed Plus, Edit2, Save - no mutation affordances in read-only view
+// S274: Removed Edit2, Save - no mutation affordances in read-only view
+// Phase1A: Re-added Plus for policy versioning UI
 
 // =============================================================================
 // TYPES (Match DB schema exactly)
@@ -84,6 +87,7 @@ interface OSPersonaPolicy {
   id: string;
   persona_id: string;
   policy_version: number;
+  status?: 'DRAFT' | 'ACTIVE' | 'DEPRECATED' | 'STAGED';  // Phase1A: Policy status
   allowed_intents: string[];
   forbidden_outputs: string[];
   allowed_tools: string[];
@@ -93,6 +97,9 @@ interface OSPersonaPolicy {
   latency_budget: Record<string, unknown>;
   escalation_rules: Record<string, unknown>;
   disclaimer_rules: Record<string, unknown>;
+  staged_at?: string | null;
+  activated_at?: string | null;
+  deprecated_at?: string | null;
   created_at: string;
   updated_at: string;
   persona_key?: string;
@@ -228,6 +235,34 @@ async function updatePersonaPolicy(
   });
   const data = await res.json();
   if (!data.success) throw new Error(data.message || data.error || 'Failed to update policy');
+  return data.data;
+}
+
+// Phase1A: Fetch policy versions for a persona
+async function fetchPolicyVersions(personaId: string): Promise<{
+  versions: OSPersonaPolicy[];
+  total_versions: number;
+  active_version: number | null;
+  draft_version: number | null;
+}> {
+  const res = await fetch(`/api/superadmin/controlplane/personas/${personaId}/policy/version`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Failed to fetch policy versions');
+  return data.data;
+}
+
+// Phase1A: Create new policy version (DRAFT)
+async function createPolicyVersion(personaId: string): Promise<{
+  id: string;
+  policy_version: number;
+  status: string;
+}> {
+  const res = await fetch(`/api/superadmin/controlplane/personas/${personaId}/policy/version`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || data.error || 'Failed to create policy version');
   return data.data;
 }
 
