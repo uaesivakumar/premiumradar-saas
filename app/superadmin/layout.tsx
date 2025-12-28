@@ -10,7 +10,7 @@
  * - Professional credibility
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -18,18 +18,12 @@ import {
   Users,
   Building2,
   Settings,
-  Database,
   Activity,
-  FileText,
-  Bell,
-  Plug,
   LogOut,
-  ChevronRight,
+  ChevronDown,
   AlertCircle,
   Loader2,
   Layers,
-  BarChart2,
-  Globe,
   Cpu,
   Server,
   Sparkles,
@@ -46,23 +40,29 @@ interface SessionInfo {
   remainingMinutes: number;
 }
 
-const navItems = [
+// Primary navigation items (always visible in top bar)
+const primaryNavItems = [
   { label: 'Overview', href: '/superadmin', icon: LayoutGrid },
   { label: 'Command Center', href: '/superadmin/command-center', icon: Sparkles },
   { label: 'Intelligence', href: '/superadmin/siva', icon: Cpu },
   { label: 'Sales-Bench', href: '/superadmin/sales-bench', icon: FlaskConical },
   { label: 'Financials', href: '/superadmin/financials', icon: DollarSign },
-  { type: 'divider' },
-  // S274: Control Plane = read-only monitoring, Wizard = mutations
-  { label: 'Control Plane', href: '/superadmin/controlplane', icon: Shield },
-  { label: 'CP Wizard', href: '/superadmin/controlplane/wizard', icon: Wand2, isMutation: true },
-  { label: 'Blueprints', href: '/superadmin/verticals', icon: Layers, readOnly: true },
-  { label: 'OS Config', href: '/superadmin/os', icon: Server },
-  { label: 'Settings', href: '/superadmin/settings', icon: Settings },
-  { type: 'divider' },
-  { label: 'Users', href: '/superadmin/users', icon: Users },
-  { label: 'Tenants', href: '/superadmin/tenants', icon: Building2 },
-  { label: 'Activity', href: '/superadmin/activity', icon: Activity },
+];
+
+// Platform dropdown items (Control Plane, Blueprints, OS Config)
+const platformItems = [
+  { label: 'Control Plane', href: '/superadmin/controlplane', icon: Shield, description: 'Monitor active stacks' },
+  { label: 'CP Wizard', href: '/superadmin/controlplane/wizard', icon: Wand2, isMutation: true, description: 'Create & modify stacks' },
+  { label: 'Blueprints', href: '/superadmin/verticals', icon: Layers, readOnly: true, description: 'Vertical templates' },
+  { label: 'OS Config', href: '/superadmin/os', icon: Server, description: 'OS settings & routing' },
+];
+
+// Admin dropdown items (Users, Tenants, Settings)
+const adminItems = [
+  { label: 'Users', href: '/superadmin/users', icon: Users, description: 'User management' },
+  { label: 'Tenants', href: '/superadmin/tenants', icon: Building2, description: 'Tenant accounts' },
+  { label: 'Activity', href: '/superadmin/activity', icon: Activity, description: 'Audit logs' },
+  { label: 'Settings', href: '/superadmin/settings', icon: Settings, description: 'System settings' },
 ];
 
 export default function SuperAdminLayout({
@@ -75,6 +75,32 @@ export default function SuperAdminLayout({
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<'platform' | 'admin' | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (navRef.current && !navRef.current.contains(event.target as Node)) {
+        setOpenDropdown(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close dropdown on route change
+  useEffect(() => {
+    setOpenDropdown(null);
+  }, [pathname]);
+
+  // Check if current path is within a dropdown group
+  const isPlatformActive = platformItems.some(item =>
+    pathname === item.href || (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''))
+  );
+  const isAdminActive = adminItems.some(item =>
+    pathname === item.href || (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''))
+  );
 
   const isLoginPage = pathname === '/superadmin/login';
 
@@ -144,49 +170,126 @@ export default function SuperAdminLayout({
             <span className="font-medium text-sm text-white">PremiumRadar</span>
           </Link>
 
-          {/* Main Nav */}
-          <nav className="flex items-center gap-1">
-            {navItems.map((item, i) => {
-              if (item.type === 'divider') {
-                return <div key={i} className="w-px h-4 bg-neutral-800 mx-2" />;
-              }
-
+          {/* Main Nav - Primary Items */}
+          <nav ref={navRef} className="flex items-center gap-1">
+            {primaryNavItems.map((item) => {
               const isActive = pathname === item.href ||
                 (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''));
               const Icon = item.icon;
 
-              const isMutation = (item as { isMutation?: boolean }).isMutation;
-              const isReadOnly = (item as { readOnly?: boolean }).readOnly;
-
               return (
                 <Link
                   key={item.href}
-                  href={item.href || '#'}
+                  href={item.href}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                     isActive
-                      ? isMutation
-                        ? 'bg-violet-600 text-white'
-                        : 'bg-neutral-800 text-white'
-                      : isMutation
-                        ? 'text-violet-400 hover:text-violet-300 hover:bg-violet-500/20 border border-violet-500/30'
-                        : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+                      ? 'bg-neutral-800 text-white'
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
                   }`}
-                  title={
-                    isMutation
-                      ? 'Create or modify vertical stacks'
-                      : isReadOnly
-                        ? 'Read-only view'
-                        : undefined
-                  }
                 >
-                  {Icon && <Icon className="w-3.5 h-3.5" />}
+                  <Icon className="w-3.5 h-3.5" />
                   <span>{item.label}</span>
-                  {isReadOnly && (
-                    <span className="text-[8px] text-neutral-600 ml-0.5">(R)</span>
-                  )}
                 </Link>
               );
             })}
+
+            <div className="w-px h-4 bg-neutral-800 mx-2" />
+
+            {/* Platform Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setOpenDropdown(openDropdown === 'platform' ? null : 'platform')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                  isPlatformActive
+                    ? 'bg-violet-600 text-white'
+                    : 'text-violet-400 hover:text-violet-300 hover:bg-violet-500/20 border border-violet-500/30'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Platform</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === 'platform' ? 'rotate-180' : ''}`} />
+              </button>
+              {openDropdown === 'platform' && (
+                <div className="absolute top-full mt-1 left-0 w-56 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl overflow-hidden z-50">
+                  {platformItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = pathname === item.href ||
+                      (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''));
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpenDropdown(null)}
+                        className={`flex items-start gap-3 px-3 py-2.5 transition-colors ${
+                          isActive
+                            ? item.isMutation
+                              ? 'bg-violet-600/20 text-violet-300'
+                              : 'bg-neutral-800 text-white'
+                            : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 mt-0.5 ${item.isMutation ? 'text-violet-400' : ''}`} />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium">{item.label}</span>
+                            {item.isMutation && (
+                              <span className="text-[9px] px-1 py-0.5 bg-violet-500/30 text-violet-300 rounded">WRITE</span>
+                            )}
+                            {item.readOnly && (
+                              <span className="text-[9px] text-neutral-600">(R)</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-neutral-500 mt-0.5">{item.description}</p>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Admin Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setOpenDropdown(openDropdown === 'admin' ? null : 'admin')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                  isAdminActive
+                    ? 'bg-neutral-800 text-white'
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Admin</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === 'admin' ? 'rotate-180' : ''}`} />
+              </button>
+              {openDropdown === 'admin' && (
+                <div className="absolute top-full mt-1 left-0 w-48 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl overflow-hidden z-50">
+                  {adminItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = pathname === item.href ||
+                      (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''));
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpenDropdown(null)}
+                        className={`flex items-start gap-3 px-3 py-2.5 transition-colors ${
+                          isActive
+                            ? 'bg-neutral-800 text-white'
+                            : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 mt-0.5" />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium">{item.label}</span>
+                          <p className="text-xs text-neutral-500 mt-0.5">{item.description}</p>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </nav>
         </div>
 
