@@ -8,19 +8,15 @@
  * - sub_vertical_name
  * - primary_entity_type (required dropdown: company | individual | deal)
  * - related_entity_types (optional multi-select)
- * - default_agent (required dropdown from /api/superadmin/controlplane/agents)
+ *
+ * Agent is ALWAYS SIVA - no selection. All behavior differentiation comes from:
+ * Vertical → Sub-Vertical → Persona → Policy → Envelope
  *
  * On success: POST /api/superadmin/controlplane/sub-verticals, store sub_vertical_id
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useWizard } from '../wizard-context';
-
-interface Agent {
-  key: string;
-  label: string;
-  description?: string;
-}
 
 const ENTITY_TYPES = [
   { value: 'company', label: 'Company' },
@@ -35,41 +31,14 @@ export function SubVerticalStep() {
   const [name, setName] = useState(wizardState.sub_vertical_name || '');
   const [primaryEntityType, setPrimaryEntityType] = useState(wizardState.primary_entity_type || '');
   const [relatedEntityTypes, setRelatedEntityTypes] = useState<string[]>([]);
-  const [defaultAgent, setDefaultAgent] = useState(wizardState.default_agent || '');
-
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loadingAgents, setLoadingAgents] = useState(true);
 
   const [keyError, setKeyError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [entityError, setEntityError] = useState<string | null>(null);
-  const [agentError, setAgentError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const isCreated = !!wizardState.sub_vertical_id;
-
-  // Fetch agents on mount
-  useEffect(() => {
-    async function fetchAgents() {
-      try {
-        const response = await fetch('/api/superadmin/controlplane/agents');
-        const data = await response.json();
-        if (data.success) {
-          setAgents(data.agents);
-          // Default to first agent if not set
-          if (!defaultAgent && data.agents.length > 0) {
-            setDefaultAgent(data.agents[0].key);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch agents:', error);
-      } finally {
-        setLoadingAgents(false);
-      }
-    }
-    fetchAgents();
-  }, [defaultAgent]);
 
   const validateKey = useCallback((value: string) => {
     if (!value) {
@@ -103,12 +72,6 @@ export function SubVerticalStep() {
     }
     setEntityError(null);
 
-    if (!defaultAgent) {
-      setAgentError('Default agent is required');
-      return;
-    }
-    setAgentError(null);
-
     if (!keyValid || !nameValid) return;
 
     setIsSubmitting(true);
@@ -124,7 +87,7 @@ export function SubVerticalStep() {
           name,
           primary_entity_type: primaryEntityType,
           related_entity_types: relatedEntityTypes,
-          default_agent: defaultAgent,
+          default_agent: 'SIVA', // Always SIVA - no user selection
         }),
       });
 
@@ -145,7 +108,7 @@ export function SubVerticalStep() {
         sub_vertical_key: data.data.key,
         sub_vertical_name: data.data.name,
         primary_entity_type: data.data.primary_entity_type,
-        default_agent: data.data.default_agent,
+        default_agent: 'SIVA',
       });
       markStepComplete(2);
     } catch (error) {
@@ -158,7 +121,6 @@ export function SubVerticalStep() {
     name,
     primaryEntityType,
     relatedEntityTypes,
-    defaultAgent,
     wizardState.vertical_id,
     validateKey,
     validateName,
@@ -201,8 +163,8 @@ export function SubVerticalStep() {
               <dd className="text-gray-900">{wizardState.primary_entity_type}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Default Agent</dt>
-              <dd className="text-gray-900">{wizardState.default_agent}</dd>
+              <dt className="text-gray-500">Agent</dt>
+              <dd className="text-gray-900">SIVA (Interpreter)</dd>
             </div>
           </dl>
         </div>
@@ -323,46 +285,27 @@ export function SubVerticalStep() {
           </div>
         </div>
 
+        {/* Agent is always SIVA - read-only display */}
         <div>
-          <label htmlFor="agent" className="block text-sm font-medium text-gray-700 mb-1">
-            Default Agent <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Agent
           </label>
-          {loadingAgents ? (
-            <p className="text-sm text-gray-500">Loading agents...</p>
-          ) : (
-            <select
-              id="agent"
-              value={defaultAgent}
-              onChange={(e) => {
-                setDefaultAgent(e.target.value);
-                setAgentError(null);
-              }}
-              className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white ${
-                agentError ? 'border-red-300' : 'border-gray-300'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              disabled={isSubmitting}
-            >
-              <option value="">Select agent...</option>
-              {agents.map((agent) => (
-                <option key={agent.key} value={agent.key}>
-                  {agent.label}
-                </option>
-              ))}
-            </select>
-          )}
+          <div className="px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-900">
+            <span className="font-medium">SIVA</span>
+            <span className="text-gray-500 ml-1">(Interpreter)</span>
+          </div>
           <p className="mt-1 text-xs text-gray-500">
-            Controls tool routing and workflows for this sub-vertical.
+            All behavior differentiation is derived from Persona → Policy → Envelope.
           </p>
-          {agentError && <p className="mt-1 text-xs text-red-600">{agentError}</p>}
         </div>
       </div>
 
       <div className="pt-4">
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting || !key || !name || !primaryEntityType || !defaultAgent}
+          disabled={isSubmitting || !key || !name || !primaryEntityType}
           className={`px-4 py-2 text-sm font-medium rounded-lg ${
-            isSubmitting || !key || !name || !primaryEntityType || !defaultAgent
+            isSubmitting || !key || !name || !primaryEntityType
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
               : 'bg-blue-600 text-white hover:bg-blue-700'
           }`}

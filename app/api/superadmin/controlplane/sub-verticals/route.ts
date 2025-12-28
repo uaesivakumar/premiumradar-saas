@@ -7,10 +7,16 @@
  * Contract Rules:
  * - key: required, lowercase snake_case
  * - vertical_id: required, must exist
- * - default_agent: required
+ * - default_agent: ALWAYS SIVA (no user selection - defaults to 'SIVA')
  * - primary_entity_type: required (v2.0), one of: deal, company, individual
  * - related_entity_types: optional array (v2.0)
  * - All writes logged to os_controlplane_audit
+ *
+ * ARCHITECTURAL NOTE (S278):
+ * - Agent is ALWAYS SIVA - there is ONE interpreter
+ * - All behavior differentiation comes from: Vertical → Sub-Vertical → Persona → Policy → Envelope
+ * - "SIVA Banking", "SIVA Insurance" variants are legacy debt, NOT features
+ * - No agent selector in UI - default_agent is auto-set to 'SIVA'
  *
  * v2.0 MIGRATION:
  * - primary_entity_type is now the source of truth (moved from vertical level)
@@ -334,18 +340,9 @@ export async function POST(request: NextRequest) {
       return validationError('name', 'Name is required');
     }
 
-    // Validation: default_agent (required per contract)
-    if (!default_agent || typeof default_agent !== 'string') {
-      await logControlPlaneAudit({
-        actorUser,
-        action: 'create_sub_vertical',
-        targetType: 'sub_vertical',
-        requestJson: body,
-        success: false,
-        errorMessage: 'default_agent is required',
-      });
-      return validationError('default_agent', 'default_agent is required');
-    }
+    // S278: Agent is ALWAYS SIVA - default if not provided
+    // No user selection - all behavior differentiation from Persona → Policy → Envelope
+    const resolvedAgent = (default_agent && typeof default_agent === 'string') ? default_agent : 'SIVA';
 
     // Validation: primary_entity_type (v2.0 - REQUIRED)
     if (!primary_entity_type || !VALID_ENTITY_TYPES.includes(primary_entity_type)) {
@@ -488,7 +485,7 @@ export async function POST(request: NextRequest) {
         vertical_id,
         key,
         name,
-        default_agent,
+        resolvedAgent, // S278: Always SIVA
         primary_entity_type,
         related_entity_types || [],
         buyer_role,
