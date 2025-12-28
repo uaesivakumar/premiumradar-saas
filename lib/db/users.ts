@@ -8,6 +8,8 @@
 
 import bcrypt from 'bcryptjs';
 import { query, queryOne, insert, transaction, getPool } from './client';
+import { getOrCreateEnterpriseForDomain, getEnterpriseById, Enterprise } from './enterprises';
+import { getOrCreateDefaultWorkspace, Workspace } from './workspaces';
 
 // ============================================================
 // TYPES
@@ -40,10 +42,13 @@ export interface User {
   password_hash: string;
   name: string | null;
   avatar_url: string | null;
-  tenant_id: string;
-  role: 'TENANT_USER' | 'TENANT_ADMIN' | 'SUPER_ADMIN' | 'READ_ONLY';
+  tenant_id: string; // Legacy - kept for backward compatibility
+  enterprise_id: string | null; // New enterprise system
+  workspace_id: string | null; // New workspace system
+  role: 'ENTERPRISE_USER' | 'ENTERPRISE_ADMIN' | 'SUPER_ADMIN' | 'INDIVIDUAL_USER' | 'TENANT_USER' | 'TENANT_ADMIN' | 'READ_ONLY';
   mfa_enabled: boolean;
   is_active: boolean;
+  is_demo: boolean;
   last_login_at: Date | null;
   last_login_ip: string | null;
   metadata: Record<string, unknown>;
@@ -73,15 +78,19 @@ export interface UserProfile {
 
 export interface UserWithProfile extends User {
   profile: UserProfile | null;
-  tenant: Tenant | null;
+  tenant: Tenant | null; // Legacy - kept for backward compatibility
+  enterprise: Enterprise | null; // New enterprise system
+  workspace: Workspace | null; // New workspace system
 }
 
 export interface CreateUserInput {
   email: string;
   password: string;
   name?: string;
-  tenantId?: string;
-  role?: 'TENANT_USER' | 'TENANT_ADMIN' | 'SUPER_ADMIN' | 'READ_ONLY';
+  tenantId?: string; // Legacy - use enterpriseId instead
+  enterpriseId?: string; // New enterprise system
+  workspaceId?: string; // New workspace system
+  role?: 'ENTERPRISE_USER' | 'ENTERPRISE_ADMIN' | 'SUPER_ADMIN' | 'INDIVIDUAL_USER';
   vertical?: string;
   subVertical?: string;
   regionCountry?: string;
@@ -163,7 +172,8 @@ export async function getOrCreateTenantForDomain(
 const SALT_ROUNDS = 12;
 
 /**
- * Create a new user with profile
+ * Create a new user with profile (Enterprise System)
+ * Uses the new enterprise/workspace model instead of legacy tenant system
  */
 export async function createUser(input: CreateUserInput): Promise<UserWithProfile> {
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
@@ -171,7 +181,42 @@ export async function createUser(input: CreateUserInput): Promise<UserWithProfil
   // Extract domain from email
   const emailDomain = input.email.split('@')[1]?.toLowerCase();
 
-  // Get or create tenant
+  // Get or create ENTERPRISE (not tenant!)
+  let enterpriseId = input.enterpriseId;
+  let enterprise: Enterprise | null = null;
+
+  if (!enterpriseId && emailDomain) {
+    enterprise = await getOrCreateEnterpriseForDomain(
+      emailDomain,
+      input.companyName || emailDomain
+    );
+    enterpriseId = enterprise.enterprise_id;
+  } else if (enterpriseId) {
+    enterprise = await getEnterpriseById(enterpriseId);
+  }
+
+  if (!enterpriseId) {
+    throw new Error('Unable to determine enterprise for user');
+  }
+
+  // Get sub-vertical ID for workspace
+  const subVerticalKey = input.subVertical || 'employee-banking';
+  const subVerticalResult = await queryOne<{ id: string }>(
+    `SELECT id FROM os_sub_verticals WHERE key = $1`,
+    [subVerticalKey]
+  );
+  const subVerticalId = subVerticalResult?.id || 'default';
+
+  // Get or create default workspace for the enterprise
+  let workspaceId = input.workspaceId;
+  let workspace: Workspace | null = null;
+
+  if (!workspaceId) {
+    workspace = await getOrCreateDefaultWorkspace(enterpriseId, subVerticalId);
+    workspaceId = workspace.workspace_id;
+  }
+
+  // Legacy: Also create/get tenant for backward compatibility
   let tenantId = input.tenantId;
   if (!tenantId && emailDomain) {
     const tenant = await getOrCreateTenantForDomain(
@@ -181,26 +226,31 @@ export async function createUser(input: CreateUserInput): Promise<UserWithProfil
     tenantId = tenant.id;
   }
 
-  if (!tenantId) {
-    throw new Error('Unable to determine tenant for user');
-  }
-
   const pool = getPool();
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    // Create user
+    // Create user with enterprise_id and workspace_id
     const userResult = await client.query<User>(
-      `INSERT INTO users (email, password_hash, name, tenant_id, role)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (email, password_hash, name, tenant_id, enterprise_id, workspace_id, role, is_demo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [input.email.toLowerCase(), passwordHash, input.name || null, tenantId, input.role || 'TENANT_USER']
+      [
+        input.email.toLowerCase(),
+        passwordHash,
+        input.name || null,
+        tenantId, // Legacy
+        enterpriseId, // New
+        workspaceId, // New
+        input.role || 'ENTERPRISE_USER', // New role
+        false
+      ]
     );
     const user = userResult.rows[0];
 
-    // Create profile
+    // Create profile (still uses tenant_id for backward compatibility)
     const profileResult = await client.query<UserProfile>(
       `INSERT INTO user_profiles (
         user_id, tenant_id, vertical, sub_vertical, region_country,
@@ -223,10 +273,16 @@ export async function createUser(input: CreateUserInput): Promise<UserWithProfil
 
     await client.query('COMMIT');
 
-    // Get tenant
-    const tenant = await getTenantById(tenantId);
+    // Get tenant for backward compatibility
+    const tenant = tenantId ? await getTenantById(tenantId) : null;
 
-    return { ...user, profile, tenant };
+    return {
+      ...user,
+      profile,
+      tenant, // Legacy
+      enterprise, // New
+      workspace // New
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -250,7 +306,7 @@ export async function getUserById(id: string): Promise<User | null> {
 }
 
 /**
- * Get user with profile and tenant
+ * Get user with profile, tenant, enterprise, and workspace
  */
 export async function getUserWithProfile(userId: string): Promise<UserWithProfile | null> {
   const user = await getUserById(userId);
@@ -261,9 +317,16 @@ export async function getUserWithProfile(userId: string): Promise<UserWithProfil
     [userId]
   );
 
+  // Legacy tenant
   const tenant = await getTenantById(user.tenant_id);
 
-  return { ...user, profile, tenant };
+  // New enterprise system
+  const enterprise = user.enterprise_id ? await getEnterpriseById(user.enterprise_id) : null;
+  const workspace = user.workspace_id
+    ? await queryOne<Workspace>('SELECT * FROM workspaces WHERE workspace_id = $1', [user.workspace_id])
+    : null;
+
+  return { ...user, profile, tenant, enterprise, workspace };
 }
 
 /**

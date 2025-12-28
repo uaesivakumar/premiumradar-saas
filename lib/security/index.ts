@@ -355,3 +355,92 @@ export async function secureConversation(
     error: result.error,
   };
 }
+
+// =============================================================================
+// Enterprise Security (S321-S325)
+// =============================================================================
+
+// Enterprise Audit (S322)
+export {
+  logAuditEvent,
+  getAuditLogs,
+  audit,
+} from './enterprise-audit';
+
+export type {
+  AuditEventType,
+  AuditSeverity,
+  AuditEntry,
+  AuditLogOptions,
+} from './enterprise-audit';
+
+// Enterprise Guards (S323)
+export {
+  getGuardContext,
+  hasRoleLevel,
+  requireAuth,
+  requireRole,
+  requireEnterprise,
+  requireEnterpriseAccess,
+  requireWorkspaceAccess,
+  requireEnterpriseAdmin,
+  requireSuperAdmin,
+  requireNonDemo,
+  requireActiveEnterprise,
+  canManageUsers,
+  canManageWorkspaces,
+  canAccessEnterpriseSettings,
+  canExportData,
+  runGuards,
+  guards,
+} from './enterprise-guards';
+
+export type {
+  EnterpriseRole,
+  GuardContext,
+  GuardResult,
+} from './enterprise-guards';
+
+// Session Security (S324)
+export {
+  getSessionConfig,
+  createSessionRecord,
+  validateSession,
+  updateSessionActivity,
+  invalidateSession,
+  invalidateAllUserSessions,
+  invalidateAllEnterpriseSessions,
+  getUserActiveSessions,
+  cleanupExpiredSessions,
+  checkSuspiciousActivity,
+  recordSuspiciousActivity,
+  sessionSecurity,
+} from './enterprise-session';
+
+export type {
+  SessionInfo,
+  SessionSecurityConfig,
+} from './enterprise-session';
+
+// Permission Matrix (S325)
+export {
+  hasPermission,
+  getPermissionConditions,
+  getRolePermissions,
+  canAccessResource,
+  getAllowedActions,
+  roleContains,
+  getAdditionalPermissions,
+  getPermissionSummary,
+  getAccessibleResources,
+  getRoleFeatureFlags,
+  permissions,
+} from './permission-matrix';
+
+export type {
+  ResourceType,
+  ActionType,
+  Permission,
+  PermissionCondition,
+  PermissionCheckResult,
+} from './permission-matrix';

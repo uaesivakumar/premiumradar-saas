@@ -470,7 +470,7 @@ Sprint completion BLOCKED if:
 
 ---
 
-## GOLDEN RULES v2.2
+## GOLDEN RULES v2.3 (Post-Hostile-Audit)
 
 1. **Contracts before code** - No implementation without wiring contract
 2. **Wiring before done** - No feature marked done without /wiring pass
@@ -481,6 +481,193 @@ Sprint completion BLOCKED if:
 7. **Abort on ambiguity** - If contracts unclear, don't start
 8. **Environment from config** - No hardcoded URLs
 9. **Notion required** - Silent skip is not allowed
+10. **Files must exist** - Never claim file creation without verification
+11. **Entry points must wire** - Signup/login must call new functions, not legacy
+12. **SQL columns must match** - Use correct column names (enterprise_id, not id)
+13. **Role taxonomy consistent** - Use ENTERPRISE_* or TENANT_*, not both
+
+---
+
+## ANTI-PATTERNS FROM HOSTILE AUDIT (User & Enterprise v1.1)
+
+**These failures MUST be prevented in future sprints:**
+
+### ANTI-PATTERN 1: Spec-Driven Certification
+
+```
+❌ BAD: "Phase A claims files exist" → Certification passes
+✅ GOOD: "Phase A claims files exist" → Verify fs.existsSync() → Certification passes
+```
+
+**Prevention:** Add `files_created_verification` to contract:
+
+```json
+{
+  "feature_id": "S48-F1",
+  "files_created": [
+    "lib/enterprise/types.ts",
+    "lib/enterprise/context.tsx"
+  ],
+  "files_created_verification": {
+    "required": true,
+    "verified": false,
+    "verified_at": null
+  }
+}
+```
+
+### ANTI-PATTERN 2: Parallel Systems Without Bridge
+
+```
+❌ BAD:
+   - Old system: signup → createTenant() → tenants table
+   - New system: enterprise APIs → enterprises table (EMPTY!)
+
+✅ GOOD:
+   - Unified: signup → createEnterprise() → enterprises table
+   - OR: Bridge function maps tenant → enterprise
+```
+
+**Prevention:** Add `entry_point_wiring` to contract:
+
+```json
+{
+  "feature_id": "S48-F1",
+  "entry_point_wiring": {
+    "entry_point": "app/api/auth/signup/route.ts",
+    "must_call": ["getOrCreateEnterpriseForDomain"],
+    "must_not_call": ["getOrCreateTenantForDomain"]
+  }
+}
+```
+
+### ANTI-PATTERN 3: SQL Column Name Mismatch
+
+```
+❌ BAD: SELECT * FROM enterprises WHERE id = $1
+✅ GOOD: SELECT * FROM enterprises WHERE enterprise_id = $1
+```
+
+**Prevention:** Add `sql_column_rules` to session:
+
+```json
+{
+  "sql_column_rules": {
+    "enterprises": "enterprise_id",
+    "workspaces": "workspace_id",
+    "users": "id"
+  }
+}
+```
+
+### ANTI-PATTERN 4: Role Taxonomy Split
+
+```
+❌ BAD:
+   - lib/db/users.ts: role = 'TENANT_USER'
+   - lib/security/guards.ts: expects 'ENTERPRISE_USER'
+
+✅ GOOD:
+   - All files use 'ENTERPRISE_USER' consistently
+   - OR: Explicit mapping function exists
+```
+
+**Prevention:** Add `role_taxonomy` to session:
+
+```json
+{
+  "role_taxonomy": {
+    "version": "enterprise",
+    "roles": ["SUPER_ADMIN", "ENTERPRISE_ADMIN", "ENTERPRISE_USER", "INDIVIDUAL_USER"],
+    "legacy_mapping": {
+      "TENANT_ADMIN": "ENTERPRISE_ADMIN",
+      "TENANT_USER": "ENTERPRISE_USER"
+    }
+  }
+}
+```
+
+---
+
+## UPDATED CONTRACT SCHEMA (v2.3)
+
+```json
+{
+  "feature_id": "S48-F1",
+  "feature_name": "Dark mode toggle",
+
+  // EXISTING (v2.2)
+  "ui_entrypoint": { ... },
+  "api_endpoints": [ ... ],
+  "wiring_checks": [ ... ],
+  "staging_verification_steps": [ ... ],
+
+  // NEW (v2.3) - Anti-pattern prevention
+  "files_created": [
+    "lib/enterprise/types.ts"
+  ],
+  "entry_point_wiring": {
+    "entry_point": "app/api/auth/signup/route.ts",
+    "must_call": ["getOrCreateEnterpriseForDomain"],
+    "must_not_call": ["getOrCreateTenantForDomain"]
+  },
+  "sql_queries": [
+    {
+      "file": "lib/db/enterprises.ts",
+      "table": "enterprises",
+      "primary_key": "enterprise_id"
+    }
+  ],
+  "role_dependencies": ["ENTERPRISE_USER", "ENTERPRISE_ADMIN"]
+}
+```
+
+---
+
+## STEP 5.5: GENERATE ANTI-PATTERN CHECKS (NEW)
+
+After generating Feature Wiring Contracts, TC MUST also generate:
+
+```javascript
+// Anti-pattern prevention checks
+const antiPatternChecks = {
+  // 1. File existence verification
+  files_to_verify: contracts.flatMap(c => c.files_created || []),
+
+  // 2. Entry point wiring verification
+  entry_point_rules: contracts
+    .filter(c => c.entry_point_wiring)
+    .map(c => c.entry_point_wiring),
+
+  // 3. SQL column rules from contracts
+  sql_column_rules: buildSqlColumnRules(contracts),
+
+  // 4. Role taxonomy check
+  role_taxonomy: {
+    expected: ['ENTERPRISE_USER', 'ENTERPRISE_ADMIN', 'SUPER_ADMIN'],
+    forbidden_legacy: ['TENANT_USER', 'TENANT_ADMIN']
+  }
+};
+
+session.anti_pattern_checks = antiPatternChecks;
+fs.writeFileSync('.claude/session/current.json', JSON.stringify(session, null, 2));
+```
+
+---
+
+## ABORT CONDITIONS (Updated v2.3)
+
+Sprint ABORTS if:
+
+1. **Notion unavailable** - Cannot fetch features
+2. **Staging unreachable** - Cannot verify deployments
+3. **Contracts unclear** - Cannot define wiring for a feature
+4. **No features** - Sprint has no features in Notion
+5. **Environment config missing** - No staging URL defined
+6. **Files claimed but missing** - Certification claims non-existent files (NEW)
+7. **Entry point wiring broken** - Signup calls legacy function (NEW)
+8. **SQL column mismatch** - Wrong column names in queries (NEW)
+9. **Role taxonomy mixed** - Uses both old and new role names (NEW)
 
 ---
 

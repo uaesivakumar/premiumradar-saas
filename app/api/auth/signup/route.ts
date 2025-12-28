@@ -166,18 +166,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<SignupRes
       // Continue anyway - user can request new verification email
     }
 
-    // Create session
+    // Create session with enterprise info (new system)
     const sessionResult = await createSession({
       userId: userWithProfile.id,
       email: userWithProfile.email,
       name: userWithProfile.name || undefined,
-      tenantId: userWithProfile.tenant_id,
+      tenantId: userWithProfile.tenant_id, // Legacy
       tenantName: userWithProfile.tenant?.name,
+      enterpriseId: userWithProfile.enterprise_id || undefined, // New
+      enterpriseName: userWithProfile.enterprise?.name,
+      workspaceId: userWithProfile.workspace_id || undefined, // New
       role: userWithProfile.role,
       mfaEnabled: userWithProfile.mfa_enabled,
       mfaVerified: false,
-      plan: (userWithProfile.tenant?.plan as 'free' | 'starter' | 'professional' | 'enterprise') || 'free',
-      subscriptionStatus: (userWithProfile.tenant?.subscription_status as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid') || 'active',
+      plan: (userWithProfile.enterprise?.plan as 'free' | 'starter' | 'professional' | 'enterprise') || (userWithProfile.tenant?.plan as 'free' | 'starter' | 'professional' | 'enterprise') || 'free',
+      subscriptionStatus: (userWithProfile.enterprise?.subscription_status as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid') || (userWithProfile.tenant?.subscription_status as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid') || 'active',
       ipAddress: ip,
       userAgent,
     });
@@ -197,7 +200,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<SignupRes
       email: normalizedEmail,
       vertical: userWithProfile.profile?.vertical,
       subVertical: userWithProfile.profile?.sub_vertical,
-      tenantId: userWithProfile.tenant_id,
+      enterpriseId: userWithProfile.enterprise_id, // New
+      workspaceId: userWithProfile.workspace_id, // New
+      tenantId: userWithProfile.tenant_id, // Legacy
     });
 
     // Build redirect URL with user info for verify-email page

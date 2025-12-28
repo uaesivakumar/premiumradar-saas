@@ -527,7 +527,275 @@ Logs bypass:
 
 ---
 
-## GOLDEN RULES v2.1
+## PHASE E: BEHAVIOR TRACE VERIFICATION (NEW - v2.2)
+
+**Added based on User & Enterprise Management v1.1 hostile audit failure.**
+
+This phase catches the pattern: "files exist but aren't connected."
+
+### E.1 Entry Point to DB Trace
+
+For each feature that claims to create entities, verify the entry point actually calls the creation function:
+
+```javascript
+async function verifyEntryPointWiring(contract) {
+  const wiring = contract.entry_point_wiring;
+  if (!wiring) return { success: true, skipped: true };
+
+  const results = { mustCall: [], mustNotCall: [] };
+
+  // Read entry point file
+  const entryPointPath = wiring.entry_point;
+  if (!fs.existsSync(entryPointPath)) {
+    return {
+      success: false,
+      error: `Entry point file not found: ${entryPointPath}`
+    };
+  }
+
+  const content = fs.readFileSync(entryPointPath, 'utf8');
+
+  // Check must_call functions are present
+  for (const fn of wiring.must_call || []) {
+    if (!content.includes(fn)) {
+      results.mustCall.push({
+        function: fn,
+        found: false,
+        error: `${entryPointPath} must call ${fn} but doesn't`
+      });
+    } else {
+      results.mustCall.push({ function: fn, found: true });
+    }
+  }
+
+  // Check must_not_call functions are absent
+  for (const fn of wiring.must_not_call || []) {
+    if (content.includes(fn)) {
+      results.mustNotCall.push({
+        function: fn,
+        found: true,
+        error: `${entryPointPath} must NOT call ${fn} (legacy) but still does`
+      });
+    } else {
+      results.mustNotCall.push({ function: fn, found: false });
+    }
+  }
+
+  const allMustCallFound = results.mustCall.every(r => r.found);
+  const noForbiddenCalls = results.mustNotCall.every(r => !r.found);
+
+  return {
+    success: allMustCallFound && noForbiddenCalls,
+    results
+  };
+}
+```
+
+### E.2 SQL Column Verification
+
+Verify all SQL queries use correct column names:
+
+```javascript
+async function verifySqlColumns(contract) {
+  const sqlQueries = contract.sql_queries;
+  if (!sqlQueries || sqlQueries.length === 0) return { success: true, skipped: true };
+
+  const results = [];
+
+  for (const sq of sqlQueries) {
+    if (!fs.existsSync(sq.file)) {
+      results.push({
+        file: sq.file,
+        success: false,
+        error: `SQL file not found: ${sq.file}`
+      });
+      continue;
+    }
+
+    const content = fs.readFileSync(sq.file, 'utf8');
+
+    // Check for incorrect column usage
+    // e.g., if table is 'enterprises' and primary_key is 'enterprise_id',
+    // flag any 'WHERE id =' queries on that table
+    const badPattern = new RegExp(
+      `FROM\\s+${sq.table}[^;]*WHERE\\s+id\\s*=`, 'gi'
+    );
+
+    if (sq.primary_key !== 'id' && badPattern.test(content)) {
+      results.push({
+        file: sq.file,
+        table: sq.table,
+        success: false,
+        error: `Uses 'WHERE id =' but ${sq.table} uses '${sq.primary_key}'`
+      });
+    } else {
+      results.push({
+        file: sq.file,
+        table: sq.table,
+        success: true
+      });
+    }
+  }
+
+  return {
+    success: results.every(r => r.success),
+    results
+  };
+}
+```
+
+### E.3 File Existence Verification
+
+Verify all claimed files actually exist:
+
+```javascript
+async function verifyFilesExist(contract) {
+  const filesCreated = contract.files_created;
+  if (!filesCreated || filesCreated.length === 0) return { success: true, skipped: true };
+
+  const results = [];
+
+  for (const file of filesCreated) {
+    if (fs.existsSync(file)) {
+      results.push({ file, exists: true });
+    } else {
+      results.push({
+        file,
+        exists: false,
+        error: `Claimed file does not exist: ${file}`
+      });
+    }
+  }
+
+  return {
+    success: results.every(r => r.exists),
+    results
+  };
+}
+```
+
+### E.4 Role Taxonomy Consistency
+
+Verify role names are consistent:
+
+```javascript
+async function verifyRoleTaxonomy(contract) {
+  const roleDeps = contract.role_dependencies;
+  if (!roleDeps || roleDeps.length === 0) return { success: true, skipped: true };
+
+  // Check that files using these roles don't mix old/new taxonomy
+  const relevantFiles = [
+    ...glob.sync('lib/security/**/*.ts'),
+    ...glob.sync('lib/db/**/*.ts')
+  ];
+
+  const oldRoles = ['TENANT_USER', 'TENANT_ADMIN'];
+  const newRoles = ['ENTERPRISE_USER', 'ENTERPRISE_ADMIN', 'INDIVIDUAL_USER'];
+
+  const issues = [];
+
+  for (const file of relevantFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+    const usesOld = oldRoles.some(r => content.includes(r));
+    const usesNew = newRoles.some(r => content.includes(r));
+
+    if (usesOld && usesNew) {
+      issues.push({
+        file,
+        error: 'Mixes old (TENANT_*) and new (ENTERPRISE_*) role taxonomy'
+      });
+    }
+  }
+
+  return {
+    success: issues.length === 0,
+    issues
+  };
+}
+```
+
+---
+
+## PHASE E REPORT FORMAT
+
+```
+────────────────────────────────────────────────────────────────────────────────
+PHASE E: BEHAVIOR TRACE VERIFICATION (v2.2)
+────────────────────────────────────────────────────────────────────────────────
+
+E.1 Entry Point Wiring:
+  app/api/auth/signup/route.ts:
+    ✓ calls getOrCreateEnterpriseForDomain
+    ✓ does NOT call getOrCreateTenantForDomain (legacy)
+
+E.2 SQL Column Names:
+  lib/db/enterprises.ts:
+    ✓ enterprises table uses enterprise_id correctly
+  lib/security/enterprise-guards.ts:
+    ✗ enterprises table uses 'WHERE id =' (should be enterprise_id)
+
+E.3 File Existence:
+  ✓ lib/enterprise/types.ts exists
+  ✓ lib/enterprise/context.tsx exists
+  ✗ lib/enterprise/hooks.ts MISSING
+
+E.4 Role Taxonomy:
+  ✗ lib/db/users.ts mixes TENANT_USER with ENTERPRISE_USER
+
+PHASE E STATUS: ✗ FAILED (3 issues)
+────────────────────────────────────────────────────────────────────────────────
+```
+
+---
+
+## UPDATED VERIFICATION FLOW (v2.2)
+
+```
+/integrator
+    │
+    ├── Step 1: Load session state and contracts
+    ├── Step 2: Validate contracts exist (FAIL if empty)
+    ├── Step 3: Load environment config
+    │
+    ├── FOR EACH CONTRACT:
+    │   ├── Phase A: UI Entrypoint Verification
+    │   ├── Phase B: API Endpoint Verification
+    │   ├── Phase C: Test Verification
+    │   ├── Phase D: Staging Runtime Verification
+    │   └── Phase E: BEHAVIOR TRACE VERIFICATION (NEW)
+    │       ├── E.1 Entry Point Wiring
+    │       ├── E.2 SQL Column Names
+    │       ├── E.3 File Existence
+    │       └── E.4 Role Taxonomy
+    │
+    ├── Step 4: Generate verification report
+    ├── Step 5: Update session state
+    └── Step 6: PASS or FAIL
+```
+
+---
+
+## FAILURE CONDITIONS (Updated v2.2)
+
+**/integrator FAILS if:**
+
+1. **No contracts defined** - session.feature_contracts is empty
+2. **Any UI file missing** - contract.ui_entrypoint.path not found
+3. **Any page doesn't render** - renders_at URL returns non-2xx/3xx
+4. **Any API returns error** - unexpected status code
+5. **Any test file missing** - test_ids[].file not found
+6. **Any test name missing** - test name not in file
+7. **Any test fails** - npm test returns non-zero
+8. **Any staging check fails** - verification step fails
+9. **Entry point missing required call** - must_call function not found (NEW)
+10. **Entry point has forbidden call** - must_not_call function still present (NEW)
+11. **SQL column name wrong** - WHERE id = on non-id table (NEW)
+12. **Claimed file missing** - files_created entry doesn't exist (NEW)
+13. **Role taxonomy mixed** - Old and new roles in same file (NEW)
+
+---
+
+## GOLDEN RULES v2.2
 
 1. **Contracts are truth** - No inference from git diff
 2. **Runtime proof required** - Files existing is not enough
@@ -535,3 +803,19 @@ Logs bypass:
 4. **Staging must respond** - Not just be deployed
 5. **All or nothing** - One failure = /integrator fails
 6. **No patterns** - Explicit test names, explicit endpoints
+7. **Entry points traced** - Verify signup/login call new functions (NEW)
+8. **SQL columns verified** - No id vs enterprise_id bugs (NEW)
+9. **Files actually exist** - Claims match reality (NEW)
+10. **Roles consistent** - No TENANT_* mixed with ENTERPRISE_* (NEW)
+
+---
+
+## LESSONS FROM HOSTILE AUDIT (User & Enterprise v1.1)
+
+| Failure | What Happened | How Phase E Prevents |
+|---------|---------------|---------------------|
+| Entry point disconnect | signup called getOrCreateTenantForDomain | E.1 checks must_call |
+| Legacy function used | signup should call enterprise, called tenant | E.1 checks must_not_call |
+| SQL column bug | WHERE id = $1 on enterprises table | E.2 validates columns |
+| Missing files | lib/enterprise/* claimed but empty | E.3 verifies existence |
+| Role taxonomy | TENANT_USER vs ENTERPRISE_USER | E.4 checks consistency |

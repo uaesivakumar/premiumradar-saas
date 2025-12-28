@@ -55,3 +55,40 @@ export {
   generateDemoComparison,
   formatDemoPrice,
 } from './safe-scoring';
+
+// S316-S320: Enterprise Demo System
+
+// Demo Provisioning (S316-S317)
+export {
+  getDemoPolicy,
+  provisionDemoEnterprise,
+  addDemoUser,
+  isDemoExpired,
+  getDemoStatus,
+  demoProvisioner,
+} from './demo-provisioner';
+
+export type {
+  DemoEnterpriseConfig,
+  DemoProvisionResult,
+} from './demo-provisioner';
+
+// Demo Seeding (S318)
+export {
+  seedDemoWorkspace,
+  clearDemoSeedData,
+  demoSeeder,
+} from './demo-seeder';
+
+export type {
+  DemoSeedConfig,
+  DemoSeedResult,
+} from './demo-seeder';
+
+// Demo Lifecycle (S319-S320)
+export {
+  handleExpiredDemos,
+  convertDemoToPaid,
+  extendDemo,
+  demoLifecycle,
+} from './demo-lifecycle';

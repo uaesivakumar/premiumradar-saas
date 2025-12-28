@@ -243,3 +243,199 @@ If wiring gaps are found:
 1. Fix them immediately
 2. Re-run /wiring
 3. Only then mark complete
+
+---
+
+## STEP 7: BEHAVIOR TRACE VERIFICATION (NEW - v2.2)
+
+**Added based on User & Enterprise Management v1.1 hostile audit failure.**
+
+This step catches the pattern: "code exists but isn't connected at the entry point."
+
+### 7.1 Entry Point Wiring Check
+
+**Critical entry points must call the correct functions, NOT legacy ones.**
+
+```bash
+# Example: Verify signup creates ENTERPRISE, not TENANT
+echo "=== ENTRY POINT WIRING ==="
+
+# Check what signup actually calls
+grep -n "getOrCreate" app/api/auth/signup/route.ts
+
+# EXPECTED (good):
+#   import { getOrCreateEnterpriseForDomain } from '@/lib/db/enterprises';
+#
+# NOT EXPECTED (legacy - must fix):
+#   import { getOrCreateTenantForDomain } from '@/lib/db/tenants';
+
+# Automated check
+if grep -q "getOrCreateTenantForDomain" app/api/auth/signup/route.ts; then
+  echo "❌ FAIL: Signup still calls legacy getOrCreateTenantForDomain"
+  echo "   Must call getOrCreateEnterpriseForDomain instead"
+  exit 1
+fi
+
+if grep -q "getOrCreateEnterpriseForDomain" app/api/auth/signup/route.ts; then
+  echo "✅ PASS: Signup calls getOrCreateEnterpriseForDomain"
+fi
+```
+
+### 7.2 SQL Column Name Check
+
+**SQL queries must use correct column names.**
+
+```bash
+echo "=== SQL COLUMN NAMES ==="
+
+# Tables that DON'T use 'id' as primary key
+declare -A TABLE_PK=(
+  ["enterprises"]="enterprise_id"
+  ["workspaces"]="workspace_id"
+)
+
+for table in "${!TABLE_PK[@]}"; do
+  pk="${TABLE_PK[$table]}"
+
+  # Find incorrect usage: FROM table WHERE id =
+  bad_queries=$(grep -rn "FROM $table" lib/ app/ --include="*.ts" | grep "WHERE id =")
+
+  if [ -n "$bad_queries" ]; then
+    echo "❌ FAIL: Found 'WHERE id =' on $table (should be $pk)"
+    echo "$bad_queries"
+    exit 1
+  fi
+done
+
+echo "✅ PASS: All SQL column names correct"
+```
+
+### 7.3 File Existence Check
+
+**If claiming to have created files, verify they exist.**
+
+```bash
+echo "=== FILE EXISTENCE ==="
+
+# Files that SHOULD exist for enterprise management
+REQUIRED_FILES=(
+  "lib/db/enterprises.ts"
+  "lib/db/workspaces.ts"
+  "app/api/enterprise/route.ts"
+  "app/api/enterprise/users/route.ts"
+  "app/api/enterprise/workspaces/route.ts"
+)
+
+for file in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "$file" ]; then
+    echo "❌ FAIL: Required file missing: $file"
+    exit 1
+  fi
+done
+
+echo "✅ PASS: All required files exist"
+```
+
+### 7.4 Role Taxonomy Check
+
+**Role names must be consistent (either old OR new, not mixed).**
+
+```bash
+echo "=== ROLE TAXONOMY ==="
+
+# Check for mixed role taxonomy
+OLD_ROLES="TENANT_USER|TENANT_ADMIN"
+NEW_ROLES="ENTERPRISE_USER|ENTERPRISE_ADMIN|INDIVIDUAL_USER"
+
+uses_old=$(grep -rn "$OLD_ROLES" lib/db/ lib/security/ --include="*.ts" | wc -l)
+uses_new=$(grep -rn "$NEW_ROLES" lib/db/ lib/security/ --include="*.ts" | wc -l)
+
+if [ "$uses_old" -gt 0 ] && [ "$uses_new" -gt 0 ]; then
+  echo "⚠️ WARNING: Mixed role taxonomy detected"
+  echo "   Old roles (TENANT_*): $uses_old occurrences"
+  echo "   New roles (ENTERPRISE_*): $uses_new occurrences"
+  echo "   Consider migrating to consistent taxonomy"
+fi
+```
+
+### 7.5 End-to-End Flow Trace
+
+**Trace the full path from user action to database write.**
+
+```
+USER ACTION → UI COMPONENT → API ROUTE → LIB FUNCTION → DATABASE → RESPONSE
+    ↓              ↓              ↓            ↓            ↓          ↓
+  signup     AuthForm.tsx    /api/signup   createUser   enterprises  session
+                               ↓               ↓            ↓
+                         Must call:        Must call:   Must write:
+                         createUser    getOrCreate...   enterprises
+                                                        (NOT tenants)
+```
+
+**For each critical path, verify:**
+
+| Step | What to Check | Command |
+|------|---------------|---------|
+| Entry point | Calls correct function | `grep -n "functionName" entry_file.ts` |
+| Lib function | Writes to correct table | `grep -n "INSERT INTO" lib_file.ts` |
+| Table | Has correct columns | `psql -c "\d table_name"` |
+
+---
+
+## WIRING REPORT FORMAT (Updated v2.2)
+
+```
+## Wiring Verification Report
+
+### What Was Implemented
+- [List files/features]
+
+### STANDARD WIRING CHECKS
+| Component | Connected To | Status |
+|-----------|--------------|--------|
+| [Component] | [Target] | ✅/❌ |
+
+### BEHAVIOR TRACE CHECKS (v2.2)
+| Check | Status | Details |
+|-------|--------|---------|
+| Entry Point Wiring | ✅/❌ | signup calls getOrCreateEnterpriseForDomain |
+| SQL Column Names | ✅/❌ | enterprises uses enterprise_id |
+| File Existence | ✅/❌ | All claimed files exist |
+| Role Taxonomy | ✅/❌ | Consistent ENTERPRISE_* usage |
+
+### Flow Trace
+USER → [Component] → [API] → [Lib] → [DB] → [Response] → [UI Update]
+      ✅           ✅       ✅      ✅      ✅           ✅
+
+### Tests Performed
+- [ ] API endpoint responds correctly
+- [ ] Frontend calls API
+- [ ] Database read/write works
+- [ ] UI updates on response
+- [ ] Entry point calls correct function (v2.2)
+- [ ] SQL uses correct column names (v2.2)
+
+### Missing Wires Found
+- [List any gaps discovered]
+
+### Fixes Applied
+- [List any fixes made]
+```
+
+---
+
+## LESSONS FROM HOSTILE AUDIT (User & Enterprise v1.1)
+
+**The following failures are now caught by Step 7:**
+
+| Failure | What Happened | How Step 7 Prevents |
+|---------|---------------|---------------------|
+| Entry point disconnect | signup called getOrCreateTenantForDomain | 7.1 checks entry point calls |
+| SQL column bug | WHERE id = $1 on enterprises table | 7.2 verifies column names |
+| Missing files | lib/enterprise/* claimed but empty | 7.3 verifies existence |
+| Role taxonomy | TENANT_USER vs ENTERPRISE_USER | 7.4 checks consistency |
+| No E2E trace | Files existed but weren't connected | 7.5 traces full flow |
+
+**Root Cause:** TC (Claude) writes excellent individual files but leaves them disconnected.
+
+**Prevention:** Step 7 verifies the CONNECTION, not just existence.
