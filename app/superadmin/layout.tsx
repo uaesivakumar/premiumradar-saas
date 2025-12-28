@@ -201,8 +201,8 @@ export default function SuperAdminLayout({
                 onClick={() => setOpenDropdown(openDropdown === 'platform' ? null : 'platform')}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                   isPlatformActive
-                    ? 'bg-violet-600 text-white'
-                    : 'text-violet-400 hover:text-violet-300 hover:bg-violet-500/20 border border-violet-500/30'
+                    ? 'bg-neutral-800 text-white'
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
                 }`}
               >
                 <Shield className="w-3.5 h-3.5" />
