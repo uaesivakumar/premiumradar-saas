@@ -1,0 +1,23 @@
+{
+  "session_id": "s261-s267-heavy-lift",
+  "started_at": "2025-12-24T15:00:00Z",
+  "sprint_range": "S261-S267",
+  "mode": "heavy-lift-continuous",
+  "deviation_policy": "ZERO",
+  "current_sprint": "S261",
+  "environment": {
+    "staging_base_url": "https://upr.sivakumar.ai",
+    "staging_service_name": "premiumradar-saas-staging",
+    "os_base_url": "https://upr-os-service-191599223867.us-central1.run.app",
+    "health_endpoint": "/api/health",
+    "region": "us-central1",
+    "project": "applied-algebra-474804-e6"
+  },
+  "guardrails": {
+    "no_schema_drift": true,
+    "no_behavior_mutation": true,
+    "bte_read_only": true,
+    "all_writes_auditable": true,
+    "no_partial_success": true
+  }
+}

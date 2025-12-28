@@ -243,7 +243,7 @@ export function SubVerticalStep() {
               validateKey(e.target.value.toLowerCase());
             }}
             placeholder="employee_banking"
-            className={`w-full px-3 py-2 border rounded-lg font-mono text-sm ${
+            className={`w-full px-3 py-2 border rounded-lg font-mono text-sm text-gray-900 bg-white placeholder:text-gray-400 ${
               keyError ? 'border-red-300' : 'border-gray-300'
             } focus:outline-none focus:ring-2 focus:ring-blue-500`}
             disabled={isSubmitting}
@@ -264,7 +264,7 @@ export function SubVerticalStep() {
               validateName(e.target.value);
             }}
             placeholder="Employee Banking"
-            className={`w-full px-3 py-2 border rounded-lg text-sm ${
+            className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white placeholder:text-gray-400 ${
               nameError ? 'border-red-300' : 'border-gray-300'
             } focus:outline-none focus:ring-2 focus:ring-blue-500`}
             disabled={isSubmitting}
@@ -285,7 +285,7 @@ export function SubVerticalStep() {
               setRelatedEntityTypes((prev) => prev.filter((t) => t !== e.target.value));
               setEntityError(null);
             }}
-            className={`w-full px-3 py-2 border rounded-lg text-sm ${
+            className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white ${
               entityError ? 'border-red-300' : 'border-gray-300'
             } focus:outline-none focus:ring-2 focus:ring-blue-500`}
             disabled={isSubmitting}
@@ -337,7 +337,7 @@ export function SubVerticalStep() {
                 setDefaultAgent(e.target.value);
                 setAgentError(null);
               }}
-              className={`w-full px-3 py-2 border rounded-lg text-sm ${
+              className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white ${
                 agentError ? 'border-red-300' : 'border-gray-300'
               } focus:outline-none focus:ring-2 focus:ring-blue-500`}
               disabled={isSubmitting}

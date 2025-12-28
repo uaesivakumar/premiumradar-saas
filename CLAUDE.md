@@ -304,3 +304,57 @@ SIVA loads persona from sub_vertical and applies all rules dynamically.
 
 - SIVA API Contract: `docs/SIVA_API_CONTRACT.md`
 - Vertical Intelligence Report: `docs/SIVA_MULTI_VERTICAL_ARCHITECTURE.md`
+
+---
+
+## Unified Session Management
+
+**Source of Truth:** `/Users/skc/Projects/UPR/.claude/session/`
+
+Both repos (upr-os and premiumradar-saas) share a unified session:
+- `latest-handoff.md` - Cross-repo handoff document
+- `current.json` - Unified session state for both repos
+- `fetch-sprint.mjs` - Query Notion for sprint details
+
+**Session Start:**
+```bash
+# Load handoff (symlinked to shared location)
+cat .claude/session/latest-handoff.md
+
+# Check current state
+cat .claude/session/current.json
+```
+
+**Query Notion Sprints:**
+```bash
+# Set token
+export NOTION_TOKEN=$(gcloud secrets versions access latest --secret=NOTION_TOKEN_SAAS)
+
+# Query specific sprint features (replace 268 with sprint number)
+NOTION_TOKEN="$NOTION_TOKEN" node -e "
+import { Client } from '@notionhq/client';
+const notion = new Client({ auth: process.env.NOTION_TOKEN });
+const r = await notion.databases.query({
+  database_id: '26ae5afe-4b5f-4d97-b402-5c459f188944',
+  filter: { property: 'Sprint', number: { equals: 268 } }
+});
+r.results.forEach((f,i) => {
+  const name = f.properties.Features?.title?.[0]?.plain_text;
+  const status = f.properties.Status?.select?.name || 'Not Started';
+  console.log((i+1) + '. ' + name + ' [' + status + ']');
+});
+"
+```
+
+**Session End:**
+Update the shared handoff at `/Users/skc/Projects/UPR/.claude/session/latest-handoff.md`
+
+---
+
+## 5 Architectural Laws
+
+1. **Authority precedes intelligence** - UPR-OS decides what SIVA can do
+2. **Persona is policy, not personality** - Persona defines capability boundaries
+3. **SIVA never mutates the world** - SIVA interprets, OS acts
+4. **Every output must be explainable** - No black boxes
+5. **If it cannot be replayed, it did not happen** - Deterministic replay required

@@ -152,7 +152,7 @@ export function VerticalStep() {
               validateKey(e.target.value.toLowerCase());
             }}
             placeholder="saas_sales"
-            className={`w-full px-3 py-2 border rounded-lg font-mono text-sm text-gray-900 placeholder-gray-400 ${
+            className={`w-full px-3 py-2 border rounded-lg font-mono text-sm text-gray-900 bg-white placeholder-gray-400 ${
               keyError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
             } focus:outline-none focus:ring-2`}
             disabled={isSubmitting}
@@ -176,7 +176,7 @@ export function VerticalStep() {
               validateName(e.target.value);
             }}
             placeholder="SaaS Sales"
-            className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 placeholder-gray-400 ${
+            className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white placeholder-gray-400 ${
               nameError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
             } focus:outline-none focus:ring-2`}
             disabled={isSubmitting}

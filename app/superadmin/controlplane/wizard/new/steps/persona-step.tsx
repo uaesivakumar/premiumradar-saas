@@ -320,7 +320,7 @@ export function PersonaStep() {
                 validateKey(e.target.value.toLowerCase());
               }}
               placeholder="eb_rm"
-              className={`w-full px-3 py-2 border rounded-lg font-mono text-sm ${
+              className={`w-full px-3 py-2 border rounded-lg font-mono text-sm text-gray-900 bg-white placeholder:text-gray-400 ${
                 keyError ? 'border-red-300' : 'border-gray-300'
               } focus:outline-none focus:ring-2 focus:ring-blue-500`}
               disabled={isSubmitting}
@@ -341,7 +341,7 @@ export function PersonaStep() {
                 validateName(e.target.value);
               }}
               placeholder="Employee Banking RM"
-              className={`w-full px-3 py-2 border rounded-lg text-sm ${
+              className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white placeholder:text-gray-400 ${
                 nameError ? 'border-red-300' : 'border-gray-300'
               } focus:outline-none focus:ring-2 focus:ring-blue-500`}
               disabled={isSubmitting}
@@ -359,7 +359,7 @@ export function PersonaStep() {
               id="scope"
               value={scope}
               onChange={(e) => setScope(e.target.value as 'GLOBAL' | 'REGIONAL' | 'LOCAL')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isSubmitting}
             >
               {SCOPES.map((s) => (
@@ -386,7 +386,7 @@ export function PersonaStep() {
                   setRegionCode(e.target.value);
                   setRegionError(null);
                 }}
-                className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 ${
+                className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white ${
                   regionError ? 'border-red-300' : 'border-gray-300'
                 } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 disabled={isSubmitting}
