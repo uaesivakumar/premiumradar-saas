@@ -33,6 +33,7 @@ import {
   History,  // Phase1A: Policy version history
   Plus,     // Phase1A: Create new version
 } from 'lucide-react';
+import { HardenButton } from '@/components/controlplane/HardenButton';
 // S274: Removed Edit2, Save - no mutation affordances in read-only view
 // Phase1A: Re-added Plus for policy versioning UI
 
@@ -714,13 +715,22 @@ function VerticalItem({
                       </span>
                     )}
                   </div>
-                  {/* S276-F3: SIVA tooltip for clarity */}
-                  <span
-                    className="text-[10px] text-neutral-600 cursor-help"
-                    title={sv.default_agent === 'SIVA' ? 'SIVA = Sales Intelligence Virtual Assistant' : undefined}
-                  >
-                    {sv.default_agent}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {/* S338-F1: Harden button for sub-vertical */}
+                    <HardenButton
+                      entityType="sub-vertical"
+                      entityId={sv.id}
+                      entityName={sv.name}
+                      size="sm"
+                    />
+                    {/* S276-F3: SIVA tooltip for clarity */}
+                    <span
+                      className="text-[10px] text-neutral-600 cursor-help"
+                      title={sv.default_agent === 'SIVA' ? 'SIVA = Sales Intelligence Virtual Assistant' : undefined}
+                    >
+                      {sv.default_agent}
+                    </span>
+                  </div>
                 </div>
                 {subPersonas.map((persona) => {
                   const personaStatus = svStatus?.personas.find(p => p.id === persona.id);
@@ -752,7 +762,16 @@ function VerticalItem({
                           </p>
                           <p className="text-[10px] text-neutral-600">{persona.key}</p>
                         </div>
-                        <Users className="w-3 h-3 text-neutral-600" />
+                        <div className="flex items-center gap-2">
+                          {/* S338-F1: Harden button for persona */}
+                          <HardenButton
+                            entityType="persona"
+                            entityId={persona.id}
+                            entityName={persona.name}
+                            size="sm"
+                          />
+                          <Users className="w-3 h-3 text-neutral-600" />
+                        </div>
                       </button>
                       {/* S276-F4: Removed redundant "Bindings: Active" - reduces visual noise */}
                     </div>

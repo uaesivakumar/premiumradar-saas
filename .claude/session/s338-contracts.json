@@ -1,0 +1,378 @@
+{
+  "sprint": "S338",
+  "sprint_name": "Control Plane HARDEN MODE",
+  "generated_at": "2025-12-28T17:15:00Z",
+  "feature_contracts": [
+    {
+      "feature_id": "S338-F1",
+      "feature_name": "Harden Mode entry point from Control Plane main view",
+      "priority": "P0",
+      "ui_entrypoint": {
+        "type": "button",
+        "path": "app/superadmin/controlplane/page.tsx",
+        "renders_at": "/superadmin/controlplane",
+        "action": "Opens HardenModePanel for selected entity"
+      },
+      "files_created": [
+        "app/superadmin/controlplane/harden/page.tsx",
+        "app/superadmin/controlplane/harden/[entityType]/[entityId]/page.tsx",
+        "components/controlplane/HardenButton.tsx"
+      ],
+      "wiring_checks": [
+        {
+          "type": "import_exists",
+          "from": "app/superadmin/controlplane/page.tsx",
+          "imports": "HardenButton"
+        },
+        {
+          "type": "button_renders",
+          "component": "HardenButton",
+          "next_to": "sub-vertical row in list"
+        },
+        {
+          "type": "navigation",
+          "from": "HardenButton onClick",
+          "to": "/superadmin/controlplane/harden/[entityType]/[entityId]"
+        }
+      ],
+      "staging_verification_steps": [
+        {
+          "type": "element_exists",
+          "page": "/superadmin/controlplane",
+          "selector": "[data-testid='harden-button']"
+        }
+      ]
+    },
+    {
+      "feature_id": "S338-F2",
+      "feature_name": "Sub-Vertical audit panel (read + limited edit)",
+      "priority": "P0",
+      "ui_entrypoint": {
+        "type": "panel",
+        "path": "app/superadmin/controlplane/harden/sub-vertical/[id]/page.tsx",
+        "renders_at": "/superadmin/controlplane/harden/sub-vertical/[id]"
+      },
+      "files_created": [
+        "app/superadmin/controlplane/harden/sub-vertical/[id]/page.tsx",
+        "components/controlplane/harden/SubVerticalAuditPanel.tsx",
+        "components/controlplane/harden/MVTCompleteness.tsx",
+        "components/controlplane/harden/ICPEditor.tsx",
+        "components/controlplane/harden/KillRulesEditor.tsx"
+      ],
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/audit",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["sub_vertical", "mvt_status", "icp", "kill_rules", "signals"]
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "data"]
+          }
+        }
+      ],
+      "wiring_checks": [
+        {
+          "type": "api_called",
+          "component": "SubVerticalAuditPanel.tsx",
+          "calls": "/api/superadmin/controlplane/sub-verticals/[id]/audit"
+        },
+        {
+          "type": "component_renders",
+          "parent": "SubVerticalAuditPanel",
+          "children": ["MVTCompleteness", "ICPEditor", "KillRulesEditor"]
+        }
+      ]
+    },
+    {
+      "feature_id": "S338-F3",
+      "feature_name": "Persona editor panel",
+      "priority": "P0",
+      "ui_entrypoint": {
+        "type": "panel",
+        "path": "app/superadmin/controlplane/harden/persona/[id]/page.tsx",
+        "renders_at": "/superadmin/controlplane/harden/persona/[id]"
+      },
+      "files_created": [
+        "app/superadmin/controlplane/harden/persona/[id]/page.tsx",
+        "components/controlplane/harden/PersonaEditorPanel.tsx",
+        "components/controlplane/harden/PolicyVersionSelector.tsx",
+        "components/controlplane/harden/PersonaPolicyLinkage.tsx"
+      ],
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/personas/[id]",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["persona", "active_policy", "available_policies"]
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/superadmin/controlplane/personas/[id]",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "data"]
+          }
+        }
+      ],
+      "wiring_checks": [
+        {
+          "type": "api_called",
+          "component": "PersonaEditorPanel.tsx",
+          "calls": "/api/superadmin/controlplane/personas/[id]"
+        },
+        {
+          "type": "form_submits_to",
+          "component": "PersonaEditorPanel",
+          "method": "PATCH",
+          "endpoint": "/api/superadmin/controlplane/personas/[id]"
+        }
+      ]
+    },
+    {
+      "feature_id": "S338-F4",
+      "feature_name": "Policy editor panel with versioning",
+      "priority": "P0",
+      "ui_entrypoint": {
+        "type": "panel",
+        "path": "app/superadmin/controlplane/harden/policy/[id]/page.tsx",
+        "renders_at": "/superadmin/controlplane/harden/policy/[id]"
+      },
+      "files_created": [
+        "app/superadmin/controlplane/harden/policy/[id]/page.tsx",
+        "components/controlplane/harden/PolicyEditorPanel.tsx",
+        "components/controlplane/harden/AllowedIntentsEditor.tsx",
+        "components/controlplane/harden/AllowedToolsEditor.tsx",
+        "components/controlplane/harden/ForbiddenOutputsEditor.tsx",
+        "components/controlplane/harden/PolicyVersionHistory.tsx"
+      ],
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/policies/[id]",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["policy", "version_history"]
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/superadmin/controlplane/policies/[id]",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "data", "new_version"]
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/policies/[id]/activate",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["success", "active_version"]
+          }
+        }
+      ],
+      "wiring_checks": [
+        {
+          "type": "api_called",
+          "component": "PolicyEditorPanel.tsx",
+          "calls": "/api/superadmin/controlplane/policies/[id]"
+        },
+        {
+          "type": "version_increment",
+          "on_save": "policy version increments (v4 -> v5)"
+        }
+      ]
+    },
+    {
+      "feature_id": "S338-F5",
+      "feature_name": "Signals audit panel",
+      "priority": "P0",
+      "ui_entrypoint": {
+        "type": "panel",
+        "path": "components/controlplane/harden/SignalsAuditPanel.tsx",
+        "renders_in": "SubVerticalAuditPanel"
+      },
+      "files_created": [
+        "components/controlplane/harden/SignalsAuditPanel.tsx",
+        "components/controlplane/harden/SignalBindingRow.tsx",
+        "components/controlplane/harden/SignalStatusBadge.tsx"
+      ],
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/signals",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": ["signals", "allowed", "forbidden", "missing"]
+          }
+        }
+      ],
+      "wiring_checks": [
+        {
+          "type": "api_called",
+          "component": "SignalsAuditPanel.tsx",
+          "calls": "/api/superadmin/controlplane/sub-verticals/[id]/signals"
+        },
+        {
+          "type": "status_displayed",
+          "for_each_signal": ["ALLOWED", "FORBIDDEN", "MISSING"]
+        }
+      ]
+    },
+    {
+      "feature_id": "S338-F6",
+      "feature_name": "Runtime eligibility breakdown (explainable)",
+      "priority": "P0",
+      "ui_entrypoint": {
+        "type": "panel",
+        "path": "components/controlplane/harden/RuntimeBreakdown.tsx",
+        "renders_in": "All harden panels"
+      },
+      "files_created": [
+        "components/controlplane/harden/RuntimeBreakdown.tsx",
+        "components/controlplane/harden/RuntimeCheckItem.tsx"
+      ],
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/runtime-check/[entityType]/[entityId]",
+          "expected_response_shape": {
+            "success_status": 200,
+            "required_fields": [
+              "vertical_exists",
+              "sub_vertical_exists",
+              "persona_exists",
+              "policy_active",
+              "mvt_complete",
+              "signals_resolved",
+              "envelope_buildable",
+              "overall_eligible"
+            ]
+          }
+        }
+      ],
+      "wiring_checks": [
+        {
+          "type": "api_called",
+          "component": "RuntimeBreakdown.tsx",
+          "calls": "/api/superadmin/controlplane/runtime-check/[entityType]/[entityId]"
+        },
+        {
+          "type": "checklist_displayed",
+          "items": 7,
+          "each_shows": "pass/fail with reason"
+        }
+      ]
+    },
+    {
+      "feature_id": "S338-F7",
+      "feature_name": "Harden Mode API endpoints",
+      "priority": "P0",
+      "ui_entrypoint": null,
+      "files_created": [
+        "app/api/superadmin/controlplane/sub-verticals/[id]/audit/route.ts",
+        "app/api/superadmin/controlplane/sub-verticals/[id]/signals/route.ts",
+        "app/api/superadmin/controlplane/personas/[id]/route.ts",
+        "app/api/superadmin/controlplane/policies/[id]/route.ts",
+        "app/api/superadmin/controlplane/policies/[id]/activate/route.ts",
+        "app/api/superadmin/controlplane/runtime-check/[entityType]/[entityId]/route.ts"
+      ],
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/audit",
+          "handler": "Sub-vertical audit data with MVT, ICP, kill rules"
+        },
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/signals",
+          "handler": "Signals bound to sub-vertical with status"
+        },
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/personas/[id]",
+          "handler": "Persona with active policy and available versions"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/superadmin/controlplane/personas/[id]",
+          "handler": "Update persona fields (scope, region, description)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/policies/[id]",
+          "handler": "Policy with version history"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/superadmin/controlplane/policies/[id]",
+          "handler": "Update policy (creates new version)"
+        },
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/policies/[id]/activate",
+          "handler": "Activate specific policy version"
+        },
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/runtime-check/[entityType]/[entityId]",
+          "handler": "Runtime eligibility breakdown (7 checks)"
+        }
+      ],
+      "sql_queries": [
+        {
+          "table": "os_sub_verticals",
+          "operations": ["SELECT", "UPDATE"],
+          "primary_key": "id"
+        },
+        {
+          "table": "os_personas",
+          "operations": ["SELECT", "UPDATE"],
+          "primary_key": "id"
+        },
+        {
+          "table": "os_persona_policies",
+          "operations": ["SELECT", "INSERT", "UPDATE"],
+          "primary_key": "id"
+        }
+      ]
+    }
+  ],
+  "anti_pattern_checks": {
+    "files_to_verify": [
+      "app/superadmin/controlplane/harden/page.tsx",
+      "components/controlplane/HardenButton.tsx",
+      "components/controlplane/harden/SubVerticalAuditPanel.tsx",
+      "components/controlplane/harden/PersonaEditorPanel.tsx",
+      "components/controlplane/harden/PolicyEditorPanel.tsx",
+      "components/controlplane/harden/SignalsAuditPanel.tsx",
+      "components/controlplane/harden/RuntimeBreakdown.tsx"
+    ],
+    "entry_point_wiring": {
+      "entry_point": "app/superadmin/controlplane/page.tsx",
+      "must_call": ["HardenButton"],
+      "must_not_call": []
+    },
+    "sql_column_rules": {
+      "os_sub_verticals": "id",
+      "os_personas": "id",
+      "os_persona_policies": "id",
+      "os_verticals": "id"
+    }
+  },
+  "summary": {
+    "total_features": 7,
+    "total_files_to_create": 22,
+    "total_api_endpoints": 8,
+    "total_wiring_checks": 14
+  }
+}

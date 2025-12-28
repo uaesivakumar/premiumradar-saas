@@ -20,8 +20,10 @@ export type AuditAction =
   | 'delete_sub_vertical'
   | 'create_persona'
   | 'update_persona'
+  | 'patch_persona'  // S338: Partial update for Harden Mode
   | 'delete_persona'
   | 'update_policy'
+  | 'patch_policy'  // S338: Partial update for Harden Mode
   | 'stage_policy'
   | 'activate_policy'
   | 'deprecate_policy'

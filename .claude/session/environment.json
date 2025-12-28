@@ -1,0 +1,10 @@
+{
+  "staging_base_url": "https://upr.sivakumar.ai",
+  "staging_service_name": "premiumradar-saas-staging",
+  "os_service_name": "upr-os-service",
+  "os_base_url": "https://upr-os-service-191599223867.us-central1.run.app",
+  "health_endpoint": "/api/health",
+  "diag_endpoint": "/__diag",
+  "region": "us-central1",
+  "project": "applied-algebra-474804-e6"
+}
