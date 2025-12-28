@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { validateSuperAdminSession } from '@/lib/superadmin-auth';
 
 const OS_BASE_URL = process.env.UPR_OS_URL || 'https://upr-os-service-191599223867.us-central1.run.app';
 const PR_OS_TOKEN = process.env.PR_OS_TOKEN || '';
@@ -483,6 +484,12 @@ function generateFounderReportHTML(data: FounderReportData): string {
 }
 
 export async function GET(request: NextRequest) {
+  // Verify super admin session
+  const sessionResult = await validateSuperAdminSession();
+  if (!sessionResult.valid) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const suiteKey = searchParams.get('suite_key');
   const format = searchParams.get('format') || 'html';

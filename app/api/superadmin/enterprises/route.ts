@@ -4,10 +4,26 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
+import { verifySession } from '@/lib/superadmin/security';
 import { query } from '@/lib/db/client';
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify super admin session
+    const headersList = await headers();
+    const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+               headersList.get('x-real-ip') || 'unknown';
+    const userAgent = headersList.get('user-agent') || 'unknown';
+
+    const sessionResult = await verifySession(ip, userAgent);
+    if (!sessionResult.valid) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     // Get query params for filtering
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');

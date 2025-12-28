@@ -4,10 +4,26 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
+import { verifySession } from '@/lib/superadmin/security';
 import { query } from '@/lib/db/client';
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify super admin session
+    const headersList = await headers();
+    const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+               headersList.get('x-real-ip') || 'unknown';
+    const userAgent = headersList.get('user-agent') || 'unknown';
+
+    const sessionResult = await verifySession(ip, userAgent);
+    if (!sessionResult.valid) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     // Get query params for filtering
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
@@ -15,49 +31,68 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Check if audit_log table exists
-    const tableCheck = await query<{ exists: boolean }>(
-      `SELECT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_name = 'audit_log'
-      ) as exists`
-    );
+    // Check if audit_log table exists (exists returns string 'true'/'false' in some drivers)
+    let hasAuditLogTable = false;
+    try {
+      const tableCheck = await query<{ exists: boolean | string }>(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_name = 'audit_log'
+        ) as exists`
+      );
+      hasAuditLogTable = tableCheck[0]?.exists === true || tableCheck[0]?.exists === 'true';
+    } catch {
+      // Table check failed, fall through to derived activity
+      hasAuditLogTable = false;
+    }
 
-    if (!tableCheck[0]?.exists) {
+    if (!hasAuditLogTable) {
       // Return recent user activity as fallback
-      const recentUsers = await query<{
-        id: string;
-        email: string;
-        action: string;
-        created_at: Date;
-      }>(
-        `SELECT
-          id,
-          email,
-          'USER_CREATED' as action,
-          created_at
-        FROM users
-        ORDER BY created_at DESC
-        LIMIT $1`,
-        [limit]
-      );
+      // Wrap in try/catch to handle missing tables gracefully
+      let recentUsers: Array<{ id: string; email: string; action: string; created_at: Date }> = [];
+      let recentEnterprises: Array<{ enterprise_id: string; name: string; action: string; created_at: Date }> = [];
 
-      const recentEnterprises = await query<{
-        enterprise_id: string;
-        name: string;
-        action: string;
-        created_at: Date;
-      }>(
-        `SELECT
-          enterprise_id,
-          name,
-          'ENTERPRISE_CREATED' as action,
-          created_at
-        FROM enterprises
-        ORDER BY created_at DESC
-        LIMIT $1`,
-        [limit]
-      );
+      try {
+        recentUsers = await query<{
+          id: string;
+          email: string;
+          action: string;
+          created_at: Date;
+        }>(
+          `SELECT
+            id,
+            email,
+            'USER_CREATED' as action,
+            created_at
+          FROM users
+          ORDER BY created_at DESC
+          LIMIT $1`,
+          [limit]
+        );
+      } catch (e) {
+        console.log('[Activity] Could not fetch users:', e);
+      }
+
+      try {
+        recentEnterprises = await query<{
+          enterprise_id: string;
+          name: string;
+          action: string;
+          created_at: Date;
+        }>(
+          `SELECT
+            enterprise_id,
+            name,
+            'ENTERPRISE_CREATED' as action,
+            created_at
+          FROM enterprises
+          ORDER BY created_at DESC
+          LIMIT $1`,
+          [limit]
+        );
+      } catch (e) {
+        console.log('[Activity] Could not fetch enterprises:', e);
+      }
 
       // Combine and sort
       const activities = [
