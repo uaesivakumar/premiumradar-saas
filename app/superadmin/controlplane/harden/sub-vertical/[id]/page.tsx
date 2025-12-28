@@ -30,6 +30,7 @@ import {
   Zap,
   AlertTriangle,
 } from 'lucide-react';
+import { RuntimeReadinessPanel } from '@/components/controlplane/harden/RuntimeReadinessPanel';
 
 interface SubVerticalAudit {
   id: string;
@@ -330,6 +331,12 @@ export default function SubVerticalHardenPage() {
                 )}
               </div>
             )}
+
+            {/* S339: Runtime Readiness Panel */}
+            <RuntimeReadinessPanel
+              entityType="sub-vertical"
+              entityId={id}
+            />
           </div>
 
           {/* Right Column - Editable Fields */}

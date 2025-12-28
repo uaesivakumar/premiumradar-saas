@@ -25,6 +25,7 @@ import {
   MapPin,
   Target,
 } from 'lucide-react';
+import { RuntimeReadinessPanel } from '@/components/controlplane/harden/RuntimeReadinessPanel';
 
 // =============================================================================
 // TYPES
@@ -311,6 +312,13 @@ export default function PersonaHardenPage() {
             <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
+
+        {/* S339: Runtime Readiness Panel */}
+        <RuntimeReadinessPanel
+          entityType="persona"
+          entityId={personaId}
+          className="mb-6"
+        />
 
         <div className="grid grid-cols-12 gap-6">
           {/* Left Column - Persona Details */}

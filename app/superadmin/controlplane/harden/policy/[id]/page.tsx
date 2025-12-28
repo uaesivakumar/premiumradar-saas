@@ -29,6 +29,7 @@ import {
   Ban,
   Wrench,
 } from 'lucide-react';
+import { RuntimeReadinessPanel } from '@/components/controlplane/harden/RuntimeReadinessPanel';
 
 // =============================================================================
 // TYPES
@@ -399,6 +400,15 @@ export default function PolicyHardenPage() {
               <p className="text-neutral-500 text-xs">No version history available</p>
             )}
           </div>
+        )}
+
+        {/* S339: Runtime Readiness Panel - Shows persona's runtime readiness */}
+        {policy.persona_id && (
+          <RuntimeReadinessPanel
+            entityType="persona"
+            entityId={policy.persona_id}
+            className="mb-6"
+          />
         )}
 
         {/* Policy Fields */}
