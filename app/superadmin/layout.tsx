@@ -183,7 +183,7 @@ export default function SuperAdminLayout({
                   href={item.href}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                     isActive
-                      ? 'bg-neutral-800 text-white'
+                      ? 'bg-white text-black'
                       : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
                   }`}
                 >
@@ -201,7 +201,7 @@ export default function SuperAdminLayout({
                 onClick={() => setOpenDropdown(openDropdown === 'platform' ? null : 'platform')}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                   isPlatformActive
-                    ? 'bg-neutral-800 text-white'
+                    ? 'bg-white text-black'
                     : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
                 }`}
               >
@@ -254,7 +254,7 @@ export default function SuperAdminLayout({
                 onClick={() => setOpenDropdown(openDropdown === 'admin' ? null : 'admin')}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                   isAdminActive
-                    ? 'bg-neutral-800 text-white'
+                    ? 'bg-white text-black'
                     : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
                 }`}
               >

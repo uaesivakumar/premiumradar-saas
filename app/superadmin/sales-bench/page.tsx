@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Component, ReactNode, ErrorInfo } from 'react';
+import { useState, useEffect, useMemo, Component, ReactNode, ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FlaskConical,
@@ -259,24 +259,34 @@ function SalesBenchDashboardInner() {
   const [filterVertical, setFilterVertical] = useState<string>('all');
   const [filterSubVertical, setFilterSubVertical] = useState<string>('all');
 
-  // Derived: unique verticals and sub-verticals from suites
-  const verticals = [...new Set(suites.map(s => s.vertical).filter(Boolean))];
-  const subVerticals = [...new Set(
-    suites
-      .filter(s => filterVertical === 'all' || s.vertical === filterVertical)
-      .map(s => s.sub_vertical)
-      .filter(Boolean)
-  )];
+  // Derived: unique verticals and sub-verticals from suites (memoized)
+  const verticals = useMemo(() =>
+    [...new Set(suites.map(s => s.vertical).filter(Boolean))],
+    [suites]
+  );
 
-  // Filtered suites based on selected filters
-  const filteredSuites = suites.filter(s => {
-    if (filterVertical !== 'all' && s.vertical !== filterVertical) return false;
-    if (filterSubVertical !== 'all' && s.sub_vertical !== filterSubVertical) return false;
-    return true;
-  });
+  const subVerticals = useMemo(() =>
+    [...new Set(
+      suites
+        .filter(s => filterVertical === 'all' || s.vertical === filterVertical)
+        .map(s => s.sub_vertical)
+        .filter(Boolean)
+    )],
+    [suites, filterVertical]
+  );
 
-  // Recalculate stats for filtered suites
-  const filteredStats = (() => {
+  // Filtered suites based on selected filters (memoized)
+  const filteredSuites = useMemo(() =>
+    suites.filter(s => {
+      if (filterVertical !== 'all' && s.vertical !== filterVertical) return false;
+      if (filterSubVertical !== 'all' && s.sub_vertical !== filterSubVertical) return false;
+      return true;
+    }),
+    [suites, filterVertical, filterSubVertical]
+  );
+
+  // Recalculate stats for filtered suites (memoized)
+  const filteredStats = useMemo(() => {
     if (!stats) return null;
     const suitesWithRuns = filteredSuites.filter(s => s.latest_run?.golden_pass_rate != null);
     const totalRuns = suitesWithRuns.length;
@@ -286,7 +296,7 @@ function SalesBenchDashboardInner() {
     const avgKill = suitesWithRuns.length > 0
       ? suitesWithRuns.reduce((sum, s) => sum + (s.latest_run?.kill_containment_rate || 0), 0) / suitesWithRuns.length
       : 0;
-    const bestSuite = suitesWithRuns.sort((a, b) => {
+    const bestSuite = [...suitesWithRuns].sort((a, b) => {
       const scoreA = (a.latest_run?.golden_pass_rate || 0) + (a.latest_run?.kill_containment_rate || 0);
       const scoreB = (b.latest_run?.golden_pass_rate || 0) + (b.latest_run?.kill_containment_rate || 0);
       return scoreB - scoreA;
@@ -300,7 +310,7 @@ function SalesBenchDashboardInner() {
       avg_kill_containment: avgKill,
       best_performer: bestSuite?.name || '-',
     };
-  })();
+  }, [stats, filteredSuites]);
 
   // Parity Check State
   const [parityStatus, setParityStatus] = useState<ParityStatus | null>(null);
@@ -308,9 +318,12 @@ function SalesBenchDashboardInner() {
   const [parityChecking, setParityChecking] = useState(false);
   const [parityError, setParityError] = useState<string | null>(null);
 
-  // Compute global parity broken status
-  const globalParityBroken = parityResult?.status === 'PARITY_BROKEN' ||
-    (parityStatus?.last_certification?.status === 'PARITY_BROKEN');
+  // Compute global parity broken status (memoized)
+  const globalParityBroken = useMemo(() =>
+    parityResult?.status === 'PARITY_BROKEN' ||
+    (parityStatus?.last_certification?.status === 'PARITY_BROKEN'),
+    [parityResult, parityStatus]
+  );
 
   const fetchParityStatus = async () => {
     try {
