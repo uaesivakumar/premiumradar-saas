@@ -28,6 +28,7 @@ import {
   Zap,
   Ban,
   Wrench,
+  Play,
 } from 'lucide-react';
 import { RuntimeReadinessPanel } from '@/components/controlplane/harden/RuntimeReadinessPanel';
 
@@ -92,8 +93,10 @@ export default function PolicyHardenPage() {
   // UI state
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [activateSuccess, setActivateSuccess] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
 
   // =============================================================================
@@ -195,6 +198,45 @@ export default function PolicyHardenPage() {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleActivate = async () => {
+    if (!policy || !persona || policy.status !== 'DRAFT') return;
+
+    // Confirm activation
+    if (!window.confirm(`Activate Policy v${policy.policy_version}? This will make it the active policy for ${persona.name}.`)) {
+      return;
+    }
+
+    setIsActivating(true);
+    setError(null);
+    setActivateSuccess(false);
+
+    try {
+      const res = await fetch(`/api/superadmin/controlplane/personas/${persona.id}/policy/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          policy_id: policy.id,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to activate policy');
+      }
+
+      setActivateSuccess(true);
+      await loadPolicyData(); // Refresh to show new status
+
+      // Clear success message after 3s
+      setTimeout(() => setActivateSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to activate policy');
+    } finally {
+      setIsActivating(false);
     }
   };
 
@@ -313,6 +355,12 @@ export default function PolicyHardenPage() {
                   Saved
                 </span>
               )}
+              {activateSuccess && (
+                <span className="flex items-center gap-1.5 text-emerald-400 text-sm">
+                  <CheckCircle className="w-4 h-4" />
+                  Activated
+                </span>
+              )}
               <button
                 onClick={() => setShowVersions(!showVersions)}
                 className="flex items-center gap-2 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
@@ -320,6 +368,26 @@ export default function PolicyHardenPage() {
                 <History className="w-4 h-4" />
                 Versions
               </button>
+              {/* Activate button - only for DRAFT policies */}
+              {policy.status === 'DRAFT' && (
+                <button
+                  onClick={handleActivate}
+                  disabled={isActivating || hasChanges}
+                  className={`flex items-center gap-2 px-4 py-2 rounded text-sm font-medium transition-colors ${
+                    !isActivating && !hasChanges
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                  }`}
+                  title={hasChanges ? 'Save changes before activating' : 'Activate this policy version'}
+                >
+                  {isActivating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4" />
+                  )}
+                  {isActivating ? 'Activating...' : 'Activate'}
+                </button>
+              )}
               <button
                 onClick={handleSave}
                 disabled={!hasChanges || isSaving}

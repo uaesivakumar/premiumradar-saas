@@ -155,22 +155,43 @@ function WizardEntryHubContent() {
         if (selectedVertical?.id === verticalId) {
           setSelectedVertical(prev => prev ? { ...prev, sub_verticals: data.data || [] } : null);
         }
+      } else {
+        // API returned error - set empty array so spinner stops
+        setError(data.message || data.error || 'Failed to load sub-verticals');
+        if (selectedVertical?.id === verticalId) {
+          setSelectedVertical(prev => prev ? { ...prev, sub_verticals: [] } : null);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch sub-verticals:', err);
+      setError('Network error loading sub-verticals');
+      if (selectedVertical?.id === verticalId) {
+        setSelectedVertical(prev => prev ? { ...prev, sub_verticals: [] } : null);
+      }
     }
   }
 
   async function fetchPersonas(subVerticalId: string) {
+    setIsLoading(true);
+    setError(null);
     try {
       const response = await fetch(`/api/superadmin/controlplane/sub-verticals/${subVerticalId}/personas`);
       const data = await response.json();
       if (data.success) {
         // Update the selected sub-vertical with personas
         setSelectedSubVertical(prev => prev ? { ...prev, personas: data.data || [] } : null);
+      } else {
+        // API returned error - set empty array so spinner stops
+        setError(data.message || data.error || 'Failed to load personas');
+        setSelectedSubVertical(prev => prev ? { ...prev, personas: [] } : null);
       }
     } catch (err) {
       console.error('Failed to fetch personas:', err);
+      setError('Network error loading personas');
+      // Set empty array to stop spinner
+      setSelectedSubVertical(prev => prev ? { ...prev, personas: [] } : null);
+    } finally {
+      setIsLoading(false);
     }
   }
 

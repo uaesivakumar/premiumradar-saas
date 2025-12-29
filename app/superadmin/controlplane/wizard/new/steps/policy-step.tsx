@@ -26,6 +26,56 @@ interface PolicyData {
 
 type PolicyStatus = 'DRAFT' | 'STAGED' | 'ACTIVE' | 'DEPRECATED';
 
+// ============================================
+// AVAILABLE OPTIONS (from UPR-OS capabilities)
+// ============================================
+
+// Tools available in UPR-OS
+const AVAILABLE_TOOLS = [
+  { value: 'qtle_score', label: 'Q/T/L/E Scoring', description: 'Compute qualification, timing, leverage, engagement scores' },
+  { value: 'pattern_match', label: 'Pattern Matching', description: 'Match company signals against known patterns' },
+  { value: 'search_companies', label: 'Search Companies', description: 'Search company database by criteria' },
+  { value: 'enrich_lead', label: 'Enrich Lead', description: 'Enrich lead data from external sources' },
+  { value: 'rank_opportunities', label: 'Rank Opportunities', description: 'Rank opportunities by likelihood' },
+  { value: 'generate_outreach', label: 'Generate Outreach', description: 'Generate personalized outreach messages' },
+  { value: 'analyze_signals', label: 'Analyze Signals', description: 'Analyze business signals for intent' },
+  { value: 'lookup_contacts', label: 'Lookup Contacts', description: 'Find decision-maker contacts' },
+  { value: 'check_compliance', label: 'Check Compliance', description: 'Verify regulatory compliance status' },
+  { value: 'calculate_risk', label: 'Calculate Risk', description: 'Calculate credit/deal risk score' },
+  { value: 'fetch_financials', label: 'Fetch Financials', description: 'Retrieve company financial data' },
+  { value: 'verify_documents', label: 'Verify Documents', description: 'Verify submitted documents' },
+];
+
+// Intents that SIVA can handle
+const AVAILABLE_INTENTS = [
+  { value: 'score_lead', label: 'Score Lead', description: 'Score a lead for qualification' },
+  { value: 'rank_companies', label: 'Rank Companies', description: 'Rank target companies' },
+  { value: 'find_prospects', label: 'Find Prospects', description: 'Discover new prospects' },
+  { value: 'analyze_opportunity', label: 'Analyze Opportunity', description: 'Deep analysis of an opportunity' },
+  { value: 'generate_outreach_message', label: 'Generate Outreach', description: 'Create personalized outreach' },
+  { value: 'recommend_next_action', label: 'Recommend Action', description: 'Suggest next best action' },
+  { value: 'evaluate_company_for_wc', label: 'Evaluate for WC', description: 'Evaluate company for working capital' },
+  { value: 'collect_required_documents', label: 'Collect Documents', description: 'Identify required documents' },
+  { value: 'ask_qualification_questions', label: 'Qualify Lead', description: 'Ask qualification questions' },
+  { value: 'assess_credit_risk', label: 'Assess Credit Risk', description: 'Evaluate credit risk' },
+  { value: 'summarize_company', label: 'Summarize Company', description: 'Generate company summary' },
+  { value: 'compare_opportunities', label: 'Compare Opportunities', description: 'Compare multiple opportunities' },
+];
+
+// Common forbidden outputs
+const COMMON_FORBIDDEN_OUTPUTS = [
+  { value: 'pii_data', label: 'PII Data', description: 'Personal identifiable information' },
+  { value: 'competitor_names', label: 'Competitor Names', description: 'Names of competitor companies' },
+  { value: 'guarantee_approval', label: 'Guarantee Approval', description: 'Promise of approval' },
+  { value: 'quote_interest_rates', label: 'Quote Rates', description: 'Specific interest rate quotes' },
+  { value: 'commit_terms_or_limits', label: 'Commit Terms', description: 'Binding terms or limits' },
+  { value: 'provide_legal_advice', label: 'Legal Advice', description: 'Legal recommendations' },
+  { value: 'disclose_internal_scoring', label: 'Internal Scoring', description: 'Internal scoring logic' },
+  { value: 'share_other_client_data', label: 'Other Client Data', description: 'Other clients information' },
+  { value: 'predict_stock_price', label: 'Stock Predictions', description: 'Stock price predictions' },
+  { value: 'make_investment_advice', label: 'Investment Advice', description: 'Investment recommendations' },
+];
+
 const STATUS_CONFIG: Record<PolicyStatus, { color: string; bg: string; label: string }> = {
   DRAFT: { color: 'text-yellow-800', bg: 'bg-yellow-100', label: 'Draft' },
   STAGED: { color: 'text-blue-800', bg: 'bg-blue-100', label: 'Staged' },
@@ -343,29 +393,32 @@ export function PolicyStep() {
               </span>
             </label>
             <div className="flex gap-2 mb-2">
-              <input
-                type="text"
+              <select
                 value={newIntent}
                 onChange={(e) => setNewIntent(e.target.value)}
-                placeholder="e.g., score_lead, rank_companies"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                disabled={isStaged}
+              >
+                <option value="">Select an intent to add...</option>
+                {AVAILABLE_INTENTS
+                  .filter(intent => !policyData.allowed_intents.includes(intent.value))
+                  .map(intent => (
+                    <option key={intent.value} value={intent.value}>
+                      {intent.label} - {intent.description}
+                    </option>
+                  ))
+                }
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  if (newIntent) {
                     addTag('allowed_intents', newIntent);
                     setNewIntent('');
                   }
                 }}
-                disabled={isStaged}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  addTag('allowed_intents', newIntent);
-                  setNewIntent('');
-                }}
                 className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
-                disabled={isStaged}
+                disabled={isStaged || !newIntent}
               >
                 Add
               </button>
@@ -402,29 +455,32 @@ export function PolicyStep() {
               </span>
             </label>
             <div className="flex gap-2 mb-2">
-              <input
-                type="text"
+              <select
                 value={newTool}
                 onChange={(e) => setNewTool(e.target.value)}
-                placeholder="e.g., qtle_score, pattern_match"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                disabled={isStaged}
+              >
+                <option value="">Select a tool to add...</option>
+                {AVAILABLE_TOOLS
+                  .filter(tool => !policyData.allowed_tools.includes(tool.value))
+                  .map(tool => (
+                    <option key={tool.value} value={tool.value}>
+                      {tool.label} - {tool.description}
+                    </option>
+                  ))
+                }
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  if (newTool) {
                     addTag('allowed_tools', newTool);
                     setNewTool('');
                   }
                 }}
-                disabled={isStaged}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  addTag('allowed_tools', newTool);
-                  setNewTool('');
-                }}
                 className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
-                disabled={isStaged}
+                disabled={isStaged || !newTool}
               >
                 Add
               </button>
@@ -461,29 +517,32 @@ export function PolicyStep() {
               </span>
             </label>
             <div className="flex gap-2 mb-2">
-              <input
-                type="text"
+              <select
                 value={newForbidden}
                 onChange={(e) => setNewForbidden(e.target.value)}
-                placeholder="e.g., pii_data, competitor_names"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                disabled={isStaged}
+              >
+                <option value="">Select a forbidden output to add...</option>
+                {COMMON_FORBIDDEN_OUTPUTS
+                  .filter(output => !policyData.forbidden_outputs.includes(output.value))
+                  .map(output => (
+                    <option key={output.value} value={output.value}>
+                      {output.label} - {output.description}
+                    </option>
+                  ))
+                }
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  if (newForbidden) {
                     addTag('forbidden_outputs', newForbidden);
                     setNewForbidden('');
                   }
                 }}
-                disabled={isStaged}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  addTag('forbidden_outputs', newForbidden);
-                  setNewForbidden('');
-                }}
                 className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
-                disabled={isStaged}
+                disabled={isStaged || !newForbidden}
               >
                 Add
               </button>

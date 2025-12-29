@@ -26,7 +26,93 @@ interface RegionOption {
   code: string;
   name: string;
   level: 'GLOBAL' | 'REGIONAL' | 'LOCAL';
+  parent?: string; // Parent region code for hierarchical selection
 }
+
+interface SubRegion {
+  code: string;
+  name: string;
+}
+
+// GOVERNANCE: Countries that require sub-region selection
+const COUNTRIES_WITH_SUBREGIONS: Record<string, { label: string; regions: SubRegion[] }> = {
+  'IN': {
+    label: 'State',
+    regions: [
+      { code: 'IN-MH', name: 'Maharashtra' },
+      { code: 'IN-KA', name: 'Karnataka' },
+      { code: 'IN-TN', name: 'Tamil Nadu' },
+      { code: 'IN-DL', name: 'Delhi' },
+      { code: 'IN-GJ', name: 'Gujarat' },
+      { code: 'IN-UP', name: 'Uttar Pradesh' },
+      { code: 'IN-WB', name: 'West Bengal' },
+      { code: 'IN-RJ', name: 'Rajasthan' },
+      { code: 'IN-TG', name: 'Telangana' },
+      { code: 'IN-AP', name: 'Andhra Pradesh' },
+      { code: 'IN-KL', name: 'Kerala' },
+      { code: 'IN-PB', name: 'Punjab' },
+      { code: 'IN-HR', name: 'Haryana' },
+      { code: 'IN-MP', name: 'Madhya Pradesh' },
+      { code: 'IN-BR', name: 'Bihar' },
+      { code: 'IN-OR', name: 'Odisha' },
+      { code: 'IN-JH', name: 'Jharkhand' },
+      { code: 'IN-CG', name: 'Chhattisgarh' },
+      { code: 'IN-AS', name: 'Assam' },
+      { code: 'IN-JK', name: 'Jammu & Kashmir' },
+      { code: 'IN-UK', name: 'Uttarakhand' },
+      { code: 'IN-HP', name: 'Himachal Pradesh' },
+      { code: 'IN-GA', name: 'Goa' },
+    ],
+  },
+  'AE': {
+    label: 'Emirate',
+    regions: [
+      { code: 'AE-DU', name: 'Dubai' },
+      { code: 'AE-AZ', name: 'Abu Dhabi' },
+      { code: 'AE-SH', name: 'Sharjah' },
+      { code: 'AE-AJ', name: 'Ajman' },
+      { code: 'AE-UQ', name: 'Umm Al Quwain' },
+      { code: 'AE-RK', name: 'Ras Al Khaimah' },
+      { code: 'AE-FU', name: 'Fujairah' },
+    ],
+  },
+  'US': {
+    label: 'State',
+    regions: [
+      { code: 'US-CA', name: 'California' },
+      { code: 'US-NY', name: 'New York' },
+      { code: 'US-TX', name: 'Texas' },
+      { code: 'US-FL', name: 'Florida' },
+      { code: 'US-IL', name: 'Illinois' },
+      { code: 'US-PA', name: 'Pennsylvania' },
+      { code: 'US-OH', name: 'Ohio' },
+      { code: 'US-GA', name: 'Georgia' },
+      { code: 'US-NC', name: 'North Carolina' },
+      { code: 'US-MI', name: 'Michigan' },
+      { code: 'US-NJ', name: 'New Jersey' },
+      { code: 'US-VA', name: 'Virginia' },
+      { code: 'US-WA', name: 'Washington' },
+      { code: 'US-AZ', name: 'Arizona' },
+      { code: 'US-MA', name: 'Massachusetts' },
+      { code: 'US-CO', name: 'Colorado' },
+    ],
+  },
+  'SA': {
+    label: 'Region',
+    regions: [
+      { code: 'SA-RY', name: 'Riyadh' },
+      { code: 'SA-MK', name: 'Makkah' },
+      { code: 'SA-MD', name: 'Madinah' },
+      { code: 'SA-EP', name: 'Eastern Province' },
+      { code: 'SA-QS', name: 'Qassim' },
+      { code: 'SA-HA', name: "Ha'il" },
+      { code: 'SA-TB', name: 'Tabuk' },
+      { code: 'SA-JF', name: 'Jizan' },
+      { code: 'SA-NJ', name: 'Najran' },
+      { code: 'SA-AS', name: 'Asir' },
+    ],
+  },
+};
 
 // GOVERNANCE: Canonical region hierarchy (no free-text allowed)
 const REGION_HIERARCHY: RegionOption[] = [
@@ -35,24 +121,35 @@ const REGION_HIERARCHY: RegionOption[] = [
   { code: 'APAC', name: 'Asia Pacific', level: 'REGIONAL' },
   { code: 'AMER', name: 'Americas', level: 'REGIONAL' },
   // LOCAL level - EMEA
-  { code: 'UAE', name: 'United Arab Emirates', level: 'LOCAL' },
-  { code: 'SA', name: 'Saudi Arabia', level: 'LOCAL' },
-  { code: 'EG', name: 'Egypt', level: 'LOCAL' },
-  { code: 'UK', name: 'United Kingdom', level: 'LOCAL' },
-  { code: 'DE', name: 'Germany', level: 'LOCAL' },
+  { code: 'AE', name: 'United Arab Emirates', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'SA', name: 'Saudi Arabia', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'EG', name: 'Egypt', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'UK', name: 'United Kingdom', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'DE', name: 'Germany', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'FR', name: 'France', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'QA', name: 'Qatar', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'KW', name: 'Kuwait', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'BH', name: 'Bahrain', level: 'LOCAL', parent: 'EMEA' },
+  { code: 'OM', name: 'Oman', level: 'LOCAL', parent: 'EMEA' },
   // LOCAL level - APAC
-  { code: 'IN', name: 'India', level: 'LOCAL' },
-  { code: 'SG', name: 'Singapore', level: 'LOCAL' },
-  { code: 'AU', name: 'Australia', level: 'LOCAL' },
-  { code: 'JP', name: 'Japan', level: 'LOCAL' },
+  { code: 'IN', name: 'India', level: 'LOCAL', parent: 'APAC' },
+  { code: 'SG', name: 'Singapore', level: 'LOCAL', parent: 'APAC' },
+  { code: 'AU', name: 'Australia', level: 'LOCAL', parent: 'APAC' },
+  { code: 'JP', name: 'Japan', level: 'LOCAL', parent: 'APAC' },
+  { code: 'CN', name: 'China', level: 'LOCAL', parent: 'APAC' },
+  { code: 'HK', name: 'Hong Kong', level: 'LOCAL', parent: 'APAC' },
+  { code: 'MY', name: 'Malaysia', level: 'LOCAL', parent: 'APAC' },
+  { code: 'ID', name: 'Indonesia', level: 'LOCAL', parent: 'APAC' },
+  { code: 'TH', name: 'Thailand', level: 'LOCAL', parent: 'APAC' },
+  { code: 'PH', name: 'Philippines', level: 'LOCAL', parent: 'APAC' },
   // LOCAL level - AMER
-  { code: 'US', name: 'United States', level: 'LOCAL' },
-  { code: 'US-CA', name: 'California, USA', level: 'LOCAL' },
-  { code: 'US-NY', name: 'New York, USA', level: 'LOCAL' },
-  { code: 'US-TX', name: 'Texas, USA', level: 'LOCAL' },
-  { code: 'CA', name: 'Canada', level: 'LOCAL' },
-  { code: 'BR', name: 'Brazil', level: 'LOCAL' },
-  { code: 'MX', name: 'Mexico', level: 'LOCAL' },
+  { code: 'US', name: 'United States', level: 'LOCAL', parent: 'AMER' },
+  { code: 'CA', name: 'Canada', level: 'LOCAL', parent: 'AMER' },
+  { code: 'BR', name: 'Brazil', level: 'LOCAL', parent: 'AMER' },
+  { code: 'MX', name: 'Mexico', level: 'LOCAL', parent: 'AMER' },
+  { code: 'AR', name: 'Argentina', level: 'LOCAL', parent: 'AMER' },
+  { code: 'CL', name: 'Chile', level: 'LOCAL', parent: 'AMER' },
+  { code: 'CO', name: 'Colombia', level: 'LOCAL', parent: 'AMER' },
 ];
 
 const SCOPES = [
@@ -70,17 +167,23 @@ export function PersonaStep() {
     (wizardState.scope as 'GLOBAL' | 'REGIONAL' | 'LOCAL') || 'GLOBAL'
   );
   const [regionCode, setRegionCode] = useState(wizardState.region_code || '');
+  const [subRegionCode, setSubRegionCode] = useState(''); // State/Emirate/Province
   const [mission, setMission] = useState('');
   const [decisionLens, setDecisionLens] = useState('');
 
   const [keyError, setKeyError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [regionError, setRegionError] = useState<string | null>(null);
+  const [subRegionError, setSubRegionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const isCreated = !!wizardState.persona_id;
   const showRegionCode = scope !== 'GLOBAL';
+
+  // Check if selected country has sub-regions (states/emirates)
+  const subRegionConfig = regionCode ? COUNTRIES_WITH_SUBREGIONS[regionCode] : null;
+  const countryHasSubRegions = !!subRegionConfig;
 
   // GOVERNANCE: Filter regions by scope level (REG-002, REG-003)
   const availableRegions = useMemo(() => {
@@ -94,15 +197,24 @@ export function PersonaStep() {
   useEffect(() => {
     if (scope === 'GLOBAL') {
       setRegionCode('');
+      setSubRegionCode('');
       setRegionError(null);
+      setSubRegionError(null);
     } else {
       // Validate current region code is valid for new scope
       const isValidForScope = availableRegions.some(r => r.code === regionCode);
       if (regionCode && !isValidForScope) {
         setRegionCode('');
+        setSubRegionCode('');
       }
     }
   }, [scope, availableRegions, regionCode]);
+
+  // Clear sub-region when country changes
+  useEffect(() => {
+    setSubRegionCode('');
+    setSubRegionError(null);
+  }, [regionCode]);
 
   const validateKey = useCallback((value: string) => {
     if (!value) {
@@ -134,6 +246,7 @@ export function PersonaStep() {
         return false;
       }
       setRegionError(null);
+      setSubRegionError(null);
       return true;
     }
 
@@ -151,8 +264,27 @@ export function PersonaStep() {
     }
 
     setRegionError(null);
+
+    // For LOCAL scope with countries that have sub-regions, sub-region is required
+    if (scope === 'LOCAL' && COUNTRIES_WITH_SUBREGIONS[regionCode]) {
+      if (!subRegionCode) {
+        const config = COUNTRIES_WITH_SUBREGIONS[regionCode];
+        setSubRegionError(`${config.label} is required for ${region.name}`);
+        return false;
+      }
+      // Validate sub-region is valid
+      const validSubRegion = COUNTRIES_WITH_SUBREGIONS[regionCode].regions.find(
+        r => r.code === subRegionCode
+      );
+      if (!validSubRegion) {
+        setSubRegionError('Invalid sub-region selected');
+        return false;
+      }
+    }
+
+    setSubRegionError(null);
     return true;
-  }, [scope, regionCode, availableRegions]);
+  }, [scope, regionCode, subRegionCode, availableRegions]);
 
   const handleSubmit = useCallback(async () => {
     const keyValid = validateKey(key);
@@ -164,6 +296,14 @@ export function PersonaStep() {
     setIsSubmitting(true);
     setServerError(null);
 
+    // Determine the final region code to send
+    // If sub-region is selected (e.g., IN-MH for Maharashtra), use that
+    // Otherwise use the country/regional code (e.g., UAE, EMEA)
+    let finalRegionCode: string | null = null;
+    if (scope !== 'GLOBAL') {
+      finalRegionCode = subRegionCode || regionCode;
+    }
+
     try {
       const response = await fetch('/api/superadmin/controlplane/personas', {
         method: 'POST',
@@ -173,7 +313,7 @@ export function PersonaStep() {
           key,
           name,
           scope,
-          region_code: scope === 'GLOBAL' ? null : regionCode,
+          region_code: finalRegionCode,
           mission: mission || null,
           decision_lens: decisionLens || null,
         }),
@@ -215,6 +355,7 @@ export function PersonaStep() {
     name,
     scope,
     regionCode,
+    subRegionCode,
     mission,
     decisionLens,
     wizardState.sub_vertical_id,
@@ -376,7 +517,7 @@ export function PersonaStep() {
           {showRegionCode && (
             <div>
               <label htmlFor="region_code" className="block text-sm font-medium text-gray-700 mb-1">
-                Region <span className="text-red-500">*</span>
+                {scope === 'LOCAL' ? 'Country' : 'Region'} <span className="text-red-500">*</span>
               </label>
               {/* GOVERNANCE: Dropdown instead of free-text (REG-001) */}
               <select
@@ -391,21 +532,55 @@ export function PersonaStep() {
                 } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 disabled={isSubmitting}
               >
-                <option value="">Select {scope.toLowerCase()} region...</option>
+                <option value="">Select {scope === 'LOCAL' ? 'country' : 'region'}...</option>
                 {availableRegions.map((region) => (
                   <option key={region.code} value={region.code}>
-                    {region.code} - {region.name}
+                    {region.name}
                   </option>
                 ))}
               </select>
               {regionError && <p className="mt-1 text-xs text-red-600">{regionError}</p>}
               <p className="mt-1 text-xs text-gray-500">
                 {scope === 'REGIONAL' && 'Select a regional grouping (e.g., EMEA, APAC)'}
-                {scope === 'LOCAL' && 'Select a specific country/territory'}
+                {scope === 'LOCAL' && !countryHasSubRegions && 'Sales results will be scoped to this country'}
+                {scope === 'LOCAL' && countryHasSubRegions && 'Select country, then choose state/region below'}
               </p>
             </div>
           )}
         </div>
+
+        {/* Sub-region dropdown (State/Emirate/Province) - only for countries that have them */}
+        {showRegionCode && scope === 'LOCAL' && subRegionConfig && (
+          <div>
+            <label htmlFor="sub_region_code" className="block text-sm font-medium text-gray-700 mb-1">
+              {subRegionConfig.label} <span className="text-red-500">*</span>
+            </label>
+            <select
+              id="sub_region_code"
+              value={subRegionCode}
+              onChange={(e) => {
+                setSubRegionCode(e.target.value);
+                setSubRegionError(null);
+              }}
+              className={`w-full px-3 py-2 border rounded-lg text-sm text-gray-900 bg-white ${
+                subRegionError ? 'border-red-300' : 'border-gray-300'
+              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              disabled={isSubmitting}
+            >
+              <option value="">Select {subRegionConfig.label.toLowerCase()}...</option>
+              {subRegionConfig.regions.map((subRegion) => (
+                <option key={subRegion.code} value={subRegion.code}>
+                  {subRegion.name}
+                </option>
+              ))}
+            </select>
+            {subRegionError && <p className="mt-1 text-xs text-red-600">{subRegionError}</p>}
+            <p className="mt-1 text-xs text-gray-500">
+              Sales results will be scoped to this {subRegionConfig.label.toLowerCase()}.
+              A salesperson in {subRegionConfig.regions[0]?.name} will only see results relevant to that area.
+            </p>
+          </div>
+        )}
 
         <div>
           <label htmlFor="mission" className="block text-sm font-medium text-gray-700 mb-1">
@@ -441,9 +616,19 @@ export function PersonaStep() {
       <div className="pt-4">
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting || !key || !name || (showRegionCode && !regionCode)}
+          disabled={
+            isSubmitting ||
+            !key ||
+            !name ||
+            (showRegionCode && !regionCode) ||
+            (showRegionCode && scope === 'LOCAL' && countryHasSubRegions && !subRegionCode)
+          }
           className={`px-4 py-2 text-sm font-medium rounded-lg ${
-            isSubmitting || !key || !name || (showRegionCode && !regionCode)
+            isSubmitting ||
+            !key ||
+            !name ||
+            (showRegionCode && !regionCode) ||
+            (showRegionCode && scope === 'LOCAL' && countryHasSubRegions && !subRegionCode)
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
               : 'bg-blue-600 text-white hover:bg-blue-700'
           }`}

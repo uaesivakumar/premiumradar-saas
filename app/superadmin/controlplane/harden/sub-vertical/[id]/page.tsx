@@ -92,22 +92,42 @@ export default function SubVerticalHardenPage() {
     try {
       const res = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/audit`);
 
+      // Handle HTTP error statuses explicitly
       if (!res.ok) {
+        // Try to get error details from response body
+        let errorDetails = '';
+        try {
+          const errorData = await res.json();
+          errorDetails = errorData.error || errorData.details || '';
+        } catch {
+          // Response might not be JSON
+        }
+
         if (res.status === 404) {
           throw new Error('Sub-vertical not found. It may have been deleted.');
         }
         if (res.status === 400) {
-          throw new Error('Invalid sub-vertical ID format.');
+          throw new Error(errorDetails || 'Invalid sub-vertical ID format.');
         }
         if (res.status === 401) {
           throw new Error('Session expired. Please log in again.');
         }
+        if (res.status === 500) {
+          throw new Error(errorDetails || 'Server error while loading sub-vertical. Please try again.');
+        }
+        // Catch any other error status
+        throw new Error(`Failed to load sub-vertical (HTTP ${res.status}): ${errorDetails}`);
       }
 
       const data = await res.json();
 
       if (!data.success) {
         throw new Error(data.error || data.message || 'Failed to load sub-vertical');
+      }
+
+      // Validate required data fields
+      if (!data.data?.sub_vertical) {
+        throw new Error('Invalid response: missing sub_vertical data');
       }
 
       setSubVertical(data.data.sub_vertical);

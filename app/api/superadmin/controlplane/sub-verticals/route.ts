@@ -22,14 +22,15 @@
  * - primary_entity_type is now the source of truth (moved from vertical level)
  * - Entity type determines discovery scope for SIVA
  *
- * S255: MVT HARD GATE ENFORCEMENT
- * - buyer_role: required (ICP Truth Triad)
- * - decision_owner: required (ICP Truth Triad)
- * - allowed_signals: required, min 1, must match primary_entity_type
- * - kill_rules: required, min 2, at least 1 compliance/regulatory
- * - seed_scenarios: required, {golden: min 2, kill: min 2}
- * - mvt_valid computed automatically by DB trigger
+ * S255 REVISED: MVT SOFT GATE (creation allowed, runtime blocked)
+ * - buyer_role: optional at creation (fill via HARDEN MODE)
+ * - decision_owner: optional at creation (fill via HARDEN MODE)
+ * - allowed_signals: optional at creation (fill via HARDEN MODE)
+ * - kill_rules: optional at creation (fill via HARDEN MODE)
+ * - seed_scenarios: optional at creation (fill via HARDEN MODE)
+ * - mvt_valid = false if any MVT field incomplete
  * - runtime_eligible = false until MVT + Persona + Policy resolved
+ * - HARDEN MODE: /superadmin/controlplane/harden/sub-vertical/:id
  */
 
 import { NextRequest } from 'next/server';
@@ -248,10 +249,12 @@ export async function GET() {
 
 /**
  * POST /api/superadmin/sub-verticals
- * Create new sub-vertical with MVT HARD GATE enforcement
+ * Create new sub-vertical with optional MVT fields
  *
- * S255: A sub-vertical CANNOT be created unless MVT is complete.
- * No partial saves. No draft leaks. No runtime visibility without MVT.
+ * S255 REVISED: MVT is optional during creation (for wizard workflow).
+ * Sub-verticals without complete MVT are created with mvt_valid=false.
+ * HARDEN MODE is used post-creation to fill MVT fields.
+ * Runtime execution is blocked until MVT is complete (checked at runtime).
  */
 export async function POST(request: NextRequest) {
   const sessionResult = await validateSuperAdminSession();
@@ -405,10 +408,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ===========================================================
-    // S255: MVT HARD GATE VALIDATION
+    // S255 REVISED: MVT VALIDATION (optional for wizard creation)
     // ===========================================================
-    // CRITICAL: Sub-vertical CANNOT be created without complete MVT.
-    // No partial saves. No draft leaks. Fail hard with explicit errors.
+    // MVT is validated but NOT required for creation.
+    // If MVT is incomplete, sub-vertical is created with mvt_valid=false.
+    // Use HARDEN MODE post-creation to complete MVT fields.
 
     const mvtValidation = validateMVT(
       primary_entity_type,
@@ -419,52 +423,13 @@ export async function POST(request: NextRequest) {
       seed_scenarios
     );
 
-    if (!mvtValidation.valid) {
-      await logControlPlaneAudit({
-        actorUser,
-        action: 'create_sub_vertical',
-        targetType: 'sub_vertical',
-        requestJson: body,
-        success: false,
-        errorMessage: `MVT_INCOMPLETE: ${mvtValidation.errors.join('; ')}`,
-      });
-
-      return Response.json(
-        {
-          success: false,
-          error: 'MVT_INCOMPLETE',
-          message: 'Minimum Viable Truth (MVT) validation failed. Sub-vertical cannot be created without complete MVT.',
-          mvt_errors: mvtValidation.errors,
-          mvt_requirements: {
-            icp_truth_triad: {
-              primary_entity_type: 'required (deal | company | individual)',
-              buyer_role: 'required (e.g., HR Manager, CFO)',
-              decision_owner: 'required (e.g., CFO, Company Owner)',
-            },
-            allowed_signals: {
-              min_count: 1,
-              fields: ['signal_key', 'entity_type (must match primary)', 'justification'],
-            },
-            kill_rules: {
-              min_count: 2,
-              compliance_required: true,
-              fields: ['rule', 'action', 'reason'],
-            },
-            seed_scenarios: {
-              golden_min: 2,
-              kill_min: 2,
-              fields: ['scenario_id', 'entry_intent'],
-            },
-          },
-        },
-        { status: 400 }
-      );
-    }
+    // Log MVT status but do NOT block creation
+    const mvtComplete = mvtValidation.valid;
 
     // ===========================================================
-    // INSERT SUB-VERTICAL WITH MVT DATA
+    // INSERT SUB-VERTICAL (MVT fields optional)
     // ===========================================================
-    // mvt_valid will be computed by DB trigger
+    // mvt_valid is set based on MVT completeness check above
 
     const result = await insert<OSSubVertical>(
       `INSERT INTO os_sub_verticals (
@@ -472,9 +437,9 @@ export async function POST(request: NextRequest) {
          primary_entity_type, related_entity_types,
          buyer_role, decision_owner,
          allowed_signals, kill_rules, seed_scenarios,
-         mvt_version, is_active
+         mvt_version, mvt_valid, is_active
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1, true)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1, $12, true)
        RETURNING id, vertical_id, key, name, default_agent,
                  primary_entity_type, related_entity_types,
                  buyer_role, decision_owner,
@@ -488,11 +453,12 @@ export async function POST(request: NextRequest) {
         resolvedAgent, // S278: Always SIVA
         primary_entity_type,
         related_entity_types || [],
-        buyer_role,
-        decision_owner,
-        JSON.stringify(allowed_signals),
-        JSON.stringify(kill_rules),
-        JSON.stringify(seed_scenarios),
+        buyer_role || null,                                    // Optional - fill via HARDEN MODE
+        decision_owner || null,                                // Optional - fill via HARDEN MODE
+        JSON.stringify(allowed_signals || []),                 // Empty array if not provided
+        JSON.stringify(kill_rules || []),                      // Empty array if not provided
+        JSON.stringify(seed_scenarios || { golden: [], kill: [] }), // Empty structure if not provided
+        mvtComplete,                                           // false if MVT incomplete
       ]
     );
 
@@ -505,20 +471,39 @@ export async function POST(request: NextRequest) {
       requestJson: body,
       resultJson: {
         ...result as unknown as Record<string, unknown>,
-        mvt_valid: true, // Validated at API layer
+        mvt_valid: mvtComplete,
       },
       success: true,
     });
 
-    return Response.json({
+    // Build response with MVT status
+    const response: {
+      success: boolean;
+      data: OSSubVertical;
+      mvt_status: {
+        valid: boolean;
+        version: number;
+        validated_at: string | null;
+        warnings?: string[];
+        next_step?: string;
+      };
+    } = {
       success: true,
       data: result,
       mvt_status: {
-        valid: true,
+        valid: mvtComplete,
         version: 1,
-        validated_at: result.mvt_validated_at,
+        validated_at: mvtComplete ? result.mvt_validated_at : null,
       },
-    }, { status: 201 });
+    };
+
+    // Add warnings if MVT incomplete
+    if (!mvtComplete) {
+      response.mvt_status.warnings = mvtValidation.errors;
+      response.mvt_status.next_step = 'Use HARDEN MODE to complete MVT fields: /superadmin/controlplane/harden/sub-vertical/' + result.id;
+    }
+
+    return Response.json(response, { status: 201 });
 
   } catch (error) {
     console.error('[SubVerticals POST] Error:', error);

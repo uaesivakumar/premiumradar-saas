@@ -167,11 +167,12 @@ export async function POST(request: NextRequest) {
       return conflictError('key');
     }
 
-    // Insert vertical (v2.0: only key, name - deprecated columns get NULL)
+    // Insert vertical (v2.0: entity_type deprecated but column has NOT NULL constraint)
+    // Use 'company' as default - actual entity type is set at sub-vertical level
     const result = await insert<OSVertical>(
-      `INSERT INTO os_verticals (key, name, is_active)
-       VALUES ($1, $2, true)
-       RETURNING id, key, name, is_active, created_at, updated_at`,
+      `INSERT INTO os_verticals (key, name, entity_type, region_scope, is_active)
+       VALUES ($1, $2, 'company', '["US"]'::jsonb, true)
+       RETURNING id, key, name, entity_type, region_scope, is_active, created_at, updated_at`,
       [key, name.trim()]
     );
 
