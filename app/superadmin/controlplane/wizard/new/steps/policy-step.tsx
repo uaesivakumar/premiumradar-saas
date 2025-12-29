@@ -94,10 +94,7 @@ export function PolicyStep() {
     escalation_rules: {},
   });
 
-  const [newIntent, setNewIntent] = useState('');
   const [customIntent, setCustomIntent] = useState('');
-  const [newTool, setNewTool] = useState('');
-  const [newForbidden, setNewForbidden] = useState('');
   const [customForbidden, setCustomForbidden] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
@@ -394,12 +391,16 @@ export function PolicyStep() {
                 ({policyData.allowed_intents.length} added)
               </span>
             </label>
-            {/* Predefined intents dropdown */}
-            <div className="flex gap-2 mb-2">
+            {/* Predefined intents dropdown - auto-adds on selection */}
+            <div className="mb-2">
               <select
-                value={newIntent}
-                onChange={(e) => setNewIntent(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    addTag('allowed_intents', e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                 disabled={isStaged}
               >
                 <option value="" className="text-gray-500">Select from predefined intents...</option>
@@ -412,19 +413,6 @@ export function PolicyStep() {
                   ))
                 }
               </select>
-              <button
-                type="button"
-                onClick={() => {
-                  if (newIntent) {
-                    addTag('allowed_intents', newIntent);
-                    setNewIntent('');
-                  }
-                }}
-                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
-                disabled={isStaged || !newIntent}
-              >
-                Add
-              </button>
             </div>
             {/* Custom intent input */}
             <div className="flex gap-2 mb-2">
@@ -488,11 +476,16 @@ export function PolicyStep() {
                 ({policyData.allowed_tools.length} added)
               </span>
             </label>
-            <div className="flex gap-2 mb-2">
+            {/* Tools dropdown - auto-adds on selection */}
+            <div className="mb-2">
               <select
-                value={newTool}
-                onChange={(e) => setNewTool(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    addTag('allowed_tools', e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                 disabled={isStaged}
               >
                 <option value="" className="text-gray-500">Select a tool to add...</option>
@@ -505,19 +498,6 @@ export function PolicyStep() {
                   ))
                 }
               </select>
-              <button
-                type="button"
-                onClick={() => {
-                  if (newTool) {
-                    addTag('allowed_tools', newTool);
-                    setNewTool('');
-                  }
-                }}
-                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
-                disabled={isStaged || !newTool}
-              >
-                Add
-              </button>
             </div>
             <div className="flex flex-wrap gap-2">
               {policyData.allowed_tools.map((tool, i) => (
@@ -550,12 +530,16 @@ export function PolicyStep() {
                 ({policyData.forbidden_outputs.length} added)
               </span>
             </label>
-            {/* Predefined forbidden outputs dropdown */}
-            <div className="flex gap-2 mb-2">
+            {/* Predefined forbidden outputs dropdown - auto-adds on selection */}
+            <div className="mb-2">
               <select
-                value={newForbidden}
-                onChange={(e) => setNewForbidden(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    addTag('forbidden_outputs', e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                 disabled={isStaged}
               >
                 <option value="" className="text-gray-500">Select from predefined outputs...</option>
@@ -568,19 +552,6 @@ export function PolicyStep() {
                   ))
                 }
               </select>
-              <button
-                type="button"
-                onClick={() => {
-                  if (newForbidden) {
-                    addTag('forbidden_outputs', newForbidden);
-                    setNewForbidden('');
-                  }
-                }}
-                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
-                disabled={isStaged || !newForbidden}
-              >
-                Add
-              </button>
             </div>
             {/* Custom forbidden output input */}
             <div className="flex gap-2 mb-2">
