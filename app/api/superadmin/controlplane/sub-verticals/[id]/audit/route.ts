@@ -61,8 +61,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const { id } = await params;
 
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!id || !uuidRegex.test(id)) {
+    console.error('[ControlPlane:SubVertical Audit] Invalid UUID format:', id);
+    return Response.json(
+      { success: false, error: 'Invalid sub-vertical ID format' },
+      { status: 400 }
+    );
+  }
+
   try {
     // Get sub-vertical with vertical context
+    // Using LEFT JOIN to handle cases where vertical might be missing
     const subVertical = await queryOne<SubVerticalAuditData>(
       `SELECT
          sv.id, sv.key, sv.name, sv.vertical_id, sv.default_agent,
@@ -71,25 +82,39 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
          sv.allowed_signals, sv.kill_rules, sv.seed_scenarios,
          sv.mvt_version, sv.mvt_valid, sv.mvt_validated_at,
          sv.is_active, sv.created_at, sv.updated_at,
-         v.key as vertical_key, v.name as vertical_name
+         COALESCE(v.key, 'unknown') as vertical_key,
+         COALESCE(v.name, 'Unknown Vertical') as vertical_name
        FROM os_sub_verticals sv
-       JOIN os_verticals v ON v.id = sv.vertical_id
+       LEFT JOIN os_verticals v ON v.id = sv.vertical_id
        WHERE sv.id = $1`,
       [id]
     );
 
     if (!subVertical) {
+      console.log('[ControlPlane:SubVertical Audit] Sub-vertical not found:', id);
       return notFoundError('Sub-Vertical');
     }
 
-    // Calculate MVT status
-    const allowedSignals = subVertical.allowed_signals || [];
-    const killRules = subVertical.kill_rules || [];
-    const seedScenarios = subVertical.seed_scenarios as { golden?: unknown[]; kill?: unknown[] } | null;
+    // Calculate MVT status with defensive null handling
+    const allowedSignals = Array.isArray(subVertical.allowed_signals) ? subVertical.allowed_signals : [];
+    const killRules = Array.isArray(subVertical.kill_rules) ? subVertical.kill_rules : [];
+    const seedScenarios = (subVertical.seed_scenarios && typeof subVertical.seed_scenarios === 'object')
+      ? subVertical.seed_scenarios as { golden?: unknown[]; kill?: unknown[] }
+      : { golden: [], kill: [] };
 
-    const hasComplianceRule = (killRules as { rule: string }[]).some(
-      (r) => r.rule?.toLowerCase().includes('compliance') || r.rule?.toLowerCase().includes('gdpr')
-    );
+    // Check for compliance rule with safe type handling
+    let hasComplianceRule = false;
+    try {
+      hasComplianceRule = killRules.some((r: unknown) => {
+        if (r && typeof r === 'object' && 'rule' in r) {
+          const rule = (r as { rule?: string }).rule;
+          return rule?.toLowerCase().includes('compliance') || rule?.toLowerCase().includes('gdpr');
+        }
+        return false;
+      });
+    } catch {
+      console.warn('[ControlPlane:SubVertical Audit] Error checking compliance rules');
+    }
 
     const mvtChecks = {
       has_buyer_role: !!subVertical.buyer_role,
@@ -122,7 +147,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
     });
   } catch (error) {
-    console.error('[ControlPlane:SubVertical Audit] Error:', error);
-    return serverError('Failed to fetch sub-vertical audit data');
+    console.error('[ControlPlane:SubVertical Audit] Error for ID:', id);
+    console.error('[ControlPlane:SubVertical Audit] Error details:', error);
+
+    // Return more specific error message for debugging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return Response.json(
+      {
+        success: false,
+        error: 'Failed to fetch sub-vertical audit data',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
+      { status: 500 }
+    );
   }
 }

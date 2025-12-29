@@ -91,10 +91,23 @@ export default function SubVerticalHardenPage() {
 
     try {
       const res = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/audit`);
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('Sub-vertical not found. It may have been deleted.');
+        }
+        if (res.status === 400) {
+          throw new Error('Invalid sub-vertical ID format.');
+        }
+        if (res.status === 401) {
+          throw new Error('Session expired. Please log in again.');
+        }
+      }
+
       const data = await res.json();
 
       if (!data.success) {
-        throw new Error(data.message || 'Failed to load sub-vertical');
+        throw new Error(data.error || data.message || 'Failed to load sub-vertical');
       }
 
       setSubVertical(data.data.sub_vertical);
@@ -102,7 +115,8 @@ export default function SubVerticalHardenPage() {
       setBuyerRole(data.data.sub_vertical.buyer_role || '');
       setDecisionOwner(data.data.sub_vertical.decision_owner || '');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load');
+      console.error('[SubVertical Harden] Load error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load sub-vertical audit data');
     } finally {
       setIsLoading(false);
     }
