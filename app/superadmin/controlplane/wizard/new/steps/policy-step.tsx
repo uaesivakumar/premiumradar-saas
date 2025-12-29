@@ -95,8 +95,10 @@ export function PolicyStep() {
   });
 
   const [newIntent, setNewIntent] = useState('');
+  const [customIntent, setCustomIntent] = useState('');
   const [newTool, setNewTool] = useState('');
   const [newForbidden, setNewForbidden] = useState('');
+  const [customForbidden, setCustomForbidden] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
   const [isStaging, setIsStaging] = useState(false);
@@ -392,18 +394,19 @@ export function PolicyStep() {
                 ({policyData.allowed_intents.length} added)
               </span>
             </label>
+            {/* Predefined intents dropdown */}
             <div className="flex gap-2 mb-2">
               <select
                 value={newIntent}
                 onChange={(e) => setNewIntent(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                 disabled={isStaged}
               >
-                <option value="">Select an intent to add...</option>
+                <option value="" className="text-gray-500">Select from predefined intents...</option>
                 {AVAILABLE_INTENTS
                   .filter(intent => !policyData.allowed_intents.includes(intent.value))
                   .map(intent => (
-                    <option key={intent.value} value={intent.value}>
+                    <option key={intent.value} value={intent.value} className="text-gray-900">
                       {intent.label} - {intent.description}
                     </option>
                   ))
@@ -421,6 +424,37 @@ export function PolicyStep() {
                 disabled={isStaged || !newIntent}
               >
                 Add
+              </button>
+            </div>
+            {/* Custom intent input */}
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={customIntent}
+                onChange={(e) => setCustomIntent(e.target.value)}
+                placeholder="Or type custom intent (e.g., my_custom_intent)"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customIntent.trim()) {
+                    e.preventDefault();
+                    addTag('allowed_intents', customIntent.trim());
+                    setCustomIntent('');
+                  }
+                }}
+                disabled={isStaged}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (customIntent.trim()) {
+                    addTag('allowed_intents', customIntent.trim());
+                    setCustomIntent('');
+                  }
+                }}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
+                disabled={isStaged || !customIntent.trim()}
+              >
+                Add Custom
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -458,14 +492,14 @@ export function PolicyStep() {
               <select
                 value={newTool}
                 onChange={(e) => setNewTool(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                 disabled={isStaged}
               >
-                <option value="">Select a tool to add...</option>
+                <option value="" className="text-gray-500">Select a tool to add...</option>
                 {AVAILABLE_TOOLS
                   .filter(tool => !policyData.allowed_tools.includes(tool.value))
                   .map(tool => (
-                    <option key={tool.value} value={tool.value}>
+                    <option key={tool.value} value={tool.value} className="text-gray-900">
                       {tool.label} - {tool.description}
                     </option>
                   ))
@@ -516,18 +550,19 @@ export function PolicyStep() {
                 ({policyData.forbidden_outputs.length} added)
               </span>
             </label>
+            {/* Predefined forbidden outputs dropdown */}
             <div className="flex gap-2 mb-2">
               <select
                 value={newForbidden}
                 onChange={(e) => setNewForbidden(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                 disabled={isStaged}
               >
-                <option value="">Select a forbidden output to add...</option>
+                <option value="" className="text-gray-500">Select from predefined outputs...</option>
                 {COMMON_FORBIDDEN_OUTPUTS
                   .filter(output => !policyData.forbidden_outputs.includes(output.value))
                   .map(output => (
-                    <option key={output.value} value={output.value}>
+                    <option key={output.value} value={output.value} className="text-gray-900">
                       {output.label} - {output.description}
                     </option>
                   ))
@@ -545,6 +580,37 @@ export function PolicyStep() {
                 disabled={isStaged || !newForbidden}
               >
                 Add
+              </button>
+            </div>
+            {/* Custom forbidden output input */}
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={customForbidden}
+                onChange={(e) => setCustomForbidden(e.target.value)}
+                placeholder="Or type custom forbidden output (e.g., sensitive_data)"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customForbidden.trim()) {
+                    e.preventDefault();
+                    addTag('forbidden_outputs', customForbidden.trim());
+                    setCustomForbidden('');
+                  }
+                }}
+                disabled={isStaged}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (customForbidden.trim()) {
+                    addTag('forbidden_outputs', customForbidden.trim());
+                    setCustomForbidden('');
+                  }
+                }}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 disabled:opacity-50"
+                disabled={isStaged || !customForbidden.trim()}
+              >
+                Add Custom
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
