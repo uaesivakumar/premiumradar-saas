@@ -104,13 +104,16 @@ export default function SuperAdminLayout({
 
   const isLoginPage = pathname === '/superadmin/login';
 
+  // Track if we've verified session at least once (don't logout on subsequent failures)
+  const hasVerifiedOnce = useRef(false);
+
   useEffect(() => {
     if (isLoginPage) {
       setIsLoading(false);
       return;
     }
 
-    async function verifySession() {
+    async function verifySession(isInitial = false) {
       try {
         const response = await fetch('/api/superadmin/session');
         const data = await response.json();
@@ -120,18 +123,30 @@ export default function SuperAdminLayout({
             email: data.session.email,
             remainingMinutes: data.session.remainingMinutes
           });
+          hasVerifiedOnce.current = true;
         } else {
+          // Only redirect if session is explicitly invalid (not just network error)
+          // AND this is the initial verification OR we've never verified successfully
+          if (isInitial || !hasVerifiedOnce.current) {
+            router.push('/superadmin/login');
+          }
+          // If we've verified once before, log the error but don't logout on interval check
+          // This prevents logout due to transient network issues
+        }
+      } catch (error) {
+        // Only redirect on initial load if we've never verified
+        // Don't logout on transient network errors during interval checks
+        if (isInitial && !hasVerifiedOnce.current) {
           router.push('/superadmin/login');
         }
-      } catch {
-        router.push('/superadmin/login');
+        console.error('[SuperAdmin Layout] Session verification failed:', error);
       } finally {
         setIsLoading(false);
       }
     }
 
-    verifySession();
-    const interval = setInterval(verifySession, 60000);
+    verifySession(true); // Initial verification
+    const interval = setInterval(() => verifySession(false), 60000);
     return () => clearInterval(interval);
   }, [router, isLoginPage]);
 
