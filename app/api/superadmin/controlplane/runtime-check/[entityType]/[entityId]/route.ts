@@ -54,6 +54,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     );
   }
 
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!entityId || !uuidRegex.test(entityId)) {
+    console.error('[RuntimeCheck] Invalid UUID format:', entityId);
+    return Response.json(
+      { success: false, error: 'Invalid entity ID format' },
+      { status: 400 }
+    );
+  }
+
   try {
     const checks: RuntimeCheck[] = [];
     let entityName = '';
@@ -61,8 +71,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     let overallEligible = true;
 
     if (entityType === 'sub-vertical') {
-      // Get sub-vertical with full context
-      const sv = await queryOne<{
+      // Get sub-vertical base info (without MVT columns that might not exist)
+      const svBase = await queryOne<{
         id: string;
         key: string;
         name: string;
@@ -70,29 +80,53 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         vertical_key: string;
         vertical_name: string;
         vertical_is_active: boolean;
+        is_active: boolean;
+      }>(
+        `SELECT
+           sv.id, sv.key, sv.name, sv.vertical_id, sv.is_active,
+           COALESCE(v.key, 'unknown') as vertical_key,
+           COALESCE(v.name, 'Unknown') as vertical_name,
+           COALESCE(v.is_active, false) as vertical_is_active
+         FROM os_sub_verticals sv
+         LEFT JOIN os_verticals v ON v.id = sv.vertical_id
+         WHERE sv.id = $1`,
+        [entityId]
+      );
+
+      if (!svBase) {
+        return notFoundError('Sub-Vertical');
+      }
+
+      // Try to get MVT columns separately (they might not exist if migration not run)
+      interface MVTData {
         buyer_role: string | null;
         decision_owner: string | null;
         allowed_signals: unknown[];
         kill_rules: unknown[];
         seed_scenarios: { golden?: unknown[]; kill?: unknown[] } | null;
         mvt_valid: boolean | null;
-        is_active: boolean;
-      }>(
-        `SELECT
-           sv.id, sv.key, sv.name, sv.vertical_id,
-           sv.buyer_role, sv.decision_owner,
-           sv.allowed_signals, sv.kill_rules, sv.seed_scenarios,
-           sv.mvt_valid, sv.is_active,
-           v.key as vertical_key, v.name as vertical_name, v.is_active as vertical_is_active
-         FROM os_sub_verticals sv
-         JOIN os_verticals v ON v.id = sv.vertical_id
-         WHERE sv.id = $1`,
-        [entityId]
-      );
-
-      if (!sv) {
-        return notFoundError('Sub-Vertical');
       }
+      let mvtData: MVTData | null = null;
+      try {
+        mvtData = await queryOne<MVTData>(
+          `SELECT buyer_role, decision_owner, allowed_signals, kill_rules, seed_scenarios, mvt_valid
+           FROM os_sub_verticals WHERE id = $1`,
+          [entityId]
+        );
+      } catch (mvtError) {
+        console.warn('[RuntimeCheck] MVT columns not available:', mvtError instanceof Error ? mvtError.message : 'unknown');
+      }
+
+      // Merge base and MVT data
+      const sv = {
+        ...svBase,
+        buyer_role: mvtData?.buyer_role || null,
+        decision_owner: mvtData?.decision_owner || null,
+        allowed_signals: mvtData?.allowed_signals || [],
+        kill_rules: mvtData?.kill_rules || [],
+        seed_scenarios: mvtData?.seed_scenarios || null,
+        mvt_valid: mvtData?.mvt_valid || null,
+      };
 
       entityName = sv.name;
 
