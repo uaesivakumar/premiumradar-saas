@@ -211,8 +211,8 @@ function WizardContent({ isExtendMode = false, extendContext }: WizardContentPro
           )}
         </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 p-6">
+        {/* Main Content - pb-24 accounts for fixed footer */}
+        <main className="flex-1 p-6 pb-24">
           <div className="max-w-3xl mx-auto">
             {renderStep()}
           </div>
