@@ -434,9 +434,93 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // ========================================
-    // FULL MVT UPDATE PATH (requires all fields)
+    // FULL MVT UPDATE PATH (allows partial saves)
     // ========================================
     if (hasMVTFields && !hasICPOnlyFields) {
+      // Merge with existing MVT values (partial updates allowed)
+      const mergedBuyerRole = buyer_role ?? existing.current_buyer_role ?? '';
+      const mergedDecisionOwner = decision_owner ?? existing.current_decision_owner ?? '';
+      const mergedAllowedSignals = allowed_signals ?? (existing.allowed_signals as AllowedSignal[]) ?? [];
+      const mergedKillRules = kill_rules ?? (existing.kill_rules as KillRule[]) ?? [];
+      const mergedSeedScenarios = seed_scenarios ?? (existing.seed_scenarios as SeedScenarios) ?? { golden: [], kill: [] };
+
+      // Validate full MVT (informational - don't block save)
+      const mvtValidation = validateMVT(
+        existing.primary_entity_type,
+        mergedBuyerRole,
+        mergedDecisionOwner,
+        mergedAllowedSignals,
+        mergedKillRules,
+        mergedSeedScenarios
+      );
+
+      // Save MVT data directly to sub_verticals table (bypass versioning for partial saves)
+      // This allows users to save progress without completing all MVT requirements
+      const mvtUpdates: string[] = [];
+      const mvtValues: unknown[] = [];
+      let mvtParamIndex = 1;
+
+      if (buyer_role !== undefined) {
+        mvtUpdates.push(`buyer_role = $${mvtParamIndex++}`);
+        mvtValues.push(buyer_role || null);
+      }
+      if (decision_owner !== undefined) {
+        mvtUpdates.push(`decision_owner = $${mvtParamIndex++}`);
+        mvtValues.push(decision_owner || null);
+      }
+      if (allowed_signals !== undefined) {
+        mvtUpdates.push(`allowed_signals = $${mvtParamIndex++}`);
+        mvtValues.push(JSON.stringify(allowed_signals));
+      }
+      if (kill_rules !== undefined) {
+        mvtUpdates.push(`kill_rules = $${mvtParamIndex++}`);
+        mvtValues.push(JSON.stringify(kill_rules));
+      }
+      if (seed_scenarios !== undefined) {
+        mvtUpdates.push(`seed_scenarios = $${mvtParamIndex++}`);
+        mvtValues.push(JSON.stringify(seed_scenarios));
+      }
+
+      // Update mvt_valid based on validation
+      mvtUpdates.push(`mvt_valid = $${mvtParamIndex++}`);
+      mvtValues.push(mvtValidation.valid);
+
+      mvtUpdates.push('updated_at = NOW()');
+      mvtValues.push(id);
+
+      const result = await queryOne<OSSubVertical>(
+        `UPDATE os_sub_verticals
+         SET ${mvtUpdates.join(', ')}
+         WHERE id = $${mvtParamIndex}
+         RETURNING *`,
+        mvtValues
+      );
+
+      await logControlPlaneAudit({
+        actorUser,
+        action: 'update_sub_vertical',
+        targetType: 'sub_vertical',
+        targetId: id,
+        requestJson: body,
+        success: true,
+      });
+
+      return Response.json({
+        success: true,
+        data: result,
+        mvt_valid: mvtValidation.valid,
+        mvt_errors: mvtValidation.valid ? [] : mvtValidation.errors,
+        message: mvtValidation.valid
+          ? 'MVT configuration saved and validated'
+          : `MVT saved but incomplete: ${mvtValidation.errors.length} issue(s) remaining`,
+      });
+    }
+
+    // ========================================
+    // LEGACY: Full MVT version creation (only if mvt_valid would be true)
+    // Keep this path for when MVT versioning is re-enabled
+    // ========================================
+    if (false && hasMVTFields && !hasICPOnlyFields) {
       // Merge with existing MVT values (partial updates allowed)
       const mergedBuyerRole = buyer_role ?? existing.current_buyer_role ?? '';
       const mergedDecisionOwner = decision_owner ?? existing.current_decision_owner ?? '';

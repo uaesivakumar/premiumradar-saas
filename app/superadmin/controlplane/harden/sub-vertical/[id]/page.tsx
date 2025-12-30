@@ -221,13 +221,19 @@ export default function SubVerticalHardenPage() {
       const data = JSON.parse(text);
 
       if (!data.success) {
-        throw new Error(data.message || 'Failed to save');
+        // Handle MVT validation errors specifically
+        if (data.error === 'MVT_INCOMPLETE' && data.mvt_errors) {
+          const errorList = data.mvt_errors.join('\n• ');
+          throw new Error(`MVT Validation Failed:\n• ${errorList}`);
+        }
+        throw new Error(data.message || data.error || 'Failed to save');
       }
 
       setSaveSuccess(true);
-      await loadData(); // Refresh data
+      await loadData(); // Refresh data only on success
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
+      console.error('[Harden Save] Error:', err);
       setSaveError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setIsSaving(false);
