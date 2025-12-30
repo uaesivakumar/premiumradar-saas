@@ -86,10 +86,11 @@ export async function POST(
 
     // Check if a system-managed binding already exists
     const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000000'; // Platform-level placeholder
+    const SYSTEM_WORKSPACE_ID = '00000000-0000-0000-0000-000000000000'; // Platform-level placeholder
     const existingBinding = await queryOne<{ id: string }>(
       `SELECT id FROM os_workspace_bindings
-       WHERE persona_id = $1 AND tenant_id = $2 AND workspace_id IS NULL AND is_active = true`,
-      [personaId, SYSTEM_TENANT_ID]
+       WHERE persona_id = $1 AND tenant_id = $2 AND workspace_id = $3 AND is_active = true`,
+      [personaId, SYSTEM_TENANT_ID, SYSTEM_WORKSPACE_ID]
     );
 
     if (existingBinding) {
@@ -105,15 +106,14 @@ export async function POST(
     }
 
     // Create system-managed binding placeholder
-    // workspace_id is NULL = "will be resolved per-user"
-    // tenant_id uses SYSTEM placeholder for OS-level configurations
+    // Use SYSTEM placeholders for OS-level configurations (platform-wide)
     const bindingId = randomUUID();
 
     await insert(
       `INSERT INTO os_workspace_bindings (
         id, tenant_id, vertical_id, sub_vertical_id, persona_id, workspace_id, is_active
-      ) VALUES ($1, $2, $3, $4, $5, NULL, true)`,
-      [bindingId, SYSTEM_TENANT_ID, vertical_id, sub_vertical_id, personaId]
+      ) VALUES ($1, $2, $3, $4, $5, $6, true)`,
+      [bindingId, SYSTEM_TENANT_ID, vertical_id, sub_vertical_id, personaId, SYSTEM_WORKSPACE_ID]
     );
 
     return Response.json({
