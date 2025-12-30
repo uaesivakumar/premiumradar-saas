@@ -629,3 +629,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return serverError('Failed to update sub-vertical');
   }
 }
+
+/**
+ * PATCH /api/superadmin/controlplane/sub-verticals/[id]
+ * Alias for PUT - supports partial updates
+ */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  return PUT(request, { params });
+}

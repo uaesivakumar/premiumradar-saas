@@ -170,7 +170,7 @@ export default function SubVerticalHardenPage() {
 
     try {
       const res = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           buyer_role: buyerRole || null,
@@ -178,7 +178,12 @@ export default function SubVerticalHardenPage() {
         }),
       });
 
-      const data = await res.json();
+      // Safe JSON parsing
+      const text = await res.text();
+      if (!text || text.trim() === '') {
+        throw new Error('Empty response from server');
+      }
+      const data = JSON.parse(text);
 
       if (!data.success) {
         throw new Error(data.message || 'Failed to save');

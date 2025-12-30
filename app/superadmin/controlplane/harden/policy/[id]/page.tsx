@@ -181,7 +181,12 @@ export default function PolicyHardenPage() {
         }),
       });
 
-      const data = await res.json();
+      // Safe JSON parsing
+      const text = await res.text();
+      if (!text || text.trim() === '') {
+        throw new Error('Empty response from server');
+      }
+      const data = JSON.parse(text);
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to save');
