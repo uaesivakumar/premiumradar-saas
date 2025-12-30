@@ -26,9 +26,11 @@ import {
   Save,
   RefreshCw,
   Target,
-  Users,
   Zap,
   AlertTriangle,
+  Plus,
+  Trash2,
+  FileText,
 } from 'lucide-react';
 import { RuntimeReadinessPanel } from '@/components/controlplane/harden/RuntimeReadinessPanel';
 
@@ -84,6 +86,23 @@ export default function SubVerticalHardenPage() {
   // Editable fields
   const [buyerRole, setBuyerRole] = useState('');
   const [decisionOwner, setDecisionOwner] = useState('');
+
+  // MVT editable fields
+  const [allowedSignals, setAllowedSignals] = useState<Array<{ signal_key: string; entity_type: string; justification: string }>>([]);
+  const [killRules, setKillRules] = useState<Array<{ rule: string; action: string; reason: string }>>([]);
+  const [seedScenarios, setSeedScenarios] = useState<{ golden: Array<{ name: string; description: string }>; kill: Array<{ name: string; description: string }> }>({ golden: [], kill: [] });
+
+  // Form visibility
+  const [showAddSignal, setShowAddSignal] = useState(false);
+  const [showAddKillRule, setShowAddKillRule] = useState(false);
+  const [showAddGolden, setShowAddGolden] = useState(false);
+  const [showAddKill, setShowAddKill] = useState(false);
+
+  // New item forms
+  const [newSignal, setNewSignal] = useState({ signal_key: '', entity_type: '', justification: '' });
+  const [newKillRule, setNewKillRule] = useState({ rule: '', action: 'BLOCK', reason: '' });
+  const [newGolden, setNewGolden] = useState({ name: '', description: '' });
+  const [newKillScenario, setNewKillScenario] = useState({ name: '', description: '' });
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -149,6 +168,9 @@ export default function SubVerticalHardenPage() {
       setMvtStatus(data.data.mvt_status);
       setBuyerRole(data.data.sub_vertical.buyer_role || '');
       setDecisionOwner(data.data.sub_vertical.decision_owner || '');
+      setAllowedSignals(data.data.sub_vertical.allowed_signals || []);
+      setKillRules(data.data.sub_vertical.kill_rules || []);
+      setSeedScenarios(data.data.sub_vertical.seed_scenarios || { golden: [], kill: [] });
     } catch (err) {
       console.error('[SubVertical Harden] Load error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load sub-vertical audit data');
@@ -169,13 +191,26 @@ export default function SubVerticalHardenPage() {
     setSaveSuccess(false);
 
     try {
+      // Build request body - include all MVT fields if signals/rules are configured
+      const hasFullMVT = allowedSignals.length > 0 || killRules.length > 0 ||
+                         seedScenarios.golden.length > 0 || seedScenarios.kill.length > 0;
+
+      const requestBody: Record<string, unknown> = {
+        buyer_role: buyerRole || null,
+        decision_owner: decisionOwner || null,
+      };
+
+      // If any MVT arrays are configured, include them all
+      if (hasFullMVT) {
+        requestBody.allowed_signals = allowedSignals;
+        requestBody.kill_rules = killRules;
+        requestBody.seed_scenarios = seedScenarios;
+      }
+
       const res = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          buyer_role: buyerRole || null,
-          decision_owner: decisionOwner || null,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       // Safe JSON parsing
@@ -197,6 +232,73 @@ export default function SubVerticalHardenPage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // === SIGNAL HELPERS ===
+  const addSignal = () => {
+    if (!newSignal.signal_key || !newSignal.justification) return;
+    setAllowedSignals([...allowedSignals, {
+      signal_key: newSignal.signal_key,
+      entity_type: newSignal.entity_type || subVertical?.primary_entity_type || 'company',
+      justification: newSignal.justification
+    }]);
+    setNewSignal({ signal_key: '', entity_type: '', justification: '' });
+    setShowAddSignal(false);
+  };
+
+  const removeSignal = (index: number) => {
+    setAllowedSignals(allowedSignals.filter((_, i) => i !== index));
+  };
+
+  // === KILL RULE HELPERS ===
+  const addKillRule = () => {
+    if (!newKillRule.rule || !newKillRule.reason) return;
+    setKillRules([...killRules, {
+      rule: newKillRule.rule,
+      action: newKillRule.action || 'BLOCK',
+      reason: newKillRule.reason
+    }]);
+    setNewKillRule({ rule: '', action: 'BLOCK', reason: '' });
+    setShowAddKillRule(false);
+  };
+
+  const removeKillRule = (index: number) => {
+    setKillRules(killRules.filter((_, i) => i !== index));
+  };
+
+  // === SEED SCENARIO HELPERS ===
+  const addGoldenScenario = () => {
+    if (!newGolden.name || !newGolden.description) return;
+    setSeedScenarios({
+      ...seedScenarios,
+      golden: [...seedScenarios.golden, { name: newGolden.name, description: newGolden.description }]
+    });
+    setNewGolden({ name: '', description: '' });
+    setShowAddGolden(false);
+  };
+
+  const removeGoldenScenario = (index: number) => {
+    setSeedScenarios({
+      ...seedScenarios,
+      golden: seedScenarios.golden.filter((_, i) => i !== index)
+    });
+  };
+
+  const addKillScenario = () => {
+    if (!newKillScenario.name || !newKillScenario.description) return;
+    setSeedScenarios({
+      ...seedScenarios,
+      kill: [...seedScenarios.kill, { name: newKillScenario.name, description: newKillScenario.description }]
+    });
+    setNewKillScenario({ name: '', description: '' });
+    setShowAddKill(false);
+  };
+
+  const removeKillScenario = (index: number) => {
+    setSeedScenarios({
+      ...seedScenarios,
+      kill: seedScenarios.kill.filter((_, i) => i !== index)
+    });
   };
 
   if (isLoading) {
@@ -436,72 +538,301 @@ export default function SubVerticalHardenPage() {
               </div>
             </div>
 
-            {/* Signals Section (Read-only for now) */}
+            {/* Signals Section - EDITABLE */}
             <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-blue-400" />
                   <h2 className="text-sm font-medium text-white">Allowed Signals</h2>
                 </div>
-                <span className="text-[10px] text-neutral-500">
-                  {subVertical.allowed_signals?.length || 0} configured
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-neutral-500">
+                    {allowedSignals.length} configured
+                  </span>
+                  <button
+                    onClick={() => setShowAddSignal(!showAddSignal)}
+                    className="p-1 text-blue-400 hover:bg-blue-500/20 rounded transition-colors"
+                    title="Add Signal"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              {subVertical.allowed_signals && subVertical.allowed_signals.length > 0 ? (
+              {/* Add Signal Form */}
+              {showAddSignal && (
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Signal Key (e.g., revenue_growth)"
+                    value={newSignal.signal_key}
+                    onChange={(e) => setNewSignal({ ...newSignal, signal_key: e.target.value })}
+                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Justification (why this signal matters)"
+                    value={newSignal.justification}
+                    onChange={(e) => setNewSignal({ ...newSignal, justification: e.target.value })}
+                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={addSignal}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => setShowAddSignal(false)}
+                      className="px-3 py-1 bg-neutral-700 hover:bg-neutral-600 text-white text-xs rounded"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {allowedSignals.length > 0 ? (
                 <div className="space-y-2">
-                  {subVertical.allowed_signals.map((signal, i) => (
+                  {allowedSignals.map((signal, i) => (
                     <div
                       key={i}
                       className="flex items-center justify-between p-2 bg-blue-500/5 border border-blue-500/20 rounded text-xs"
                     >
-                      <div>
+                      <div className="flex-1">
                         <span className="text-blue-400 font-mono">{signal.signal_key}</span>
                         <span className="text-neutral-600 ml-2">({signal.entity_type})</span>
+                        <p className="text-neutral-500 text-[10px] mt-0.5">{signal.justification}</p>
                       </div>
-                      <span className="text-neutral-500 text-[10px] max-w-xs truncate">
-                        {signal.justification}
-                      </span>
+                      <button
+                        onClick={() => removeSignal(i)}
+                        className="p-1 text-red-400 hover:bg-red-500/20 rounded ml-2"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-neutral-600 text-xs">No signals configured</p>
+                <p className="text-neutral-600 text-xs">No signals configured. Add at least 1 signal.</p>
               )}
             </div>
 
-            {/* Kill Rules Section (Read-only for now) */}
+            {/* Kill Rules Section - EDITABLE */}
             <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-red-400" />
                   <h2 className="text-sm font-medium text-white">Kill Rules</h2>
                 </div>
-                <span className="text-[10px] text-neutral-500">
-                  {subVertical.kill_rules?.length || 0} configured
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-neutral-500">
+                    {killRules.length} configured
+                  </span>
+                  <button
+                    onClick={() => setShowAddKillRule(!showAddKillRule)}
+                    className="p-1 text-red-400 hover:bg-red-500/20 rounded transition-colors"
+                    title="Add Kill Rule"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              {subVertical.kill_rules && subVertical.kill_rules.length > 0 ? (
+              {/* Add Kill Rule Form */}
+              {showAddKillRule && (
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Rule name (e.g., GDPR Compliance Check)"
+                    value={newKillRule.rule}
+                    onChange={(e) => setNewKillRule({ ...newKillRule, rule: e.target.value })}
+                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
+                  />
+                  <select
+                    value={newKillRule.action}
+                    onChange={(e) => setNewKillRule({ ...newKillRule, action: e.target.value })}
+                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white"
+                  >
+                    <option value="BLOCK">BLOCK</option>
+                    <option value="WARN">WARN</option>
+                    <option value="REVIEW">REVIEW</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Reason (include 'compliance' or 'regulatory' for compliance rules)"
+                    value={newKillRule.reason}
+                    onChange={(e) => setNewKillRule({ ...newKillRule, reason: e.target.value })}
+                    className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={addKillRule}
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => setShowAddKillRule(false)}
+                      className="px-3 py-1 bg-neutral-700 hover:bg-neutral-600 text-white text-xs rounded"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {killRules.length > 0 ? (
                 <div className="space-y-2">
-                  {subVertical.kill_rules.map((rule, i) => (
+                  {killRules.map((rule, i) => (
                     <div
                       key={i}
                       className="p-2 bg-red-500/5 border border-red-500/20 rounded text-xs"
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-red-400">{rule.rule}</span>
-                        <span className="text-red-300 text-[10px] px-1.5 py-0.5 bg-red-500/20 rounded">
-                          {rule.action}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-red-300 text-[10px] px-1.5 py-0.5 bg-red-500/20 rounded">
+                            {rule.action}
+                          </span>
+                          <button
+                            onClick={() => removeKillRule(i)}
+                            className="p-1 text-red-400 hover:bg-red-500/20 rounded"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-neutral-500 text-[10px]">{rule.reason}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-neutral-600 text-xs">No kill rules configured</p>
+                <p className="text-neutral-600 text-xs">No kill rules configured. Add at least 2 rules (1 must be compliance).</p>
               )}
+            </div>
+
+            {/* Seed Scenarios Section - EDITABLE */}
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-4 h-4 text-purple-400" />
+                <h2 className="text-sm font-medium text-white">Seed Scenarios</h2>
+              </div>
+
+              {/* Golden Scenarios */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-emerald-400">Golden Scenarios (happy path)</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-neutral-500">{seedScenarios.golden.length} configured</span>
+                    <button
+                      onClick={() => setShowAddGolden(!showAddGolden)}
+                      className="p-1 text-emerald-400 hover:bg-emerald-500/20 rounded transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+
+                {showAddGolden && (
+                  <div className="mb-2 p-2 bg-emerald-500/10 border border-emerald-500/30 rounded space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Scenario name"
+                      value={newGolden.name}
+                      onChange={(e) => setNewGolden({ ...newGolden, name: e.target.value })}
+                      className="w-full px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Description"
+                      value={newGolden.description}
+                      onChange={(e) => setNewGolden({ ...newGolden, description: e.target.value })}
+                      className="w-full px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={addGoldenScenario} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] rounded">Add</button>
+                      <button onClick={() => setShowAddGolden(false)} className="px-2 py-1 bg-neutral-700 text-white text-[10px] rounded">Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {seedScenarios.golden.length > 0 ? (
+                  <div className="space-y-1">
+                    {seedScenarios.golden.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between p-1.5 bg-emerald-500/5 border border-emerald-500/20 rounded text-[10px]">
+                        <div>
+                          <span className="text-emerald-400">{s.name}</span>
+                          <span className="text-neutral-500 ml-2">{s.description}</span>
+                        </div>
+                        <button onClick={() => removeGoldenScenario(i)} className="p-0.5 text-red-400 hover:bg-red-500/20 rounded">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-neutral-600 text-[10px]">Add at least 2 golden scenarios</p>
+                )}
+              </div>
+
+              {/* Kill Scenarios */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-red-400">Kill Scenarios (rejection cases)</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-neutral-500">{seedScenarios.kill.length} configured</span>
+                    <button
+                      onClick={() => setShowAddKill(!showAddKill)}
+                      className="p-1 text-red-400 hover:bg-red-500/20 rounded transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+
+                {showAddKill && (
+                  <div className="mb-2 p-2 bg-red-500/10 border border-red-500/30 rounded space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Scenario name"
+                      value={newKillScenario.name}
+                      onChange={(e) => setNewKillScenario({ ...newKillScenario, name: e.target.value })}
+                      className="w-full px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Description"
+                      value={newKillScenario.description}
+                      onChange={(e) => setNewKillScenario({ ...newKillScenario, description: e.target.value })}
+                      className="w-full px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={addKillScenario} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-[10px] rounded">Add</button>
+                      <button onClick={() => setShowAddKill(false)} className="px-2 py-1 bg-neutral-700 text-white text-[10px] rounded">Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {seedScenarios.kill.length > 0 ? (
+                  <div className="space-y-1">
+                    {seedScenarios.kill.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between p-1.5 bg-red-500/5 border border-red-500/20 rounded text-[10px]">
+                        <div>
+                          <span className="text-red-400">{s.name}</span>
+                          <span className="text-neutral-500 ml-2">{s.description}</span>
+                        </div>
+                        <button onClick={() => removeKillScenario(i)} className="p-0.5 text-red-400 hover:bg-red-500/20 rounded">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-neutral-600 text-[10px]">Add at least 2 kill scenarios</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
