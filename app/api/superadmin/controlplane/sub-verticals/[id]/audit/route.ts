@@ -101,6 +101,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
     let mvtData: MVTColumns | null = null;
 
+    // Check if sub-vertical exists FIRST
+    if (!subVertical) {
+      console.log('[ControlPlane:SubVertical Audit] Sub-vertical not found:', id);
+      return notFoundError('Sub-Vertical');
+    }
+
     try {
       mvtData = await queryOne<MVTColumns>(
         `SELECT
@@ -116,7 +122,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Merge MVT data if available
     const fullSubVertical: SubVerticalAuditData = {
-      ...subVertical!,
+      ...subVertical,
       buyer_role: mvtData?.buyer_role || null,
       decision_owner: mvtData?.decision_owner || null,
       allowed_signals: mvtData?.allowed_signals || null,
@@ -126,11 +132,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       mvt_valid: mvtData?.mvt_valid || null,
       mvt_validated_at: mvtData?.mvt_validated_at || null,
     };
-
-    if (!subVertical) {
-      console.log('[ControlPlane:SubVertical Audit] Sub-vertical not found:', id);
-      return notFoundError('Sub-Vertical');
-    }
 
     // Calculate MVT status with defensive null handling
     const allowedSignals = Array.isArray(fullSubVertical.allowed_signals) ? fullSubVertical.allowed_signals : [];
