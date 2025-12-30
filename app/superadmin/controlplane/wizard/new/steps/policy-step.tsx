@@ -121,7 +121,7 @@ export function PolicyStep() {
           `/api/superadmin/controlplane/personas/${wizardState.persona_id}/policy`
         );
         const data = await response.json();
-        if (data.success) {
+        if (data.success && data.data) {
           setPolicyData({
             allowed_intents: data.data.allowed_intents || [],
             allowed_tools: data.data.allowed_tools || [],
@@ -129,9 +129,16 @@ export function PolicyStep() {
             evidence_scope: data.data.evidence_scope || {},
             escalation_rules: data.data.escalation_rules || {},
           });
-          // Update status from server
-          if (data.data.status) {
-            updateWizardState({ policy_status: data.data.status });
+          // Update status AND version from server
+          const serverStatus = data.data.status;
+          const serverVersion = data.data.policy_version;
+          updateWizardState({
+            policy_status: serverStatus,
+            policy_version: serverVersion,
+          });
+          // If policy is already ACTIVE, auto-mark step complete
+          if (serverStatus === 'ACTIVE') {
+            markStepComplete(4);
           }
         }
       } catch (error) {
@@ -139,7 +146,7 @@ export function PolicyStep() {
       }
     }
     fetchPolicy();
-  }, [wizardState.persona_id, updateWizardState]);
+  }, [wizardState.persona_id, updateWizardState, markStepComplete]);
 
   /**
    * Save policy (keeps in DRAFT status)
