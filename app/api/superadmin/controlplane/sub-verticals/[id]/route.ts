@@ -409,7 +409,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
         await logControlPlaneAudit({
           actorUser,
-          action: 'update_sub_vertical_icp',
+          action: 'update_sub_vertical',
           targetType: 'sub_vertical',
           targetId: id,
           requestJson: body,
