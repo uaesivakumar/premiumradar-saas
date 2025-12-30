@@ -97,10 +97,13 @@ export default function SubVerticalHardenPage() {
         // Try to get error details from response body
         let errorDetails = '';
         try {
-          const errorData = await res.json();
-          errorDetails = errorData.error || errorData.details || '';
+          const text = await res.text();
+          if (text) {
+            const errorData = JSON.parse(text);
+            errorDetails = errorData.error || errorData.details || '';
+          }
         } catch {
-          // Response might not be JSON
+          // Response might not be JSON or empty
         }
 
         if (res.status === 404) {
@@ -119,7 +122,19 @@ export default function SubVerticalHardenPage() {
         throw new Error(`Failed to load sub-vertical (HTTP ${res.status}): ${errorDetails}`);
       }
 
-      const data = await res.json();
+      // Safely parse JSON response
+      const text = await res.text();
+      if (!text || text.trim() === '') {
+        throw new Error('Empty response from server');
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('[SubVertical Harden] JSON parse error:', parseError, 'Response:', text.substring(0, 200));
+        throw new Error('Invalid JSON response from server');
+      }
 
       if (!data.success) {
         throw new Error(data.error || data.message || 'Failed to load sub-vertical');

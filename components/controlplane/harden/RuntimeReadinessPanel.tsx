@@ -91,15 +91,30 @@ export function RuntimeReadinessPanel({
       if (!res.ok) {
         let errorMsg = `HTTP ${res.status}`;
         try {
-          const errorData = await res.json();
-          errorMsg = errorData.error || errorData.message || errorMsg;
+          const text = await res.text();
+          if (text) {
+            const errorData = JSON.parse(text);
+            errorMsg = errorData.error || errorData.message || errorMsg;
+          }
         } catch {
-          // Response might not be JSON
+          // Response might not be JSON or empty
         }
         throw new Error(errorMsg);
       }
 
-      const data = await res.json();
+      // Safely parse JSON response
+      const text = await res.text();
+      if (!text || text.trim() === '') {
+        throw new Error('Empty response from server');
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('[RuntimeReadiness] JSON parse error:', parseError, 'Response:', text.substring(0, 200));
+        throw new Error('Invalid JSON response from server');
+      }
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to check runtime readiness');
