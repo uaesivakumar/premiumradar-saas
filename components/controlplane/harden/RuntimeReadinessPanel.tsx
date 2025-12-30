@@ -86,6 +86,19 @@ export function RuntimeReadinessPanel({
       const res = await fetch(
         `/api/superadmin/controlplane/runtime-check/${entityType}/${entityId}`
       );
+
+      // Handle non-ok responses before trying to parse JSON
+      if (!res.ok) {
+        let errorMsg = `HTTP ${res.status}`;
+        try {
+          const errorData = await res.json();
+          errorMsg = errorData.error || errorData.message || errorMsg;
+        } catch {
+          // Response might not be JSON
+        }
+        throw new Error(errorMsg);
+      }
+
       const data = await res.json();
 
       if (!data.success) {
