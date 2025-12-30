@@ -71,8 +71,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return notFoundError('Persona');
     }
 
-    const policy = await queryOne<OSPersonaPolicy>(
-      `SELECT id, persona_id, policy_version, allowed_intents, forbidden_outputs, allowed_tools,
+    const policy = await queryOne<OSPersonaPolicy & { status: string }>(
+      `SELECT id, persona_id, policy_version, status, allowed_intents, forbidden_outputs, allowed_tools,
               evidence_scope, memory_scope, cost_budget, latency_budget,
               escalation_rules, disclaimer_rules, created_at, updated_at
        FROM os_persona_policies WHERE persona_id = $1`,
