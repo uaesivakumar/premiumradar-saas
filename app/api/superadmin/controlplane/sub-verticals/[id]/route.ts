@@ -362,6 +362,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // ========================================
     // MVT UPDATE PATH (v2.0)
     // ========================================
+    // Check what MVT fields are being updated
+    const hasICPOnlyFields = (buyer_role !== undefined || decision_owner !== undefined) &&
+      allowed_signals === undefined &&
+      kill_rules === undefined &&
+      seed_scenarios === undefined;
+
     const hasMVTFields =
       buyer_role !== undefined ||
       decision_owner !== undefined ||
@@ -371,7 +377,66 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     let newMVTVersion: MVTVersion | null = null;
 
-    if (hasMVTFields) {
+    // ========================================
+    // ICP-ONLY UPDATE PATH (buyer_role, decision_owner)
+    // Allow saving ICP fields without full MVT validation
+    // ========================================
+    if (hasICPOnlyFields) {
+      // Update ICP fields directly on sub_verticals table
+      const icpUpdates: string[] = [];
+      const icpValues: unknown[] = [];
+      let icpParamIndex = 1;
+
+      if (buyer_role !== undefined) {
+        icpUpdates.push(`buyer_role = $${icpParamIndex++}`);
+        icpValues.push(buyer_role || null);
+      }
+      if (decision_owner !== undefined) {
+        icpUpdates.push(`decision_owner = $${icpParamIndex++}`);
+        icpValues.push(decision_owner || null);
+      }
+
+      if (icpUpdates.length > 0) {
+        icpUpdates.push('updated_at = NOW()');
+        icpValues.push(id);
+
+        await queryOne(
+          `UPDATE os_sub_verticals
+           SET ${icpUpdates.join(', ')}
+           WHERE id = $${icpParamIndex}`,
+          icpValues
+        );
+
+        await logControlPlaneAudit({
+          actorUser,
+          action: 'update_sub_vertical_icp',
+          targetType: 'sub_vertical',
+          targetId: id,
+          requestJson: body,
+          success: true,
+        });
+
+        // Fetch updated result
+        const result = await queryOne<OSSubVertical>(
+          `SELECT id, vertical_id, key, name, default_agent, primary_entity_type,
+                  related_entity_types, active_mvt_version_id, is_active,
+                  buyer_role, decision_owner, created_at, updated_at
+           FROM os_sub_verticals WHERE id = $1`,
+          [id]
+        );
+
+        return Response.json({
+          success: true,
+          data: result,
+          message: 'ICP fields updated. Complete MVT configuration to enable runtime.',
+        });
+      }
+    }
+
+    // ========================================
+    // FULL MVT UPDATE PATH (requires all fields)
+    // ========================================
+    if (hasMVTFields && !hasICPOnlyFields) {
       // Merge with existing MVT values (partial updates allowed)
       const mergedBuyerRole = buyer_role ?? existing.current_buyer_role ?? '';
       const mergedDecisionOwner = decision_owner ?? existing.current_decision_owner ?? '';
