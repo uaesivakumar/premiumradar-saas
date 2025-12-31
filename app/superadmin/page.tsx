@@ -1,150 +1,385 @@
 'use client';
 
 /**
- * Super Admin Dashboard - Professional Control Panel
+ * SOLO FOUNDER COMMAND CENTER
  *
- * Design: Linear/Stripe inspired - minimal, functional, no gradients
- * Fetches REAL data from /api/superadmin/stats
+ * One page to rule them all.
+ * Design: Modern, intelligent, efficient.
+ * No fragmentation. No hunting through pages.
+ *
+ * Features:
+ * - User creation with ONE CLICK
+ * - Human-readable activity (no UUIDs)
+ * - Smart insights and recommendations
+ * - Everything visible at a glance
  */
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   Building2,
   Activity,
+  TrendingUp,
+  TrendingDown,
   AlertTriangle,
-  Server,
-  Database,
+  CheckCircle,
+  Clock,
+  UserPlus,
+  Shield,
   Zap,
   ArrowRight,
-  CheckCircle,
-  XCircle,
-  Globe,
-  BarChart3,
-  Loader2,
+  ChevronRight,
   RefreshCw,
+  Eye,
+  UserX,
+  UserCheck,
+  Briefcase,
+  BarChart3,
+  Sparkles,
+  Target,
+  Mail,
+  Settings,
+  Database,
+  Server,
+  Play,
+  Pause,
+  Plus,
+  X,
+  Check,
+  Edit2,
+  ExternalLink,
+  Loader2,
+  Search,
+  Filter,
+  MoreHorizontal,
 } from 'lucide-react';
 
-interface ApiStats {
-  users: {
-    total: number;
-    active: number;
-    demo: number;
-    pending: number;
-  };
-  tenants: {
-    total: number;
-    active: number;
-    trial: number;
-  };
-  signals: {
-    today: number;
-    thisWeek: number;
-    thisMonth: number;
-  };
-  database: {
-    healthy: boolean;
-    connectionCount: number;
-    maxConnections: number;
-    queryTimeAvg: number;
-    storageUsedMb: number;
-    storageMaxMb: number;
-  };
-  api: {
-    latencyP95: number;
-    errorRate: number; // For system health (recent errors only)
-    cumulativeErrorRate: number; // All-time error rate
-    hasRecentErrors: boolean;
-    integrations: Array<{
-      provider: string;
-      name: string;
-      isActive: boolean;
-      usageCount: number;
-      errorCount: number;
-      lastUsedAt: string | null;
-    }>;
-  };
-  outreach: {
-    sentToday: number;
-    openRate: number;
-    replyRate: number;
-  };
-  recentActivity: Array<{
-    id: string;
-    type: string;
-    message: string;
-    timestamp: string;
-    status: 'success' | 'warning' | 'error';
-  }>;
+// Types
+interface UserData {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  is_demo: boolean;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+  enterprise_name: string | null;
 }
 
-export default function SuperAdminDashboard() {
-  const [stats, setStats] = useState<ApiStats | null>(null);
+interface Stats {
+  total_users: number;
+  demo_users: number;
+  real_users: number;
+  suspended_users: number;
+  converted_this_month: number;
+  churned_this_month: number;
+  role_breakdown: {
+    SUPER_ADMIN: number;
+    ENTERPRISE_ADMIN: number;
+    ENTERPRISE_USER: number;
+    INDIVIDUAL_USER: number;
+  };
+}
+
+interface Enterprise {
+  enterprise_id: string;
+  name: string;
+  domain: string;
+  user_count: number;
+  created_at: string;
+}
+
+interface ActivityItem {
+  id: string;
+  event_type: string;
+  description: string;
+  actor: string;
+  timestamp: string;
+  importance: 'high' | 'medium' | 'low';
+}
+
+interface Insight {
+  id: string;
+  type: 'warning' | 'opportunity' | 'success' | 'info';
+  title: string;
+  description: string;
+  action?: { label: string; onClick: () => void };
+}
+
+export default function SoloFounderCommandCenter() {
+  // Data states
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [insights, setInsights] = useState<Insight[]>([]);
+
+  // UI states
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [selectedUserType, setSelectedUserType] = useState<string | null>(null);
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
 
-  async function fetchStats() {
+  // Create user form
+  const [createEmail, setCreateEmail] = useState('');
+  const [createName, setCreateName] = useState('');
+  const [createEnterprise, setCreateEnterprise] = useState('');
+  const [createIsDemo, setCreateIsDemo] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState('');
+
+  // Filter states
+  const [userFilter, setUserFilter] = useState<'all' | 'demo' | 'real' | 'suspended'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Fetch all data
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      setError(null);
-      const response = await fetch('/api/superadmin/stats');
-      const data = await response.json();
+      const [plgRes, enterprisesRes, activityRes] = await Promise.all([
+        fetch('/api/superadmin/plg?status=all&role=all'),
+        fetch('/api/superadmin/enterprises'),
+        fetch('/api/superadmin/activity?limit=15'),
+      ]);
 
-      if (data.success) {
-        setStats(data.data);
-        setLastRefresh(new Date());
-      } else {
-        setError(data.error || 'Failed to load stats');
+      const [plgData, enterprisesData, activityData] = await Promise.all([
+        plgRes.json(),
+        enterprisesRes.json(),
+        activityRes.json(),
+      ]);
+
+      if (plgData.success) {
+        setStats(plgData.data.stats);
+        setUsers(plgData.data.users || []);
+        generateInsights(plgData.data.stats, setShowCreatePanel);
       }
-    } catch (err) {
-      setError('Failed to connect to stats API');
-      console.error('Stats fetch error:', err);
+
+      if (enterprisesData.success) {
+        setEnterprises(enterprisesData.data?.enterprises || []);
+      }
+
+      if (activityData.success) {
+        const humanActivities = (activityData.data || []).map((a: any) => formatActivity(a));
+        setActivities(humanActivities);
+      }
+
+      setLastRefresh(new Date());
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
     } finally {
       setIsLoading(false);
     }
-  }
-
-  useEffect(() => {
-    fetchStats();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
   }, []);
 
-  // Determine system health based on database and API health
-  const systemHealth = stats?.database.healthy
-    ? stats.api.errorRate < 0.05
-      ? 'healthy'
-      : 'degraded'
-    : 'down';
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Generate insights
+  function generateInsights(stats: Stats, setShowCreate: (v: boolean) => void) {
+    const newInsights: Insight[] = [];
+
+    if (stats.demo_users > 3) {
+      newInsights.push({
+        id: 'convert-demos',
+        type: 'opportunity',
+        title: `${stats.demo_users} demo users ready to convert`,
+        description: 'Active demo users could become paying customers.',
+        action: {
+          label: 'View demos',
+          onClick: () => setUserFilter('demo'),
+        },
+      });
+    }
+
+    if (stats.suspended_users > 0) {
+      newInsights.push({
+        id: 'suspended',
+        type: 'warning',
+        title: `${stats.suspended_users} suspended users`,
+        description: 'Review and decide whether to reinstate or remove.',
+        action: {
+          label: 'View suspended',
+          onClick: () => setUserFilter('suspended'),
+        },
+      });
+    }
+
+    if (stats.converted_this_month > 0) {
+      newInsights.push({
+        id: 'conversions',
+        type: 'success',
+        title: `${stats.converted_this_month} conversions this month`,
+        description: 'Demo users are converting to real accounts.',
+      });
+    }
+
+    if (stats.total_users === 0) {
+      newInsights.push({
+        id: 'no-users',
+        type: 'info',
+        title: 'No users yet',
+        description: 'Create your first user to get started.',
+        action: {
+          label: 'Create user',
+          onClick: () => setShowCreate(true),
+        },
+      });
+    }
+
+    setInsights(newInsights);
+  }
+
+  // Format activity to human-readable
+  function formatActivity(event: any): ActivityItem {
+    const metadata = event.metadata || {};
+    const eventType = event.event_type;
+
+    const descriptions: Record<string, (m: any) => string> = {
+      'USER_CREATED': (m) => `${m.email || 'New user'} account created`,
+      'USER_SIGNUP': (m) => `${m.email || 'Someone'} signed up`,
+      'USER_LOGIN': (m) => `${m.email || 'User'} logged in`,
+      'DEMO_CONVERTED': (m) => `${m.email || 'Demo'} upgraded to real account`,
+      'USER_SUSPENDED': (m) => `${m.target_email || 'User'} suspended`,
+      'USER_REINSTATED': (m) => `${m.target_email || 'User'} reinstated`,
+      'ENTERPRISE_CREATED': (m) => `Enterprise "${m.name}" created`,
+      'WORKSPACE_CREATED': (m) => `Workspace "${m.name}" created`,
+      'PLG_ADMIN_CONVERT': (m) => `Converted ${m.target_user_email || 'user'} to real`,
+      'PLG_ADMIN_SUSPEND': (m) => `Suspended ${m.target_user_email || 'user'}`,
+      'PLG_ADMIN_REINSTATE': (m) => `Reinstated ${m.target_user_email || 'user'}`,
+      'PLG_ADMIN_OVERRIDE': (m) => `Updated ${m.target_user_email || 'user'} settings`,
+      'ONBOARDING_STARTED': (m) => `${m.email || 'User'} started onboarding`,
+      'ONBOARDING_COMPLETED': (m) => `${m.email || 'User'} completed onboarding`,
+    };
+
+    const getDescription = descriptions[eventType] || (() => eventType.replace(/_/g, ' ').toLowerCase());
+
+    return {
+      id: event.id,
+      event_type: eventType,
+      description: getDescription(metadata),
+      actor: metadata.performed_by || metadata.email || 'System',
+      timestamp: event.created_at,
+      importance: getImportance(eventType),
+    };
+  }
+
+  function getImportance(eventType: string): 'high' | 'medium' | 'low' {
+    if (['USER_SUSPENDED', 'DEMO_CONVERTED', 'ENTERPRISE_CREATED', 'PLG_ADMIN_CONVERT'].includes(eventType)) return 'high';
+    if (['USER_CREATED', 'USER_SIGNUP', 'ONBOARDING_COMPLETED'].includes(eventType)) return 'medium';
+    return 'low';
+  }
+
+  // Create user
+  async function handleCreateUser(type: 'individual' | 'demo' | 'enterprise' | 'enterprise_admin') {
+    if (!createEmail) {
+      setCreateError('Email is required');
+      return;
+    }
+
+    if ((type === 'enterprise' || type === 'enterprise_admin') && !createEnterprise) {
+      setCreateError('Please select an enterprise');
+      return;
+    }
+
+    setIsCreating(true);
+    setCreateError('');
+    setCreateSuccess('');
+
+    const roleMap: Record<string, { role: string; is_demo: boolean }> = {
+      individual: { role: 'INDIVIDUAL_USER', is_demo: false },
+      demo: { role: 'INDIVIDUAL_USER', is_demo: true },
+      enterprise: { role: 'ENTERPRISE_USER', is_demo: createIsDemo },
+      enterprise_admin: { role: 'ENTERPRISE_ADMIN', is_demo: false },
+    };
+
+    const { role, is_demo } = roleMap[type];
+
+    try {
+      const res = await fetch('/api/superadmin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: createEmail,
+          name: createName || createEmail.split('@')[0],
+          role,
+          is_demo,
+          enterprise_id: createEnterprise || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setCreateSuccess(`Created ${createEmail}`);
+        setCreateEmail('');
+        setCreateName('');
+        setCreateEnterprise('');
+        setCreateIsDemo(false);
+        setSelectedUserType(null);
+        fetchData();
+        setTimeout(() => setCreateSuccess(''), 3000);
+      } else {
+        setCreateError(data.error || 'Failed to create user');
+      }
+    } catch (err) {
+      setCreateError('Network error');
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  // User actions
+  async function handleUserAction(userId: string, action: 'suspend' | 'reinstate' | 'convert') {
+    try {
+      const endpoint = `/api/superadmin/plg/${userId}/${action}`;
+      const res = await fetch(endpoint, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        fetchData();
+      }
+    } catch (err) {
+      console.error(`Failed to ${action} user:`, err);
+    }
+  }
+
+  // Time ago
+  function timeAgo(date: string): string {
+    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return 'now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `${days}d`;
+  }
+
+  // Filter users
+  const filteredUsers = users.filter((u) => {
+    // Status filter
+    if (userFilter === 'demo' && (!u.is_demo || !u.is_active)) return false;
+    if (userFilter === 'real' && (u.is_demo || !u.is_active)) return false;
+    if (userFilter === 'suspended' && u.is_active) return false;
+
+    // Search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return (
+        u.email.toLowerCase().includes(q) ||
+        u.name?.toLowerCase().includes(q) ||
+        u.enterprise_name?.toLowerCase().includes(q)
+      );
+    }
+
+    return true;
+  });
 
   if (isLoading && !stats) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <Loader2 className="w-5 h-5 text-neutral-500 animate-spin mx-auto mb-3" />
-          <p className="text-neutral-500 text-sm">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !stats) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto mb-3" />
-          <p className="text-neutral-400 text-sm mb-4">{error}</p>
-          <button
-            onClick={fetchStats}
-            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded transition-colors"
-          >
-            Retry
-          </button>
-        </div>
+      <div className="flex items-center justify-center h-[60vh]">
+        <RefreshCw className="w-6 h-6 text-neutral-500 animate-spin" />
       </div>
     );
   }
@@ -154,333 +389,540 @@ export default function SuperAdminDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-medium text-white">Overview</h1>
-          <p className="text-neutral-500 text-sm mt-0.5">
-            System metrics
-            {lastRefresh && (
-              <span className="text-neutral-600 ml-2">
-                · {formatTimeAgo(lastRefresh)}
-              </span>
-            )}
+          <h1 className="text-xl font-semibold text-white flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-400" />
+            Command Center
+          </h1>
+          <p className="text-sm text-neutral-500 mt-0.5">
+            One page. Everything you need.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchStats}
-            disabled={isLoading}
-            className="p-1.5 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
-            systemHealth === 'healthy'
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              : systemHealth === 'degraded'
-              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-              : 'bg-red-500/10 text-red-400 border border-red-500/20'
-          }`}>
-            {systemHealth === 'healthy' ? (
-              <CheckCircle className="w-3 h-3" />
-            ) : systemHealth === 'degraded' ? (
-              <AlertTriangle className="w-3 h-3" />
-            ) : (
-              <XCircle className="w-3 h-3" />
-            )}
-            {systemHealth}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-neutral-600">
+            Updated {timeAgo(lastRefresh.toISOString())} ago
           </span>
+          <button
+            onClick={fetchData}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 rounded transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard
-          title="Total Users"
-          value={stats?.users.total || 0}
-          icon={Users}
-          subtitle={`${stats?.users.active || 0} active, ${stats?.users.demo || 0} demo`}
-          color="blue"
-        />
-        <StatCard
-          title="Tenants"
-          value={stats?.tenants.total || 0}
-          icon={Building2}
-          subtitle={`${stats?.tenants.active || 0} active, ${stats?.tenants.trial || 0} trial`}
-          color="purple"
-        />
-        <StatCard
-          title="Active Sessions"
-          value={stats?.database.connectionCount || 0}
-          icon={Activity}
-          subtitle={`of ${stats?.database.maxConnections || 100} max`}
-          color="green"
-        />
-        <StatCard
-          title="Signals Today"
-          value={(stats?.signals.today || 0).toLocaleString()}
-          icon={Zap}
-          subtitle={`${(stats?.signals.thisWeek || 0).toLocaleString()} this week`}
-          color="orange"
-        />
+      {/* Quick Stats + Create Actions Row */}
+      <div className="grid grid-cols-6 gap-4">
+        {/* Stats */}
+        <div className="col-span-4 grid grid-cols-4 gap-4">
+          <StatCard
+            label="Total Users"
+            value={stats?.total_users || 0}
+            icon={<Users className="w-4 h-4" />}
+            onClick={() => setUserFilter('all')}
+            active={userFilter === 'all'}
+          />
+          <StatCard
+            label="Demo"
+            value={stats?.demo_users || 0}
+            icon={<Clock className="w-4 h-4" />}
+            color="amber"
+            onClick={() => setUserFilter('demo')}
+            active={userFilter === 'demo'}
+          />
+          <StatCard
+            label="Real"
+            value={stats?.real_users || 0}
+            icon={<CheckCircle className="w-4 h-4" />}
+            color="emerald"
+            onClick={() => setUserFilter('real')}
+            active={userFilter === 'real'}
+          />
+          <StatCard
+            label="Suspended"
+            value={stats?.suspended_users || 0}
+            icon={<UserX className="w-4 h-4" />}
+            color="red"
+            onClick={() => setUserFilter('suspended')}
+            active={userFilter === 'suspended'}
+          />
+        </div>
+
+        {/* Quick Create */}
+        <div className="col-span-2 bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-white flex items-center gap-1.5">
+              <Plus className="w-4 h-4" />
+              Quick Create
+            </h3>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => { setSelectedUserType('individual'); setShowCreatePanel(true); }}
+              className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-left transition-all"
+            >
+              <UserPlus className="w-4 h-4 text-blue-400" />
+              <span className="text-xs text-white">Individual</span>
+            </button>
+            <button
+              onClick={() => { setSelectedUserType('demo'); setShowCreatePanel(true); }}
+              className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 rounded-lg text-left transition-all"
+            >
+              <Clock className="w-4 h-4 text-amber-400" />
+              <span className="text-xs text-white">Demo</span>
+            </button>
+            <button
+              onClick={() => { setSelectedUserType('enterprise'); setShowCreatePanel(true); }}
+              className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-left transition-all"
+            >
+              <Briefcase className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs text-white">Enterprise</span>
+            </button>
+            <button
+              onClick={() => { setSelectedUserType('enterprise_admin'); setShowCreatePanel(true); }}
+              className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-left transition-all"
+            >
+              <Shield className="w-4 h-4 text-violet-400" />
+              <span className="text-xs text-white">Admin</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* System Metrics */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-neutral-300">API</h3>
-            <Server className="w-4 h-4 text-neutral-600" />
+      {/* Create Panel (slides down) */}
+      {showCreatePanel && (
+        <div className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-4 animate-in slide-in-from-top duration-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-white flex items-center gap-2">
+              <UserPlus className="w-4 h-4" />
+              Create {selectedUserType === 'individual' ? 'Individual User' :
+                selectedUserType === 'demo' ? 'Demo User' :
+                selectedUserType === 'enterprise' ? 'Enterprise User' : 'Enterprise Admin'}
+            </h3>
+            <button
+              onClick={() => { setShowCreatePanel(false); setSelectedUserType(null); setCreateError(''); }}
+              className="p-1 text-neutral-500 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <div className="space-y-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-neutral-500">P95 Latency</span>
-                <span className="text-xs font-medium text-white">{stats?.api.latencyP95 || 0}ms</span>
+
+          <div className="flex items-end gap-4">
+            <div className="flex-1">
+              <label className="block text-xs text-neutral-500 mb-1">Email</label>
+              <input
+                type="email"
+                value={createEmail}
+                onChange={(e) => setCreateEmail(e.target.value)}
+                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:border-neutral-600"
+                placeholder="user@example.com"
+                autoFocus
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-neutral-500 mb-1">Name (optional)</label>
+              <input
+                type="text"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:border-neutral-600"
+                placeholder="John Smith"
+              />
+            </div>
+            {(selectedUserType === 'enterprise' || selectedUserType === 'enterprise_admin') && (
+              <div className="flex-1">
+                <label className="block text-xs text-neutral-500 mb-1">Enterprise</label>
+                <select
+                  value={createEnterprise}
+                  onChange={(e) => setCreateEnterprise(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:border-neutral-600"
+                >
+                  <option value="">Select...</option>
+                  {enterprises.map((e) => (
+                    <option key={e.enterprise_id} value={e.enterprise_id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="h-1 bg-neutral-800 rounded-full">
-                <div
-                  className="h-full bg-emerald-500/60 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, ((stats?.api.latencyP95 || 0) / 500) * 100)}%` }}
+            )}
+            {selectedUserType === 'enterprise' && (
+              <div className="flex items-center gap-2 pb-2">
+                <input
+                  type="checkbox"
+                  id="createIsDemo"
+                  checked={createIsDemo}
+                  onChange={(e) => setCreateIsDemo(e.target.checked)}
+                  className="rounded border-neutral-600"
+                />
+                <label htmlFor="createIsDemo" className="text-xs text-neutral-400">Demo</label>
+              </div>
+            )}
+            <button
+              onClick={() => handleCreateUser(selectedUserType as any)}
+              disabled={isCreating}
+              className="px-4 py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-neutral-200 transition-colors disabled:opacity-50"
+            >
+              {isCreating ? 'Creating...' : 'Create'}
+            </button>
+          </div>
+
+          {createError && (
+            <div className="mt-3 text-sm text-red-400 bg-red-500/10 px-3 py-2 rounded-lg flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              {createError}
+            </div>
+          )}
+          {createSuccess && (
+            <div className="mt-3 text-sm text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              {createSuccess}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main Grid */}
+      <div className="grid grid-cols-3 gap-6">
+        {/* Users List (2/3 width) */}
+        <div className="col-span-2 bg-neutral-900/50 border border-neutral-800 rounded-xl">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-neutral-800">
+            <h2 className="text-sm font-medium text-white flex items-center gap-2">
+              <Users className="w-4 h-4 text-neutral-500" />
+              Users
+              <span className="text-xs text-neutral-600">({filteredUsers.length})</span>
+            </h2>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search..."
+                  className="w-48 pl-8 pr-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white focus:outline-none focus:border-neutral-600"
                 />
               </div>
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-neutral-500">Error Rate (1h)</span>
-                <span className={`text-xs font-medium ${stats?.api.hasRecentErrors ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {stats?.api.hasRecentErrors ? `${((stats?.api.errorRate || 0) * 100).toFixed(2)}%` : '0%'}
-                </span>
+          </div>
+
+          {/* Users Table */}
+          <div className="max-h-[400px] overflow-y-auto">
+            {filteredUsers.length === 0 ? (
+              <div className="py-12 text-center">
+                <Users className="w-8 h-8 text-neutral-700 mx-auto mb-2" />
+                <p className="text-neutral-500 text-sm">No users found</p>
+                <button
+                  onClick={() => setShowCreatePanel(true)}
+                  className="mt-3 text-xs text-blue-400 hover:text-blue-300"
+                >
+                  Create your first user
+                </button>
               </div>
-              <div className="h-1 bg-neutral-800 rounded-full">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    !stats?.api.hasRecentErrors ? 'bg-emerald-500/60' :
-                    (stats?.api.errorRate || 0) < 0.05 ? 'bg-amber-500/60' : 'bg-red-500/60'
-                  }`}
-                  style={{ width: stats?.api.hasRecentErrors ? `${Math.min(100, (stats?.api.errorRate || 0) * 1000)}%` : '5%' }}
-                />
-              </div>
-            </div>
-            {/* Integration Stats */}
-            <div className="pt-2 border-t border-neutral-800">
-              <div className="flex flex-wrap gap-1.5">
-                {stats?.api.integrations.map((integration) => (
-                  <span
-                    key={integration.provider}
-                    className={`px-1.5 py-0.5 text-[10px] rounded ${
-                      integration.isActive
-                        ? 'bg-emerald-500/10 text-emerald-400'
-                        : 'bg-neutral-800 text-neutral-500'
+            ) : (
+              <table className="w-full">
+                <thead className="sticky top-0 bg-neutral-900/95 backdrop-blur">
+                  <tr className="text-xs text-neutral-500 border-b border-neutral-800">
+                    <th className="text-left font-medium px-4 py-2">User</th>
+                    <th className="text-left font-medium px-4 py-2">Role</th>
+                    <th className="text-left font-medium px-4 py-2">Status</th>
+                    <th className="text-left font-medium px-4 py-2">Joined</th>
+                    <th className="text-right font-medium px-4 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.slice(0, 50).map((user) => (
+                    <tr key={user.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-xs font-medium text-white">
+                            {user.name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-sm text-white font-medium">{user.name || user.email.split('@')[0]}</div>
+                            <div className="text-xs text-neutral-500">{user.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
+                          user.role === 'SUPER_ADMIN' ? 'bg-red-500/10 text-red-400' :
+                          user.role === 'ENTERPRISE_ADMIN' ? 'bg-violet-500/10 text-violet-400' :
+                          user.role === 'ENTERPRISE_USER' ? 'bg-emerald-500/10 text-emerald-400' :
+                          'bg-blue-500/10 text-blue-400'
+                        }`}>
+                          {user.role === 'SUPER_ADMIN' && <Shield className="w-3 h-3" />}
+                          {user.role === 'ENTERPRISE_ADMIN' && <Briefcase className="w-3 h-3" />}
+                          {user.role === 'ENTERPRISE_USER' && <Building2 className="w-3 h-3" />}
+                          {user.role === 'INDIVIDUAL_USER' && <Users className="w-3 h-3" />}
+                          {user.role.replace('_', ' ').split(' ').map(w => w[0]).join('')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {!user.is_active ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-400">
+                            <UserX className="w-3 h-3" />
+                            Suspended
+                          </span>
+                        ) : user.is_demo ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400">
+                            <Clock className="w-3 h-3" />
+                            Demo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400">
+                            <Check className="w-3 h-3" />
+                            Active
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-neutral-500">
+                        {timeAgo(user.created_at)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          {user.is_demo && user.is_active && (
+                            <button
+                              onClick={() => handleUserAction(user.id, 'convert')}
+                              className="p-1.5 text-amber-400 hover:bg-amber-500/10 rounded transition-colors"
+                              title="Convert to real"
+                            >
+                              <TrendingUp className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {user.is_active ? (
+                            <button
+                              onClick={() => handleUserAction(user.id, 'suspend')}
+                              className="p-1.5 text-neutral-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                              title="Suspend"
+                            >
+                              <Pause className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleUserAction(user.id, 'reinstate')}
+                              className="p-1.5 text-neutral-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors"
+                              title="Reinstate"
+                            >
+                              <Play className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column - Insights + Activity */}
+        <div className="col-span-1 space-y-4">
+          {/* Insights */}
+          {insights.length > 0 && (
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-4">
+              <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+                <Target className="w-4 h-4 text-amber-400" />
+                Insights
+              </h3>
+              <div className="space-y-2">
+                {insights.map((insight) => (
+                  <div
+                    key={insight.id}
+                    className={`p-3 rounded-lg border ${
+                      insight.type === 'warning' ? 'bg-amber-500/5 border-amber-500/20' :
+                      insight.type === 'opportunity' ? 'bg-blue-500/5 border-blue-500/20' :
+                      insight.type === 'success' ? 'bg-emerald-500/5 border-emerald-500/20' :
+                      'bg-neutral-800/50 border-neutral-700'
                     }`}
                   >
-                    {integration.provider}
-                  </span>
-                ))}
-                {(!stats?.api.integrations || stats.api.integrations.length === 0) && (
-                  <span className="text-[10px] text-neutral-600">No integrations</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-neutral-300">Database</h3>
-            <Database className={`w-4 h-4 ${stats?.database.healthy ? 'text-emerald-500' : 'text-red-500'}`} />
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">Status</span>
-              <span className={`text-xs font-medium ${stats?.database.healthy ? 'text-emerald-400' : 'text-red-400'}`}>
-                {stats?.database.healthy ? 'Connected' : 'Disconnected'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">Connections</span>
-              <span className="text-xs font-medium text-white">
-                {stats?.database.connectionCount || 0}/{stats?.database.maxConnections || 100}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">Avg Query</span>
-              <span className="text-xs font-medium text-white">{stats?.database.queryTimeAvg || 0}ms</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">Storage</span>
-              <span className="text-xs font-medium text-white">
-                {formatStorageSize(stats?.database.storageUsedMb || 0)} / {formatStorageSize(stats?.database.storageMaxMb || 10240)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-neutral-300">Outreach</h3>
-            <BarChart3 className="w-4 h-4 text-neutral-600" />
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">Sent Today</span>
-              <span className="text-xs font-medium text-white">{stats?.outreach.sentToday || 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">Open Rate</span>
-              <span className={`text-xs font-medium ${(stats?.outreach.openRate || 0) > 30 ? 'text-emerald-400' : 'text-white'}`}>
-                {stats?.outreach.openRate || 0}%
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">Reply Rate</span>
-              <span className={`text-xs font-medium ${(stats?.outreach.replyRate || 0) > 5 ? 'text-emerald-400' : 'text-white'}`}>
-                {stats?.outreach.replyRate || 0}%
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-neutral-800">
-            <p className="text-[10px] text-neutral-600">Signals/month: {(stats?.signals.thisMonth || 0).toLocaleString()}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Activity & Quick Actions */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Recent Activity */}
-        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-neutral-300">Activity</h3>
-            <Link href="/superadmin/activity" className="text-xs text-neutral-500 hover:text-white flex items-center gap-1 transition-colors">
-              View all <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {stats?.recentActivity && stats.recentActivity.length > 0 ? (
-              stats.recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-2 p-2 bg-neutral-800/30 rounded">
-                  <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${
-                    activity.status === 'success' ? 'bg-emerald-500' :
-                    activity.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-neutral-300 truncate">{activity.message}</p>
-                    <p className="text-[10px] text-neutral-600 mt-0.5">{formatTimeAgo(new Date(activity.timestamp))}</p>
+                    <div className="flex items-start gap-2">
+                      {insight.type === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5" />}
+                      {insight.type === 'opportunity' && <TrendingUp className="w-4 h-4 text-blue-400 mt-0.5" />}
+                      {insight.type === 'success' && <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5" />}
+                      {insight.type === 'info' && <Activity className="w-4 h-4 text-neutral-400 mt-0.5" />}
+                      <div className="flex-1">
+                        <div className="text-xs font-medium text-white">{insight.title}</div>
+                        <div className="text-xs text-neutral-500 mt-0.5">{insight.description}</div>
+                        {insight.action && (
+                          <button
+                            onClick={insight.action.onClick}
+                            className="text-xs text-blue-400 hover:text-blue-300 mt-1.5 flex items-center gap-1"
+                          >
+                            {insight.action.label}
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-6">
-                <Activity className="w-5 h-5 text-neutral-700 mx-auto mb-2" />
-                <p className="text-xs text-neutral-600">No recent activity</p>
+                ))}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
 
-        {/* Quick Actions */}
-        <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
-          <h3 className="text-sm font-medium text-neutral-300 mb-3">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-2">
-            <QuickActionCard
-              title="Demo User"
-              description="Testing & demos"
-              href="/superadmin/users/demo"
-              icon={Users}
-            />
-            <QuickActionCard
-              title="Verticals"
-              description="Personas & config"
-              href="/superadmin/verticals"
-              icon={Globe}
-            />
-            <QuickActionCard
-              title="Logs"
-              description="Audit trail"
-              href="/superadmin/logs"
-              icon={Activity}
-            />
-            <QuickActionCard
-              title="Integrations"
-              description="API providers"
-              href="/superadmin/integrations"
-              icon={Zap}
-            />
+          {/* Activity Feed */}
+          <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-white flex items-center gap-2">
+                <Activity className="w-4 h-4 text-violet-400" />
+                Activity
+              </h3>
+              <a href="/superadmin/activity" className="text-xs text-neutral-500 hover:text-white flex items-center gap-1">
+                All <ChevronRight className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="space-y-1 max-h-[300px] overflow-y-auto">
+              {activities.length === 0 ? (
+                <div className="text-center py-6 text-neutral-600 text-xs">
+                  No recent activity
+                </div>
+              ) : (
+                activities.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className={`p-2 rounded border-l-2 ${
+                      activity.importance === 'high' ? 'border-l-amber-500' :
+                      activity.importance === 'medium' ? 'border-l-blue-500' :
+                      'border-l-neutral-600'
+                    } bg-neutral-800/30 hover:bg-neutral-800/50 transition-colors`}
+                  >
+                    <div className="text-xs text-white">{activity.description}</div>
+                    <div className="text-[10px] text-neutral-500 mt-0.5 flex items-center justify-between">
+                      <span>{activity.actor}</span>
+                      <span>{timeAgo(activity.timestamp)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Enterprises */}
+          <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-white flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-emerald-400" />
+                Enterprises
+                <span className="text-xs text-neutral-600">({enterprises.length})</span>
+              </h3>
+              <a href="/superadmin/tenants" className="text-xs text-neutral-500 hover:text-white flex items-center gap-1">
+                Manage <ChevronRight className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+              {enterprises.length === 0 ? (
+                <div className="text-center py-4 text-neutral-600 text-xs">
+                  No enterprises yet
+                </div>
+              ) : (
+                enterprises.slice(0, 5).map((enterprise) => (
+                  <div key={enterprise.enterprise_id} className="flex items-center justify-between p-2 bg-neutral-800/30 rounded">
+                    <div>
+                      <div className="text-xs font-medium text-white">{enterprise.name}</div>
+                      <div className="text-[10px] text-neutral-500">{enterprise.domain}</div>
+                    </div>
+                    <span className="text-xs text-neutral-500">{enterprise.user_count || 0} users</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Role Distribution */}
+      {stats && (
+        <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-4">
+          <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-blue-400" />
+            User Distribution by Role
+          </h3>
+          <div className="grid grid-cols-4 gap-4">
+            <RoleBar role="Individual" count={stats.role_breakdown.INDIVIDUAL_USER} total={stats.total_users} color="blue" />
+            <RoleBar role="Enterprise User" count={stats.role_breakdown.ENTERPRISE_USER} total={stats.total_users} color="emerald" />
+            <RoleBar role="Enterprise Admin" count={stats.role_breakdown.ENTERPRISE_ADMIN} total={stats.total_users} color="violet" />
+            <RoleBar role="Super Admin" count={stats.role_breakdown.SUPER_ADMIN} total={stats.total_users} color="red" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+// Stat Card Component
 function StatCard({
-  title,
+  label,
   value,
-  icon: Icon,
-  subtitle,
+  icon,
+  color = 'default',
+  onClick,
+  active,
 }: {
-  title: string;
-  value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-  subtitle?: string;
-  color: 'blue' | 'purple' | 'green' | 'orange';
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color?: 'default' | 'amber' | 'emerald' | 'red';
+  onClick?: () => void;
+  active?: boolean;
 }) {
+  const colors = {
+    default: active ? 'bg-white/10 border-white/20' : 'bg-neutral-900/50 border-neutral-800 hover:bg-neutral-800/50',
+    amber: active ? 'bg-amber-500/10 border-amber-500/30' : 'bg-neutral-900/50 border-neutral-800 hover:bg-amber-500/5',
+    emerald: active ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-neutral-900/50 border-neutral-800 hover:bg-emerald-500/5',
+    red: active ? 'bg-red-500/10 border-red-500/30' : 'bg-neutral-900/50 border-neutral-800 hover:bg-red-500/5',
+  };
+
   return (
-    <div className="bg-neutral-900/50 rounded-lg border border-neutral-800 p-4">
+    <button
+      onClick={onClick}
+      className={`p-4 rounded-xl border text-left transition-all ${colors[color]}`}
+    >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-neutral-500">{title}</span>
-        <Icon className="w-4 h-4 text-neutral-600" />
+        <span className="text-neutral-500">{icon}</span>
       </div>
-      <div className="flex flex-col">
-        <span className="text-2xl font-semibold text-white">{value}</span>
-        {subtitle && (
-          <span className="text-[10px] text-neutral-600 mt-0.5">{subtitle}</span>
-        )}
+      <div className="text-2xl font-semibold text-white">{value}</div>
+      <div className="text-xs text-neutral-500 mt-0.5">{label}</div>
+    </button>
+  );
+}
+
+// Role Bar Component
+function RoleBar({
+  role,
+  count,
+  total,
+  color,
+}: {
+  role: string;
+  count: number;
+  total: number;
+  color: 'blue' | 'emerald' | 'violet' | 'red';
+}) {
+  const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+  const colors = {
+    blue: 'bg-blue-500',
+    emerald: 'bg-emerald-500',
+    violet: 'bg-violet-500',
+    red: 'bg-red-500',
+  };
+
+  return (
+    <div className="p-3 bg-neutral-800/30 rounded-lg">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-neutral-400">{role}</span>
+        <span className="text-sm font-medium text-white">{count}</span>
       </div>
+      <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${colors[color]} rounded-full transition-all`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <div className="text-[10px] text-neutral-600 mt-1">{percentage}%</div>
     </div>
   );
-}
-
-function QuickActionCard({
-  title,
-  description,
-  href,
-  icon: Icon,
-}: {
-  title: string;
-  description: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Link
-      href={href}
-      className="block p-3 bg-neutral-800/30 hover:bg-neutral-800/50 border border-neutral-800 hover:border-neutral-700 rounded transition-all group"
-    >
-      <Icon className="w-4 h-4 text-neutral-500 group-hover:text-white mb-1.5 transition-colors" />
-      <h4 className="font-medium text-white text-xs">{title}</h4>
-      <p className="text-[10px] text-neutral-600 mt-0.5">{description}</p>
-    </Link>
-  );
-}
-
-/**
- * Format a date as "X minutes ago", "X hours ago", etc.
- */
-function formatTimeAgo(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
-  return `${Math.floor(seconds / 86400)} days ago`;
-}
-
-/**
- * Format storage size (MB to human readable)
- */
-function formatStorageSize(mb: number): string {
-  if (mb >= 1024) {
-    return `${(mb / 1024).toFixed(1)}GB`;
-  }
-  return `${mb}MB`;
 }
