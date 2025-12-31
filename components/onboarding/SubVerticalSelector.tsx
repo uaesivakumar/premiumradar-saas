@@ -146,8 +146,26 @@ export function SubVerticalSelector() {
     setIsSubmitting(true);
     setSubVertical(selected);
 
-    // Brief transition animation
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // S348-F4: Update context via API (emits USER_UPDATED event)
+    try {
+      const contextResponse = await fetch('/api/onboarding/context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subVertical: selected,
+          step: 'region',
+        }),
+      });
+
+      if (!contextResponse.ok) {
+        const data = await contextResponse.json();
+        console.error('[SubVerticalSelector] Failed to update context:', data.error);
+      } else {
+        console.log('[S348-F4] Sub-vertical context updated with event');
+      }
+    } catch (error) {
+      console.error('[SubVerticalSelector] Failed to update context:', error);
+    }
 
     completeStep('subVertical');
     setStep('regions');

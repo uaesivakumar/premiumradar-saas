@@ -146,6 +146,27 @@ export function VerticalSelector() {
     setIsSubmitting(true);
     setVertical(selectedVertical);
 
+    // S348-F4: Update context via API (emits USER_UPDATED event)
+    try {
+      const contextResponse = await fetch('/api/onboarding/context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vertical: selectedVertical,
+          step: 'sub-vertical',
+        }),
+      });
+
+      if (!contextResponse.ok) {
+        const data = await contextResponse.json();
+        console.error('[VerticalSelector] Failed to update context:', data.error);
+      } else {
+        console.log('[S348-F4] Vertical context updated with event');
+      }
+    } catch (error) {
+      console.error('[VerticalSelector] Failed to update context:', error);
+    }
+
     // VS10.3: Lock user's vertical via API (uses real session user ID)
     try {
       const response = await fetch('/api/auth/profile/lock-vertical', {

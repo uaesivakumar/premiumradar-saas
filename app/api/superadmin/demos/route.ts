@@ -10,22 +10,9 @@ import { query, queryOne, insert, transaction } from '@/lib/db/client';
 import { createEnterprise } from '@/lib/db/enterprises';
 import { createDefaultWorkspace } from '@/lib/db/workspaces';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
-import type { ResolvedContext } from '@/lib/auth/session/session-context';
+import { createSuperAdminContextWithTarget } from '@/lib/auth/session/session-context';
 import bcrypt from 'bcryptjs';
 import { getOrCreateTenantFromEnterprise, warnTenantIdUsage } from '@/lib/db/tenant-bridge';
-
-function createSuperAdminContext(): ResolvedContext {
-  return {
-    user_id: '00000000-0000-0000-0000-000000000001',
-    role: 'SUPER_ADMIN',
-    enterprise_id: null,
-    workspace_id: null,
-    sub_vertical_id: null,
-    region_code: null,
-    is_demo: false,
-    demo_type: null,
-  };
-}
 
 /**
  * GET /api/superadmin/demos
@@ -185,8 +172,13 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Emit business event
-    const ctx = createSuperAdminContext();
+    // Emit business event with full target context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: enterprise.enterprise_id,
+      workspace_id: workspace.workspace_id,
+      sub_vertical_id: body.sub_vertical_id,
+      region_code: enterprise.region,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'DEMO_STARTED',
       entity_type: 'ENTERPRISE',

@@ -40,7 +40,13 @@ export type AdminPlaneEventType =
   | 'DEMO_EXPIRED'
   // Admin actions
   | 'ADMIN_ACTION'
-  | 'SUPER_ADMIN_ACTION';
+  | 'SUPER_ADMIN_ACTION'
+  // PLG Admin actions (S348 Governance)
+  | 'PLG_ADMIN_CONVERT'
+  | 'PLG_ADMIN_EXPIRE'
+  | 'PLG_ADMIN_SUSPEND'
+  | 'PLG_ADMIN_REINSTATE'
+  | 'PLG_ADMIN_OVERRIDE';
 
 export type EntityType =
   | 'ENTERPRISE'
@@ -86,11 +92,79 @@ export interface StoredBusinessEvent {
 const SYSTEM_SENTINEL_UUID = '00000000-0000-0000-0000-000000000000';
 
 // ============================================================
+// S347: CONTEXT COMPLETENESS VALIDATION
+// ============================================================
+
+/**
+ * S347: Validation rules for context completeness.
+ * When strict mode is enabled (STRICT_CONTEXT_VALIDATION=true),
+ * incomplete context throws an error instead of warning.
+ */
+interface ContextValidationResult {
+  valid: boolean;
+  warnings: string[];
+}
+
+function validateContextCompleteness(
+  context: ResolvedContext,
+  payload: BusinessEventPayload
+): ContextValidationResult {
+  const warnings: string[] = [];
+
+  // Rule 1: ENTERPRISE events must have enterprise_id
+  if (payload.entity_type === 'ENTERPRISE' && !context.enterprise_id) {
+    warnings.push(
+      `[S347] ENTERPRISE event '${payload.event_type}' emitted with NULL enterprise_id. ` +
+      `Entity: ${payload.entity_id}. Context should include target enterprise_id.`
+    );
+  }
+
+  // Rule 2: WORKSPACE events must have workspace_id AND enterprise_id
+  if (payload.entity_type === 'WORKSPACE') {
+    if (!context.workspace_id) {
+      warnings.push(
+        `[S347] WORKSPACE event '${payload.event_type}' emitted with NULL workspace_id. ` +
+        `Entity: ${payload.entity_id}. Context should include target workspace_id.`
+      );
+    }
+    if (!context.enterprise_id) {
+      warnings.push(
+        `[S347] WORKSPACE event '${payload.event_type}' emitted with NULL enterprise_id. ` +
+        `Entity: ${payload.entity_id}. Workspace belongs to an enterprise.`
+      );
+    }
+  }
+
+  // Rule 3: USER events for enterprise users must have enterprise_id
+  // (Skip for SUPER_ADMIN creating system-level users)
+  if (payload.entity_type === 'USER' && context.role !== 'SUPER_ADMIN') {
+    if (!context.enterprise_id) {
+      warnings.push(
+        `[S347] USER event '${payload.event_type}' emitted with NULL enterprise_id. ` +
+        `Entity: ${payload.entity_id}. User belongs to an enterprise.`
+      );
+    }
+  }
+
+  return {
+    valid: warnings.length === 0,
+    warnings,
+  };
+}
+
+// ============================================================
 // EVENT EMITTER
 // ============================================================
 
 /**
  * Emit a business event to the immutable BTE log.
+ *
+ * S347: Now validates context completeness before emission.
+ * - ENTERPRISE events require enterprise_id in context
+ * - WORKSPACE events require workspace_id AND enterprise_id
+ * - USER events (non-SUPER_ADMIN) require enterprise_id
+ *
+ * Set STRICT_CONTEXT_VALIDATION=true to fail on incomplete context.
  *
  * @param context - Resolved context from session (includes actor, enterprise, workspace)
  * @param payload - Event details (type, entity, metadata)
@@ -111,6 +185,23 @@ export async function emitBusinessEvent(
   context: ResolvedContext,
   payload: BusinessEventPayload
 ): Promise<StoredBusinessEvent> {
+  // S347: Validate context completeness
+  const validation = validateContextCompleteness(context, payload);
+
+  if (!validation.valid) {
+    const strictMode = process.env.STRICT_CONTEXT_VALIDATION === 'true';
+
+    if (strictMode) {
+      throw new Error(
+        `[S347] Context completeness validation failed:\n${validation.warnings.join('\n')}`
+      );
+    } else {
+      // Log warnings but allow emission
+      validation.warnings.forEach(warning => {
+        console.warn(warning);
+      });
+    }
+  }
   // Build metadata with resolved context
   const enrichedMetadata: Record<string, unknown> = {
     ...payload.metadata,

@@ -94,8 +94,29 @@ export function RegionMultiSelect() {
 
     setIsSubmitting(true);
 
-    // Brief transition animation
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // S348-F4: Update context via API (emits USER_UPDATED event)
+    try {
+      // For region, we use the primary region (first selected) or 'UAE' for all
+      const regionCountry = isAllSelected ? 'UAE' : (selectedRegions[0] || 'UAE');
+
+      const contextResponse = await fetch('/api/onboarding/context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          regionCountry,
+          step: 'complete',
+        }),
+      });
+
+      if (!contextResponse.ok) {
+        const data = await contextResponse.json();
+        console.error('[RegionMultiSelect] Failed to update context:', data.error);
+      } else {
+        console.log('[S348-F4] Region context updated with event');
+      }
+    } catch (error) {
+      console.error('[RegionMultiSelect] Failed to update context:', error);
+    }
 
     completeStep('regions');
     setStep('transition');

@@ -510,10 +510,99 @@ export async function requireSuperAdmin(): Promise<void> {
   }
 }
 
+// ============================================================
+// S347: SUPER ADMIN CONTEXT WITH TARGET (Context Propagation)
+// ============================================================
+
+/**
+ * S347: Target entity context for SUPER_ADMIN mutations.
+ * When SUPER_ADMIN acts on an entity, we capture the TARGET's context.
+ */
+export interface SuperAdminTarget {
+  enterprise_id?: string | null;
+  workspace_id?: string | null;
+  sub_vertical_id?: string | null;
+  region_code?: string | null;
+}
+
+/**
+ * S347: Create ResolvedContext for SUPER_ADMIN with target entity context.
+ *
+ * This is the ONLY way to create context for Super Admin mutations.
+ * The target's organizational fields are captured for evidence fidelity.
+ *
+ * @param target - The target entity's organizational context
+ * @returns ResolvedContext with target's enterprise/workspace/etc
+ *
+ * @example
+ * ```typescript
+ * // When creating an enterprise
+ * const ctx = createSuperAdminContextWithTarget({
+ *   enterprise_id: newEnterprise.enterprise_id,
+ *   region_code: newEnterprise.region,
+ * });
+ *
+ * // When creating a workspace
+ * const ctx = createSuperAdminContextWithTarget({
+ *   enterprise_id: workspace.enterprise_id,
+ *   workspace_id: workspace.workspace_id,
+ *   sub_vertical_id: workspace.sub_vertical_id,
+ * });
+ * ```
+ */
+export function createSuperAdminContextWithTarget(target: SuperAdminTarget = {}): ResolvedContext {
+  return {
+    user_id: '00000000-0000-0000-0000-000000000001', // Super Admin sentinel
+    role: 'SUPER_ADMIN',
+    enterprise_id: target.enterprise_id ?? null,
+    workspace_id: target.workspace_id ?? null,
+    sub_vertical_id: target.sub_vertical_id ?? null,
+    region_code: target.region_code ?? null,
+    is_demo: false,
+    demo_type: null,
+  };
+}
+
+// ============================================================
+// S348: PLG SIGNUP CONTEXT (Individual User Path)
+// ============================================================
+
+/**
+ * S348-F5: Create ResolvedContext for a newly created INDIVIDUAL_USER.
+ *
+ * This is used during signup to emit USER_CREATED events.
+ * The user has no enterprise/workspace binding at this point.
+ *
+ * @param userId - The newly created user's ID
+ * @param regionCode - Optional region from signup form
+ * @returns ResolvedContext for INDIVIDUAL_USER
+ */
+export function createIndividualUserContext(
+  userId: string,
+  regionCode?: string
+): ResolvedContext {
+  return {
+    user_id: userId,
+    role: 'INDIVIDUAL_USER',
+    enterprise_id: null, // Not bound at signup
+    workspace_id: null,  // Not bound at signup
+    sub_vertical_id: null,
+    region_code: regionCode || null,
+    is_demo: false,
+    demo_type: null,
+  };
+}
+
 export default {
   // S340: Admin Plane v1.1 Resolved Context
   getResolvedContext,
   requireResolvedContext,
+
+  // S347: Super Admin Context with Target
+  createSuperAdminContextWithTarget,
+
+  // S348: PLG Signup Context
+  createIndividualUserContext,
 
   // Legacy context resolution (kept for backward compatibility)
   getFullSessionContext,

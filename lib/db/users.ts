@@ -172,6 +172,111 @@ export async function getOrCreateTenantForDomain(
 const SALT_ROUNDS = 12;
 
 /**
+ * S348-F5: Create an INDIVIDUAL_USER (PLG Path)
+ *
+ * Creates a user who is NOT bound to an enterprise or workspace.
+ * This is the entry point for PLG signups.
+ *
+ * PLG User State:
+ * - role: INDIVIDUAL_USER
+ * - enterprise_id: NULL
+ * - workspace_id: NULL
+ *
+ * User must complete onboarding to bind to enterprise/workspace.
+ */
+export interface CreateIndividualUserInput {
+  email: string;
+  password: string;
+  name?: string;
+  vertical?: string;
+  subVertical?: string;
+  regionCountry?: string;
+  companyName?: string;
+  companyDomain?: string;
+}
+
+export interface IndividualUser extends User {
+  profile: UserProfile | null;
+}
+
+export async function createIndividualUser(input: CreateIndividualUserInput): Promise<IndividualUser> {
+  const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+  const emailDomain = input.email.split('@')[1]?.toLowerCase();
+
+  // CRITICAL: For PLG, we create a "personal" tenant for legacy compatibility
+  // but do NOT create enterprise or workspace binding
+  const slug = emailDomain.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const personalTenantName = input.companyName || emailDomain;
+
+  const pool = getPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Create a minimal tenant for legacy compatibility (required by DB constraint)
+    const tenantResult = await client.query<Tenant>(
+      `INSERT INTO tenants (name, slug, domain, plan)
+       VALUES ($1, $2, $3, 'free')
+       ON CONFLICT (slug) DO UPDATE SET updated_at = NOW()
+       RETURNING *`,
+      [personalTenantName, `${slug}-${Date.now()}`, emailDomain]
+    );
+    const tenant = tenantResult.rows[0];
+
+    // Create user with INDIVIDUAL_USER role
+    // CRITICAL: enterprise_id and workspace_id are NULL (PLG state)
+    const userResult = await client.query<User>(
+      `INSERT INTO users (
+        email, password_hash, name, tenant_id,
+        enterprise_id, workspace_id, role, is_demo
+       )
+       VALUES ($1, $2, $3, $4, NULL, NULL, 'INDIVIDUAL_USER', false)
+       RETURNING *`,
+      [
+        input.email.toLowerCase(),
+        passwordHash,
+        input.name || null,
+        tenant.id,
+      ]
+    );
+    const user = userResult.rows[0];
+
+    // Create profile (minimal - user will complete during onboarding)
+    const profileResult = await client.query<UserProfile>(
+      `INSERT INTO user_profiles (
+        user_id, tenant_id, vertical, sub_vertical, region_country,
+        company_name, company_domain, onboarding_step
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'context-selection')
+       RETURNING *`,
+      [
+        user.id,
+        tenant.id,
+        input.vertical || 'banking',
+        input.subVertical || 'employee-banking',
+        input.regionCountry || 'UAE',
+        input.companyName || null,
+        input.companyDomain || emailDomain || null,
+      ]
+    );
+    const profile = profileResult.rows[0];
+
+    await client.query('COMMIT');
+
+    return {
+      ...user,
+      profile,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Create a new user with profile (Enterprise System)
  * Uses the new enterprise/workspace model instead of legacy tenant system
  */

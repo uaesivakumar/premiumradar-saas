@@ -32,6 +32,7 @@ import {
   Shield,
   FlaskConical,
   Wand2,
+  Zap,
 } from 'lucide-react';
 import AICommandBar from '@/components/superadmin/AICommandBar';
 
@@ -57,9 +58,10 @@ const platformItems = [
   { label: 'OS Config', href: '/superadmin/os', icon: Server, description: 'OS settings & routing' },
 ];
 
-// Admin dropdown items (Users, Tenants, Settings)
+// Admin dropdown items (Users, Tenants, PLG, Settings)
 const adminItems = [
-  { label: 'Users', href: '/superadmin/users', icon: Users, description: 'User management' },
+  { label: 'User Governance', href: '/superadmin/plg', icon: Zap, description: 'ALL users: lifecycle, suspend, override' },
+  { label: 'Users (View)', href: '/superadmin/users', icon: Users, description: 'User list (read-only)' },
   { label: 'Tenants', href: '/superadmin/tenants', icon: Building2, description: 'Tenant accounts' },
   { label: 'Activity', href: '/superadmin/activity', icon: Activity, description: 'Audit logs' },
   { label: 'Settings', href: '/superadmin/settings', icon: Settings, description: 'System settings' },

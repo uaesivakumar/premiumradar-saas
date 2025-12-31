@@ -8,9 +8,10 @@
  * User profile settings page with preferences management.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useEnterprise } from '@/lib/providers/EnterpriseContextProvider';
 import { DemoBanner } from './DemoBanner';
+import { useDemoConversion } from '@/lib/hooks/useDemoConversion';
 
 interface UserPreferences {
   theme: 'light' | 'dark' | 'system';
@@ -51,6 +52,21 @@ export function ProfileSettings() {
     phone: '',
     preferences: DEFAULT_PREFERENCES,
   });
+
+  // S348-F2: Demo conversion hook
+  const { convertToReal } = useDemoConversion();
+
+  // S348-F2: Handle upgrade/conversion click
+  const handleUpgradeClick = useCallback(async () => {
+    const result = await convertToReal({
+      conversionReason: 'manual_request',
+      attributionSource: 'profile_settings_banner',
+    });
+
+    if (result.success) {
+      window.location.reload();
+    }
+  }, [convertToReal]);
 
   useEffect(() => {
     if (user) {
@@ -156,7 +172,8 @@ export function ProfileSettings() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {isDemoUser && <DemoBanner variant="banner" />}
+      {/* S348-F2: Wired to explicit conversion */}
+      {isDemoUser && <DemoBanner variant="banner" onUpgrade={handleUpgradeClick} />}
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}

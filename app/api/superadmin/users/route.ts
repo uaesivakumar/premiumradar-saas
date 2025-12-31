@@ -8,22 +8,9 @@ import { headers } from 'next/headers';
 import { verifySession } from '@/lib/superadmin/security';
 import { query, insert } from '@/lib/db/client';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
-import type { ResolvedContext, ValidRole } from '@/lib/auth/session/session-context';
+import { createSuperAdminContextWithTarget, type ValidRole } from '@/lib/auth/session/session-context';
 import bcrypt from 'bcryptjs';
 import { getOrCreateTenantFromEnterprise, warnTenantIdUsage } from '@/lib/db/tenant-bridge';
-
-function createSuperAdminContext(): ResolvedContext {
-  return {
-    user_id: '00000000-0000-0000-0000-000000000001',
-    role: 'SUPER_ADMIN',
-    enterprise_id: null,
-    workspace_id: null,
-    sub_vertical_id: null,
-    region_code: null,
-    is_demo: false,
-    demo_type: null,
-  };
-}
 
 const VALID_ROLES: ValidRole[] = ['SUPER_ADMIN', 'ENTERPRISE_ADMIN', 'ENTERPRISE_USER', 'INDIVIDUAL_USER'];
 
@@ -230,8 +217,11 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // Emit business event
-    const ctx = createSuperAdminContext();
+    // Emit business event with target context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: user.enterprise_id,
+      workspace_id: user.workspace_id,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'USER_CREATED',
       entity_type: 'USER',

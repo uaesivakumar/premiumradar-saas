@@ -1,21 +1,24 @@
 /**
- * VS10.2: Signup API Route
- * Sprint: S1 (VS10)
+ * S348-F5: PLG Signup API Route
+ * Sprint: S348 - PLG Proof Pack
  *
- * Real user signup with:
+ * Real user signup with PLG model:
+ * - Creates INDIVIDUAL_USER (not enterprise-bound)
+ * - Emits USER_CREATED business event (no silent onboarding)
  * - Personal email domain blocking (Gmail, Yahoo, etc.)
- * - Company domain extraction
- * - Automatic tenant creation
- * - Profile with vertical selection
- * - Email verification token
+ * - User must complete onboarding to bind to workspace
+ *
+ * Evidence guarantee: Every signup emits a traceable event.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { createUser, emailExists, createEmailVerificationCode } from '@/lib/db/users';
+import { createIndividualUser, emailExists, createEmailVerificationCode } from '@/lib/db/users';
 import { isPersonalEmailDomain, analyzeEmail } from '@/lib/auth/identity/domain-extractor';
 import { createSession, setSessionCookies } from '@/lib/auth/session/enhanced-session';
 import { sendEmail } from '@/lib/email/send';
+import { createIndividualUserContext } from '@/lib/auth/session/session-context';
+import { emitBusinessEvent } from '@/lib/events/event-emitter';
 
 // ============================================================
 // TYPES
@@ -126,8 +129,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<SignupRes
                'unknown';
     const userAgent = headersList.get('user-agent') || 'unknown';
 
-    // Create user with profile
-    const userWithProfile = await createUser({
+    // S348-F5: Create INDIVIDUAL_USER (PLG path)
+    // User is NOT bound to enterprise/workspace at signup
+    const userWithProfile = await createIndividualUser({
       email: normalizedEmail,
       password,
       name: name || undefined,
@@ -136,7 +140,38 @@ export async function POST(request: NextRequest): Promise<NextResponse<SignupRes
       regionCountry: regionCountry || 'UAE',
       companyName: emailAnalysis.companyName || undefined,
       companyDomain: emailAnalysis.domain,
-      companyIndustry: undefined, // TODO: Enrich via OS if needed
+    });
+
+    // S348-F5: Emit USER_CREATED business event (NO SILENT ONBOARDING)
+    const ctx = createIndividualUserContext(
+      userWithProfile.id,
+      regionCountry || 'UAE'
+    );
+
+    await emitBusinessEvent(ctx, {
+      event_type: 'USER_CREATED',
+      entity_type: 'USER',
+      entity_id: userWithProfile.id,
+      metadata: {
+        email_domain: emailAnalysis.domain,
+        company_name: emailAnalysis.companyName,
+        vertical: vertical || 'banking',
+        sub_vertical: subVertical || 'employee-banking',
+        region: regionCountry || 'UAE',
+        role: 'INDIVIDUAL_USER',
+        plg_signup: true,
+        enterprise_bound: false,
+        workspace_bound: false,
+        onboarding_step: 'context-selection',
+        ip_address: ip,
+        user_agent_hash: userAgent.substring(0, 50),
+      },
+    });
+
+    console.log('[S348-F5] PLG signup event emitted:', {
+      userId: userWithProfile.id,
+      role: 'INDIVIDUAL_USER',
+      enterpriseBound: false,
     });
 
     // Create email verification code (VS12: 6-digit code)
@@ -166,21 +201,22 @@ export async function POST(request: NextRequest): Promise<NextResponse<SignupRes
       // Continue anyway - user can request new verification email
     }
 
-    // Create session with enterprise info (new system)
+    // S348-F5: Create session for INDIVIDUAL_USER
+    // Note: enterprise_id and workspace_id are NULL (PLG state)
     const sessionResult = await createSession({
       userId: userWithProfile.id,
       email: userWithProfile.email,
       name: userWithProfile.name || undefined,
-      tenantId: userWithProfile.tenant_id, // Legacy
-      tenantName: userWithProfile.tenant?.name,
-      enterpriseId: userWithProfile.enterprise_id || undefined, // New
-      enterpriseName: userWithProfile.enterprise?.name,
-      workspaceId: userWithProfile.workspace_id || undefined, // New
-      role: userWithProfile.role,
+      tenantId: userWithProfile.tenant_id, // Legacy (minimal tenant for compatibility)
+      tenantName: undefined, // No tenant name for PLG
+      enterpriseId: undefined, // NOT BOUND (PLG)
+      enterpriseName: undefined,
+      workspaceId: undefined, // NOT BOUND (PLG)
+      role: 'INDIVIDUAL_USER', // Explicit role
       mfaEnabled: userWithProfile.mfa_enabled,
       mfaVerified: false,
-      plan: (userWithProfile.enterprise?.plan as 'free' | 'starter' | 'professional' | 'enterprise') || (userWithProfile.tenant?.plan as 'free' | 'starter' | 'professional' | 'enterprise') || 'free',
-      subscriptionStatus: (userWithProfile.enterprise?.subscription_status as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid') || (userWithProfile.tenant?.subscription_status as 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid') || 'active',
+      plan: 'free', // PLG users start on free
+      subscriptionStatus: 'active',
       ipAddress: ip,
       userAgent,
     });
@@ -195,14 +231,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<SignupRes
     // Set session cookies
     await setSessionCookies(sessionResult.accessToken, sessionResult.refreshToken);
 
-    console.log('[VS10.2] User created successfully:', {
+    console.log('[S348-F5] PLG user created successfully:', {
       userId: userWithProfile.id,
       email: normalizedEmail,
+      role: 'INDIVIDUAL_USER',
       vertical: userWithProfile.profile?.vertical,
       subVertical: userWithProfile.profile?.sub_vertical,
-      enterpriseId: userWithProfile.enterprise_id, // New
-      workspaceId: userWithProfile.workspace_id, // New
-      tenantId: userWithProfile.tenant_id, // Legacy
+      enterpriseId: null, // PLG: not bound
+      workspaceId: null, // PLG: not bound
+      onboardingStep: 'context-selection',
+      eventEmitted: true,
     });
 
     // Build redirect URL with user info for verify-email page

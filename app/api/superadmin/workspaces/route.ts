@@ -9,20 +9,8 @@ import { verifySession } from '@/lib/superadmin/security';
 import { query } from '@/lib/db/client';
 import { createWorkspace, type CreateWorkspaceInput } from '@/lib/db/workspaces';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
-import type { ResolvedContext } from '@/lib/auth/session/session-context';
-
-function createSuperAdminContext(): ResolvedContext {
-  return {
-    user_id: '00000000-0000-0000-0000-000000000001',
-    role: 'SUPER_ADMIN',
-    enterprise_id: null,
-    workspace_id: null,
-    sub_vertical_id: null,
-    region_code: null,
-    is_demo: false,
-    demo_type: null,
-  };
-}
+import { createSuperAdminContextWithTarget } from '@/lib/auth/session/session-context';
+import { getEnterpriseById } from '@/lib/db/enterprises';
 
 /**
  * GET /api/superadmin/workspaces
@@ -176,8 +164,16 @@ export async function POST(request: NextRequest) {
 
     const workspace = await createWorkspace(input);
 
-    // Emit business event
-    const ctx = createSuperAdminContext();
+    // Get enterprise for region_code (S347)
+    const enterprise = await getEnterpriseById(workspace.enterprise_id);
+
+    // Emit business event with full target context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: workspace.enterprise_id,
+      workspace_id: workspace.workspace_id,
+      sub_vertical_id: workspace.sub_vertical_id,
+      region_code: enterprise?.region || null,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'WORKSPACE_CREATED',
       entity_type: 'WORKSPACE',

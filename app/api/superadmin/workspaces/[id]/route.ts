@@ -13,20 +13,8 @@ import {
   type UpdateWorkspaceInput
 } from '@/lib/db/workspaces';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
-import type { ResolvedContext } from '@/lib/auth/session/session-context';
-
-function createSuperAdminContext(): ResolvedContext {
-  return {
-    user_id: '00000000-0000-0000-0000-000000000001',
-    role: 'SUPER_ADMIN',
-    enterprise_id: null,
-    workspace_id: null,
-    sub_vertical_id: null,
-    region_code: null,
-    is_demo: false,
-    demo_type: null,
-  };
-}
+import { createSuperAdminContextWithTarget } from '@/lib/auth/session/session-context';
+import { getEnterpriseById } from '@/lib/db/enterprises';
 
 /**
  * GET /api/superadmin/workspaces/[id]
@@ -114,7 +102,16 @@ export async function PATCH(
 
     const updated = await updateWorkspace(id, updateInput);
 
-    const ctx = createSuperAdminContext();
+    // Get enterprise for region_code (S347)
+    const enterprise = await getEnterpriseById(updated?.enterprise_id || existing.enterprise_id);
+
+    // Emit event with full target context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: updated?.enterprise_id || existing.enterprise_id,
+      workspace_id: id,
+      sub_vertical_id: updated?.sub_vertical_id || existing.sub_vertical_id,
+      region_code: enterprise?.region || null,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'WORKSPACE_UPDATED',
       entity_type: 'WORKSPACE',
@@ -171,7 +168,16 @@ export async function DELETE(
 
     const deleted = await deleteWorkspace(id);
 
-    const ctx = createSuperAdminContext();
+    // Get enterprise for region_code (S347)
+    const enterprise = await getEnterpriseById(existing.enterprise_id);
+
+    // Emit event with full target context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: existing.enterprise_id,
+      workspace_id: id,
+      sub_vertical_id: existing.sub_vertical_id,
+      region_code: enterprise?.region || null,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'WORKSPACE_DELETED',
       entity_type: 'WORKSPACE',

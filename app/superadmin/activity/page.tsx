@@ -1,54 +1,127 @@
 'use client';
 
 /**
- * Super Admin - Activity/Audit Log
- * View system activity and audit events
+ * S349: Super Admin - Activity Page (Admin Plane v1.1)
+ *
+ * Displays business events from the immutable business_events table.
+ * This is read-only visibility, NOT analytics.
+ *
+ * Guardrails:
+ * - NO derived metrics
+ * - Surface raw data + evidence-linked
+ * - Uses same contracts from S346 Evidence Pack
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Activity,
   RefreshCw,
   Loader2,
   User,
   Building2,
-  Key,
-  Settings,
-  FileText,
+  Briefcase,
+  Play,
   Filter,
   Clock,
+  ChevronDown,
+  ChevronRight,
+  Database,
+  Eye,
 } from 'lucide-react';
+import EventDetailModal from '@/components/superadmin/EventDetailModal';
 
-interface ActivityItem {
-  id: string;
-  action: string;
+// Event types from lib/events/event-emitter.ts
+const EVENT_TYPES = [
+  // Enterprise
+  'ENTERPRISE_CREATED',
+  'ENTERPRISE_UPDATED',
+  'ENTERPRISE_DELETED',
+  'ENTERPRISE_PLAN_CHANGED',
+  // User
+  'USER_CREATED',
+  'USER_UPDATED',
+  'USER_DELETED',
+  'USER_ROLE_CHANGED',
+  'USER_LOGIN',
+  'USER_LOGOUT',
+  // Workspace
+  'WORKSPACE_CREATED',
+  'WORKSPACE_UPDATED',
+  'WORKSPACE_DELETED',
+  // Demo
+  'DEMO_STARTED',
+  'DEMO_EXTENDED',
+  'DEMO_CONVERTED',
+  'DEMO_EXPIRED',
+  // Admin
+  'ADMIN_ACTION',
+  'SUPER_ADMIN_ACTION',
+] as const;
+
+const ENTITY_TYPES = [
+  'ENTERPRISE',
+  'USER',
+  'WORKSPACE',
+  'DEMO_POLICY',
+  'SYSTEM',
+] as const;
+
+interface BusinessEvent {
+  event_id: string;
+  event_type: string;
   entity_type: string;
   entity_id: string;
-  description: string;
+  workspace_id: string;
+  sub_vertical_id: string;
+  actor_user_id: string;
   timestamp: string;
-  actor: string;
-  actor_email?: string;
-  metadata?: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+}
+
+interface ActivityResponse {
+  success: boolean;
+  data: {
+    events: BusinessEvent[];
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+    source: string;
+  };
 }
 
 export default function ActivityPage() {
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [events, setEvents] = useState<BusinessEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [entityFilter, setEntityFilter] = useState<string>('all');
-  const [source, setSource] = useState<string>('');
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
 
-  const fetchActivity = async () => {
+  // Filters
+  const [eventTypeFilter, setEventTypeFilter] = useState<string>('');
+  const [entityTypeFilter, setEntityTypeFilter] = useState<string>('');
+  const [limit] = useState(50);
+  const [offset, setOffset] = useState(0);
+
+  // Detail view
+  const [selectedEvent, setSelectedEvent] = useState<BusinessEvent | null>(null);
+  const [expandedMetadata, setExpandedMetadata] = useState<Set<string>>(new Set());
+
+  const fetchActivity = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      if (entityFilter !== 'all') params.set('entity_type', entityFilter);
+      if (eventTypeFilter) params.set('event_type', eventTypeFilter);
+      if (entityTypeFilter) params.set('entity_type', entityTypeFilter);
+      params.set('limit', limit.toString());
+      params.set('offset', offset.toString());
 
       const res = await fetch(`/api/superadmin/activity?${params}`);
-      const data = await res.json();
+      const data: ActivityResponse = await res.json();
 
       if (data.success) {
-        setActivities(data.data.activities);
-        setSource(data.data.source);
+        setEvents(data.data.events);
+        setTotal(data.data.total);
+        setHasMore(data.data.has_more);
       }
     } catch (error) {
       console.error('Failed to fetch activity:', error);
@@ -56,11 +129,12 @@ export default function ActivityPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [eventTypeFilter, entityTypeFilter, limit, offset]);
 
   useEffect(() => {
+    setOffset(0); // Reset pagination when filters change
     fetchActivity();
-  }, [entityFilter]);
+  }, [eventTypeFilter, entityTypeFilter, fetchActivity]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -69,20 +143,26 @@ export default function ActivityPage() {
 
   const getEntityIcon = (entityType: string) => {
     const icons: Record<string, React.ReactNode> = {
-      'user': <User className="w-4 h-4" />,
-      'enterprise': <Building2 className="w-4 h-4" />,
-      'session': <Key className="w-4 h-4" />,
-      'settings': <Settings className="w-4 h-4" />,
-      'config': <FileText className="w-4 h-4" />,
+      ENTERPRISE: <Building2 className="w-4 h-4" />,
+      USER: <User className="w-4 h-4" />,
+      WORKSPACE: <Briefcase className="w-4 h-4" />,
+      DEMO_POLICY: <Play className="w-4 h-4" />,
+      SYSTEM: <Database className="w-4 h-4" />,
     };
     return icons[entityType] || <Activity className="w-4 h-4" />;
   };
 
-  const getActionColor = (action: string) => {
-    if (action.includes('CREATE') || action.includes('CREATED')) return 'text-emerald-400';
-    if (action.includes('DELETE') || action.includes('DELETED')) return 'text-red-400';
-    if (action.includes('UPDATE') || action.includes('UPDATED')) return 'text-blue-400';
-    if (action.includes('LOGIN') || action.includes('LOGOUT')) return 'text-violet-400';
+  const getEventColor = (eventType: string) => {
+    if (eventType.includes('CREATED') || eventType.includes('STARTED'))
+      return 'text-emerald-400';
+    if (eventType.includes('DELETED') || eventType.includes('EXPIRED'))
+      return 'text-red-400';
+    if (eventType.includes('UPDATED') || eventType.includes('CHANGED'))
+      return 'text-blue-400';
+    if (eventType.includes('LOGIN') || eventType.includes('LOGOUT'))
+      return 'text-violet-400';
+    if (eventType.includes('EXTENDED') || eventType.includes('CONVERTED'))
+      return 'text-amber-400';
     return 'text-neutral-400';
   };
 
@@ -100,6 +180,20 @@ export default function ActivityPage() {
     if (diffDays < 7) return `${diffDays}d ago`;
     return then.toLocaleDateString();
   };
+
+  const toggleMetadata = (eventId: string) => {
+    setExpandedMetadata((prev) => {
+      const next = new Set(prev);
+      if (next.has(eventId)) {
+        next.delete(eventId);
+      } else {
+        next.add(eventId);
+      }
+      return next;
+    });
+  };
+
+  const SENTINEL_UUID = '00000000-0000-0000-0000-000000000000';
 
   if (loading) {
     return (
@@ -119,77 +213,140 @@ export default function ActivityPage() {
             Activity
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            System activity and audit log
-            {source === 'derived' && (
-              <span className="ml-2 text-amber-500">(derived from entity records)</span>
-            )}
+            Business events from immutable audit log
+            <span className="ml-2 text-emerald-500 text-xs">
+              (source: business_events)
+            </span>
           </p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-neutral-500">
+            {total} events
+          </span>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded text-sm transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-neutral-500" />
           <select
-            value={entityFilter}
-            onChange={(e) => setEntityFilter(e.target.value)}
+            value={eventTypeFilter}
+            onChange={(e) => setEventTypeFilter(e.target.value)}
             className="px-3 py-2 bg-neutral-900 border border-neutral-800 rounded text-sm text-white focus:outline-none focus:border-violet-500"
           >
-            <option value="all">All Types</option>
-            <option value="user">Users</option>
-            <option value="enterprise">Enterprises</option>
-            <option value="session">Sessions</option>
-            <option value="config">Config</option>
+            <option value="">All Event Types</option>
+            {EVENT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type.replace(/_/g, ' ')}
+              </option>
+            ))}
           </select>
         </div>
+
+        <select
+          value={entityTypeFilter}
+          onChange={(e) => setEntityTypeFilter(e.target.value)}
+          className="px-3 py-2 bg-neutral-900 border border-neutral-800 rounded text-sm text-white focus:outline-none focus:border-violet-500"
+        >
+          <option value="">All Entity Types</option>
+          {ENTITY_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Activity List */}
+      {/* Events List */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
-        {activities.length === 0 ? (
+        {events.length === 0 ? (
           <div className="p-8 text-center text-neutral-500">
-            No activity found
+            No events found
           </div>
         ) : (
           <div className="divide-y divide-neutral-800/50">
-            {activities.map((activity) => (
+            {events.map((event) => (
               <div
-                key={`${activity.id}-${activity.timestamp}`}
-                className="px-4 py-3 hover:bg-neutral-800/30 transition-colors"
+                key={event.event_id}
+                className="px-4 py-3 hover:bg-neutral-800/30 transition-colors cursor-pointer"
+                onClick={() => setSelectedEvent(event)}
               >
                 <div className="flex items-start gap-3">
+                  {/* Entity Icon */}
                   <div className="p-2 bg-neutral-800 rounded-lg text-neutral-400">
-                    {getEntityIcon(activity.entity_type)}
+                    {getEntityIcon(event.entity_type)}
                   </div>
+
+                  {/* Event Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-medium text-sm ${getActionColor(activity.action)}`}>
-                        {activity.action.replace('_', ' ')}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`font-medium text-sm ${getEventColor(event.event_type)}`}>
+                        {event.event_type.replace(/_/g, ' ')}
                       </span>
-                      <span className="text-neutral-600">•</span>
-                      <span className="text-xs text-neutral-500">{activity.entity_type}</span>
+                      <span className="text-neutral-600">|</span>
+                      <span className="text-xs text-neutral-500 font-mono">
+                        {event.entity_type}
+                      </span>
                     </div>
-                    <p className="text-sm text-neutral-300 mt-0.5">
-                      {activity.description}
+
+                    {/* Entity ID */}
+                    <p className="text-xs text-neutral-400 mt-1 font-mono">
+                      entity: {event.entity_id}
                     </p>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-neutral-500">
-                      <span className="flex items-center gap-1">
+
+                    {/* Context fields (S347 - highlighted) */}
+                    <div className="flex items-center gap-3 mt-2 text-xs flex-wrap">
+                      <span className="flex items-center gap-1 text-neutral-500">
                         <Clock className="w-3 h-3" />
-                        {formatTimeAgo(activity.timestamp)}
+                        {formatTimeAgo(event.timestamp)}
                       </span>
-                      {activity.actor_email && (
-                        <span>by {activity.actor_email}</span>
+                      {event.actor_user_id !== SENTINEL_UUID && (
+                        <span className="text-neutral-500">
+                          actor: <span className="font-mono">{event.actor_user_id.slice(0, 8)}...</span>
+                        </span>
+                      )}
+                      {event.workspace_id !== SENTINEL_UUID && (
+                        <span className="text-cyan-500/70">
+                          ws: <span className="font-mono">{event.workspace_id.slice(0, 8)}...</span>
+                        </span>
                       )}
                     </div>
+
+                    {/* Expandable Metadata */}
+                    <div className="mt-2">
+                      <button
+                        onClick={() => toggleMetadata(event.event_id)}
+                        className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300 transition-colors"
+                      >
+                        {expandedMetadata.has(event.event_id) ? (
+                          <ChevronDown className="w-3 h-3" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3" />
+                        )}
+                        <Eye className="w-3 h-3" />
+                        metadata
+                      </button>
+
+                      {expandedMetadata.has(event.event_id) && (
+                        <pre className="mt-2 p-3 bg-neutral-950 rounded text-xs text-neutral-400 overflow-x-auto max-h-48">
+                          {JSON.stringify(event.metadata, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Timestamp (absolute) */}
+                  <div className="text-xs text-neutral-600 whitespace-nowrap">
+                    {new Date(event.timestamp).toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -198,14 +355,44 @@ export default function ActivityPage() {
         )}
       </div>
 
-      {/* Info Notice */}
-      {source === 'derived' && (
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-          <p className="text-sm text-amber-300">
-            <strong>Note:</strong> Activity is derived from entity records. For detailed audit logging,
-            an audit_log table can be implemented to track all system changes.
-          </p>
+      {/* Pagination */}
+      {(hasMore || offset > 0) && (
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setOffset(Math.max(0, offset - limit))}
+            disabled={offset === 0}
+            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-neutral-500">
+            Showing {offset + 1} - {Math.min(offset + events.length, total)} of {total}
+          </span>
+          <button
+            onClick={() => setOffset(offset + limit)}
+            disabled={!hasMore}
+            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
+          >
+            Next
+          </button>
         </div>
+      )}
+
+      {/* Source Notice */}
+      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4">
+        <p className="text-sm text-emerald-300">
+          <strong>Immutable Audit Log:</strong> Events are from the business_events table.
+          This table has database triggers preventing UPDATE and DELETE operations.
+          What you see is the complete, unmodified record.
+        </p>
+      </div>
+
+      {/* Event Detail Modal (S349-F5) */}
+      {selectedEvent && (
+        <EventDetailModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
       )}
     </div>
   );

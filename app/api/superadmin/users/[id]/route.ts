@@ -8,21 +8,8 @@ import { headers } from 'next/headers';
 import { verifySession } from '@/lib/superadmin/security';
 import { queryOne, query as dbQuery } from '@/lib/db/client';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
-import type { ResolvedContext, ValidRole } from '@/lib/auth/session/session-context';
+import { createSuperAdminContextWithTarget, type ValidRole } from '@/lib/auth/session/session-context';
 import bcrypt from 'bcryptjs';
-
-function createSuperAdminContext(): ResolvedContext {
-  return {
-    user_id: '00000000-0000-0000-0000-000000000001',
-    role: 'SUPER_ADMIN',
-    enterprise_id: null,
-    workspace_id: null,
-    sub_vertical_id: null,
-    region_code: null,
-    is_demo: false,
-    demo_type: null,
-  };
-}
 
 const VALID_ROLES: ValidRole[] = ['SUPER_ADMIN', 'ENTERPRISE_ADMIN', 'ENTERPRISE_USER', 'INDIVIDUAL_USER'];
 
@@ -196,8 +183,11 @@ export async function PATCH(
       values
     );
 
-    // Emit event (special event for role change)
-    const ctx = createSuperAdminContext();
+    // Emit event with target context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: updated?.enterprise_id || existing.enterprise_id,
+      workspace_id: updated?.workspace_id || existing.workspace_id,
+    });
     const eventType = updatedFields.includes('role') ? 'USER_ROLE_CHANGED' : 'USER_UPDATED';
     await emitBusinessEvent(ctx, {
       event_type: eventType,
@@ -265,7 +255,11 @@ export async function DELETE(
       [id]
     );
 
-    const ctx = createSuperAdminContext();
+    // Emit event with target context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: existing.enterprise_id,
+      workspace_id: existing.workspace_id,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'USER_DELETED',
       entity_type: 'USER',

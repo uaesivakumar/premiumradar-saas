@@ -9,20 +9,7 @@ import { verifySession } from '@/lib/superadmin/security';
 import { queryOne, query } from '@/lib/db/client';
 import { getEnterpriseById, updateEnterprise } from '@/lib/db/enterprises';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
-import type { ResolvedContext } from '@/lib/auth/session/session-context';
-
-function createSuperAdminContext(): ResolvedContext {
-  return {
-    user_id: '00000000-0000-0000-0000-000000000001',
-    role: 'SUPER_ADMIN',
-    enterprise_id: null,
-    workspace_id: null,
-    sub_vertical_id: null,
-    region_code: null,
-    is_demo: false,
-    demo_type: null,
-  };
-}
+import { createSuperAdminContextWithTarget } from '@/lib/auth/session/session-context';
 
 /**
  * GET /api/superadmin/demos/[id]
@@ -145,7 +132,11 @@ export async function PATCH(
       );
     }
 
-    const ctx = createSuperAdminContext();
+    // Create context with target enterprise (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: id,
+      region_code: enterprise.region,
+    });
 
     if (body.action === 'extend') {
       // Extend demo

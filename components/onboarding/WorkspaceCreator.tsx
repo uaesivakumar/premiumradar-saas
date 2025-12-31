@@ -44,22 +44,47 @@ export function WorkspaceCreator() {
 
     setIsSubmitting(true);
 
-    // Create workspace
-    const workspace = {
-      id: crypto.randomUUID(),
-      name: workspaceName.trim(),
-      type: workspaceType,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      // S348-F3: Call real workspace binding API
+      const response = await fetch('/api/onboarding/workspace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceName: workspaceName.trim(),
+          workspaceType,
+        }),
+      });
 
-    setWorkspace(workspace);
+      const result = await response.json();
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
+      if (!result.success) {
+        console.error('[WorkspaceCreator] Binding failed:', result.error);
+        setIsSubmitting(false);
+        // TODO: Show error to user
+        return;
+      }
 
-    completeStep('workspace');
-    setStep('vertical');
-    router.push('/onboarding/vertical');
+      // Update local store with real workspace data
+      const workspace = {
+        id: result.workspace.workspaceId,
+        name: result.workspace.workspaceName,
+        type: workspaceType,
+        enterpriseId: result.workspace.enterpriseId,
+        enterpriseName: result.workspace.enterpriseName,
+        createdAt: new Date().toISOString(),
+      };
+
+      setWorkspace(workspace);
+
+      console.log('[S348-F3] Workspace bound successfully:', workspace);
+
+      completeStep('workspace');
+      setStep('vertical');
+      router.push('/onboarding/vertical');
+    } catch (error) {
+      console.error('[WorkspaceCreator] Error:', error);
+      setIsSubmitting(false);
+    }
   };
 
   return (

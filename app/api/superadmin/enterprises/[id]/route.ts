@@ -13,21 +13,7 @@ import {
   type UpdateEnterpriseInput
 } from '@/lib/db/enterprises';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
-import { getResolvedContext, type ResolvedContext } from '@/lib/auth/session/session-context';
-
-// Helper to create super admin context for event emission
-function createSuperAdminContext(email: string): ResolvedContext {
-  return {
-    user_id: '00000000-0000-0000-0000-000000000001', // Super admin sentinel
-    role: 'SUPER_ADMIN',
-    enterprise_id: null,
-    workspace_id: null,
-    sub_vertical_id: null,
-    region_code: null,
-    is_demo: false,
-    demo_type: null,
-  };
-}
+import { createSuperAdminContextWithTarget } from '@/lib/auth/session/session-context';
 
 /**
  * GET /api/superadmin/enterprises/[id]
@@ -122,8 +108,11 @@ export async function PATCH(
 
     const updated = await updateEnterprise(id, updateInput);
 
-    // Emit business event
-    const ctx = createSuperAdminContext(sessionResult.session?.email || 'unknown');
+    // Emit business event with target enterprise context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: id,
+      region_code: updated?.region || existing.region,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'ENTERPRISE_UPDATED',
       entity_type: 'ENTERPRISE',
@@ -183,8 +172,11 @@ export async function DELETE(
     // Soft delete
     const deleted = await deleteEnterprise(id);
 
-    // Emit business event
-    const ctx = createSuperAdminContext(sessionResult.session?.email || 'unknown');
+    // Emit business event with target enterprise context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: id,
+      region_code: existing.region,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'ENTERPRISE_DELETED',
       entity_type: 'ENTERPRISE',

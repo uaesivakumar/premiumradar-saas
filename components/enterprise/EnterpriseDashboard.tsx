@@ -8,12 +8,13 @@
  * Main dashboard for enterprise admins.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useEnterprise } from '@/lib/providers/EnterpriseContextProvider';
 import { EnterpriseSettingsCard } from './EnterpriseSettingsCard';
 import { WorkspaceList } from './WorkspaceList';
 import { UserList } from './UserList';
 import { DemoBanner } from './DemoBanner';
+import { useDemoConversion } from '@/lib/hooks/useDemoConversion';
 
 interface EnterpriseStats {
   enterprise: {
@@ -39,6 +40,26 @@ export function EnterpriseDashboard() {
   const [stats, setStats] = useState<EnterpriseStats | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'workspaces' | 'settings'>('overview');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  // S348-F2: Demo conversion hook
+  const { convertToReal, isConverting, conversionResult } = useDemoConversion();
+
+  // S348-F2: Handle upgrade/conversion click
+  const handleUpgradeClick = useCallback(async () => {
+    // For explicit demo → real conversion
+    const result = await convertToReal({
+      conversionReason: 'manual_request',
+      attributionSource: 'enterprise_dashboard_banner',
+    });
+
+    if (result.success) {
+      // Reload the page to reflect new state
+      window.location.reload();
+    } else {
+      // Show upgrade modal for failures or if conversion not applicable
+      setShowUpgradeModal(true);
+    }
+  }, [convertToReal]);
 
   useEffect(() => {
     if (enterprise) {
@@ -98,11 +119,11 @@ export function EnterpriseDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Demo Banner */}
+      {/* Demo Banner - S348-F2: Wired to explicit conversion */}
       {isDemoUser && (
         <DemoBanner
           variant="banner"
-          onUpgrade={() => setShowUpgradeModal(true)}
+          onUpgrade={handleUpgradeClick}
         />
       )}
 

@@ -1,19 +1,42 @@
 /**
- * Super Admin - Activity/Audit Log API
- * List system activity and audit events
+ * S349: Super Admin - Activity API (Admin Plane v1.1)
+ *
+ * List business events from the immutable business_events table.
+ * This is read-only visibility, NOT analytics.
+ *
+ * Guardrails:
+ * - NO derived metrics
+ * - NO aggregations
+ * - Raw events only from business_events table
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { verifySession } from '@/lib/superadmin/security';
 import { query } from '@/lib/db/client';
+import { StoredBusinessEvent } from '@/lib/events/event-emitter';
 
+/**
+ * GET /api/superadmin/activity
+ *
+ * Query params:
+ * - event_type: string (optional) - Filter by AdminPlaneEventType
+ * - entity_type: string (optional) - Filter by EntityType
+ * - entity_id: string (optional) - Filter by specific entity
+ * - actor_user_id: string (optional) - Filter by actor
+ * - from: ISO timestamp (optional) - Start of time range
+ * - to: ISO timestamp (optional) - End of time range
+ * - limit: number (default 50, max 200)
+ * - offset: number (default 0)
+ */
 export async function GET(request: NextRequest) {
   try {
     // Verify super admin session
     const headersList = await headers();
-    const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-               headersList.get('x-real-ip') || 'unknown';
+    const ip =
+      headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      headersList.get('x-real-ip') ||
+      'unknown';
     const userAgent = headersList.get('user-agent') || 'unknown';
 
     const sessionResult = await verifySession(ip, userAgent);
@@ -24,169 +47,91 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get query params for filtering
+    // Parse query params
     const { searchParams } = new URL(request.url);
-    const action = searchParams.get('action');
+    const eventType = searchParams.get('event_type');
     const entityType = searchParams.get('entity_type');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const entityId = searchParams.get('entity_id');
+    const actorUserId = searchParams.get('actor_user_id');
+    const fromDate = searchParams.get('from');
+    const toDate = searchParams.get('to');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 200);
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Check if audit_log table exists (exists returns string 'true'/'false' in some drivers)
-    let hasAuditLogTable = false;
-    try {
-      const tableCheck = await query<{ exists: boolean | string }>(
-        `SELECT EXISTS (
-          SELECT FROM information_schema.tables
-          WHERE table_name = 'audit_log'
-        ) as exists`
-      );
-      hasAuditLogTable = tableCheck[0]?.exists === true || tableCheck[0]?.exists === 'true';
-    } catch {
-      // Table check failed, fall through to derived activity
-      hasAuditLogTable = false;
-    }
-
-    if (!hasAuditLogTable) {
-      // Return recent user activity as fallback
-      // Wrap in try/catch to handle missing tables gracefully
-      let recentUsers: Array<{ id: string; email: string; action: string; created_at: Date }> = [];
-      let recentEnterprises: Array<{ enterprise_id: string; name: string; action: string; created_at: Date }> = [];
-
-      try {
-        recentUsers = await query<{
-          id: string;
-          email: string;
-          action: string;
-          created_at: Date;
-        }>(
-          `SELECT
-            id,
-            email,
-            'USER_CREATED' as action,
-            created_at
-          FROM users
-          ORDER BY created_at DESC
-          LIMIT $1`,
-          [limit]
-        );
-      } catch (e) {
-        console.log('[Activity] Could not fetch users:', e);
-      }
-
-      try {
-        recentEnterprises = await query<{
-          enterprise_id: string;
-          name: string;
-          action: string;
-          created_at: Date;
-        }>(
-          `SELECT
-            enterprise_id,
-            name,
-            'ENTERPRISE_CREATED' as action,
-            created_at
-          FROM enterprises
-          ORDER BY created_at DESC
-          LIMIT $1`,
-          [limit]
-        );
-      } catch (e) {
-        console.log('[Activity] Could not fetch enterprises:', e);
-      }
-
-      // Combine and sort
-      const activities = [
-        ...recentUsers.map(u => ({
-          id: u.id,
-          action: u.action,
-          entity_type: 'user',
-          entity_id: u.id,
-          description: `User ${u.email} created`,
-          timestamp: u.created_at,
-          actor: 'system',
-        })),
-        ...recentEnterprises.map(e => ({
-          id: e.enterprise_id,
-          action: e.action,
-          entity_type: 'enterprise',
-          entity_id: e.enterprise_id,
-          description: `Enterprise ${e.name} created`,
-          timestamp: e.created_at,
-          actor: 'system',
-        })),
-      ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-       .slice(0, limit);
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          activities,
-          total: activities.length,
-          limit,
-          offset,
-          source: 'derived', // Not from audit_log table
-        }
-      });
-    }
-
-    // If audit_log exists, query it
-    let whereClause = 'WHERE 1=1';
-    const params: (string | number)[] = [];
+    // Build WHERE clause
+    const conditions: string[] = [];
+    const params: (string | number | Date)[] = [];
     let paramIndex = 1;
 
-    if (action) {
-      whereClause += ` AND action = $${paramIndex++}`;
-      params.push(action);
+    if (eventType) {
+      conditions.push(`event_type = $${paramIndex++}`);
+      params.push(eventType);
     }
 
     if (entityType) {
-      whereClause += ` AND entity_type = $${paramIndex++}`;
+      conditions.push(`entity_type = $${paramIndex++}`);
       params.push(entityType);
     }
 
-    const activities = await query<{
-      id: string;
-      action: string;
-      entity_type: string;
-      entity_id: string;
-      description: string;
-      metadata: Record<string, unknown>;
-      actor_id: string;
-      actor_email: string;
-      timestamp: Date;
-    }>(
+    if (entityId) {
+      conditions.push(`entity_id = $${paramIndex++}`);
+      params.push(entityId);
+    }
+
+    if (actorUserId) {
+      conditions.push(`actor_user_id = $${paramIndex++}`);
+      params.push(actorUserId);
+    }
+
+    if (fromDate) {
+      conditions.push(`timestamp >= $${paramIndex++}`);
+      params.push(new Date(fromDate));
+    }
+
+    if (toDate) {
+      conditions.push(`timestamp <= $${paramIndex++}`);
+      params.push(new Date(toDate));
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Query business_events table (read-only, no JOINs per guardrail)
+    const events = await query<StoredBusinessEvent>(
       `SELECT
-        al.id,
-        al.action,
-        al.entity_type,
-        al.entity_id,
-        al.description,
-        al.metadata,
-        al.actor_id,
-        u.email as actor_email,
-        al.created_at as timestamp
-      FROM audit_log al
-      LEFT JOIN users u ON al.actor_id = u.id
+        event_id,
+        event_type,
+        entity_type,
+        entity_id,
+        workspace_id,
+        sub_vertical_id,
+        actor_user_id,
+        timestamp,
+        metadata
+      FROM business_events
       ${whereClause}
-      ORDER BY al.created_at DESC
+      ORDER BY timestamp DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
       [...params, limit, offset]
     );
 
+    // Get total count for pagination
     const countResult = await query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM audit_log ${whereClause}`,
+      `SELECT COUNT(*) as count FROM business_events ${whereClause}`,
       params
     );
+    const total = parseInt(countResult[0]?.count || '0');
 
     return NextResponse.json({
       success: true,
       data: {
-        activities,
-        total: parseInt(countResult[0]?.count || '0'),
+        events,
+        total,
         limit,
         offset,
-        source: 'audit_log',
-      }
+        has_more: offset + events.length < total,
+        source: 'business_events', // Always from immutable BTE table
+      },
     });
   } catch (error) {
     console.error('[SuperAdmin] GET /api/superadmin/activity error:', error);

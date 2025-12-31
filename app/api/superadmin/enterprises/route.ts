@@ -9,21 +9,7 @@ import { verifySession } from '@/lib/superadmin/security';
 import { query } from '@/lib/db/client';
 import { createEnterprise, type CreateEnterpriseInput } from '@/lib/db/enterprises';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
-import type { ResolvedContext } from '@/lib/auth/session/session-context';
-
-// Helper to create super admin context for event emission
-function createSuperAdminContext(email: string): ResolvedContext {
-  return {
-    user_id: '00000000-0000-0000-0000-000000000001',
-    role: 'SUPER_ADMIN',
-    enterprise_id: null,
-    workspace_id: null,
-    sub_vertical_id: null,
-    region_code: null,
-    is_demo: false,
-    demo_type: null,
-  };
-}
+import { createSuperAdminContextWithTarget } from '@/lib/auth/session/session-context';
 
 export async function GET(request: NextRequest) {
   try {
@@ -199,8 +185,11 @@ export async function POST(request: NextRequest) {
 
     const enterprise = await createEnterprise(input);
 
-    // Emit business event
-    const ctx = createSuperAdminContext(sessionResult.session?.email || 'unknown');
+    // Emit business event with target enterprise context (S347)
+    const ctx = createSuperAdminContextWithTarget({
+      enterprise_id: enterprise.enterprise_id,
+      region_code: enterprise.region,
+    });
     await emitBusinessEvent(ctx, {
       event_type: 'ENTERPRISE_CREATED',
       entity_type: 'ENTERPRISE',
