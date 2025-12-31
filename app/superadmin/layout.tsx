@@ -32,7 +32,6 @@ import {
   Shield,
   FlaskConical,
   Wand2,
-  Zap,
 } from 'lucide-react';
 import AICommandBar from '@/components/superadmin/AICommandBar';
 
@@ -58,12 +57,11 @@ const platformItems = [
   { label: 'OS Config', href: '/superadmin/os', icon: Server, description: 'OS settings & routing' },
 ];
 
-// Admin dropdown items (Users, Tenants, PLG, Settings)
-const adminItems = [
-  { label: 'User Governance', href: '/superadmin/plg', icon: Zap, description: 'ALL users: lifecycle, suspend, override' },
-  { label: 'Users (View)', href: '/superadmin/users', icon: Users, description: 'User list (read-only)' },
-  { label: 'Tenants', href: '/superadmin/tenants', icon: Building2, description: 'Tenant accounts' },
-  { label: 'Activity', href: '/superadmin/activity', icon: Activity, description: 'Audit logs' },
+// Users dropdown items (User Management is primary)
+const usersItems = [
+  { label: 'User Management', href: '/superadmin/users', icon: Users, description: 'Create, manage, govern all users', isPrimary: true },
+  { label: 'Enterprises', href: '/superadmin/tenants', icon: Building2, description: 'Enterprise accounts' },
+  { label: 'Activity Log', href: '/superadmin/activity', icon: Activity, description: 'Audit trail' },
   { label: 'Settings', href: '/superadmin/settings', icon: Settings, description: 'System settings' },
 ];
 
@@ -77,7 +75,7 @@ export default function SuperAdminLayout({
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState<'platform' | 'admin' | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<'platform' | 'users' | null>(null);
   const navRef = useRef<HTMLElement>(null);
 
   // Close dropdown when clicking outside
@@ -100,7 +98,7 @@ export default function SuperAdminLayout({
   const isPlatformActive = platformItems.some(item =>
     pathname === item.href || (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''))
   );
-  const isAdminActive = adminItems.some(item =>
+  const isUsersActive = usersItems.some(item =>
     pathname === item.href || (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''))
   );
 
@@ -265,23 +263,23 @@ export default function SuperAdminLayout({
               )}
             </div>
 
-            {/* Admin Dropdown */}
+            {/* Users Dropdown */}
             <div className="relative">
               <button
-                onClick={() => setOpenDropdown(openDropdown === 'admin' ? null : 'admin')}
+                onClick={() => setOpenDropdown(openDropdown === 'users' ? null : 'users')}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
-                  isAdminActive
+                  isUsersActive
                     ? 'bg-white text-black'
                     : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>Admin</span>
-                <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === 'admin' ? 'rotate-180' : ''}`} />
+                <span>Users</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === 'users' ? 'rotate-180' : ''}`} />
               </button>
-              {openDropdown === 'admin' && (
-                <div className="absolute top-full mt-1 left-0 w-48 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl overflow-hidden z-50">
-                  {adminItems.map((item) => {
+              {openDropdown === 'users' && (
+                <div className="absolute top-full mt-1 left-0 w-56 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl overflow-hidden z-50">
+                  {usersItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = pathname === item.href ||
                       (item.href !== '/superadmin' && pathname?.startsWith(item.href || ''));

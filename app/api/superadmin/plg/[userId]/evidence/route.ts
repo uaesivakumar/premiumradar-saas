@@ -57,7 +57,7 @@ export async function GET(
        WHERE entity_type = 'USER'
          AND entity_id = $1
          AND event_type = 'USER_CREATED'
-       ORDER BY created_at ASC
+       ORDER BY timestamp ASC
        LIMIT 1`,
       [userId]
     );
@@ -78,7 +78,7 @@ export async function GET(
            OR metadata ? 'sub_vertical'
            OR metadata ? 'region'
          )
-       ORDER BY created_at ASC`,
+       ORDER BY timestamp ASC`,
       [userId]
     );
 
@@ -86,7 +86,7 @@ export async function GET(
       const meta = event.metadata || {};
       const changes = meta.changes || {};
       return {
-        timestamp: event.created_at,
+        timestamp: event.timestamp,
         step: meta.onboarding_step || 'context_update',
         value: Object.entries(changes)
           .map(([k, v]) => `${k}: ${v}`)
@@ -100,7 +100,7 @@ export async function GET(
        WHERE entity_type = 'USER'
          AND entity_id = $1
          AND event_type = 'DEMO_CONVERTED'
-       ORDER BY created_at DESC
+       ORDER BY timestamp DESC
        LIMIT 1`,
       [userId]
     );
@@ -110,11 +110,11 @@ export async function GET(
 
     // Get all events for this user (recent)
     const eventsResult = await query(
-      `SELECT event_type, created_at, metadata
+      `SELECT event_type, timestamp, metadata
        FROM business_events
        WHERE entity_type = 'USER'
          AND entity_id = $1
-       ORDER BY created_at DESC
+       ORDER BY timestamp DESC
        LIMIT 50`,
       [userId]
     );
@@ -133,7 +133,7 @@ export async function GET(
 
     // Days active (unique days with events)
     const daysActiveResult = await query(
-      `SELECT COUNT(DISTINCT DATE(created_at)) as days
+      `SELECT COUNT(DISTINCT DATE(timestamp)) as days
        FROM business_events
        WHERE entity_type = 'USER'
          AND entity_id = $1`,
@@ -197,7 +197,7 @@ export async function GET(
       conversion: conversionEvent
         ? {
             converted: true,
-            converted_at: conversionEvent.created_at,
+            converted_at: conversionEvent.timestamp,
             reason: conversionMetadata.conversion_reason || 'unknown',
             was_explicit: conversionMetadata.conversion_explicit || false,
             days_as_demo: conversionMetadata.days_as_demo || null,

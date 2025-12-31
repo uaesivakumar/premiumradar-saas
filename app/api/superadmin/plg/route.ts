@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
       SELECT COUNT(*) as count
       FROM business_events
       WHERE event_type = 'DEMO_CONVERTED'
-        AND created_at >= $1
+        AND timestamp >= $1
     `, [startOfMonth.toISOString()]);
     const convertedThisMonth = parseInt((conversionsResult as any)[0]?.count || '0');
 
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
       FROM business_events
       WHERE event_type IN ('USER_SUSPENDED', 'USER_DELETED')
         AND entity_type = 'USER'
-        AND created_at >= $1
+        AND timestamp >= $1
         AND metadata->>'role' = 'INDIVIDUAL_USER'
     `, [startOfMonth.toISOString()]);
     const churnedThisMonth = parseInt((churnedResult as any)[0]?.count || '0');
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
     const avgDaysResult = await query(`
       SELECT AVG(
         EXTRACT(EPOCH FROM (
-          (metadata->>'converted_at')::timestamp - created_at
+          (metadata->>'converted_at')::timestamp - timestamp
         )) / 86400
       ) as avg_days
       FROM business_events
