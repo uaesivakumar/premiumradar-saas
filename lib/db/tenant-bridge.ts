@@ -77,10 +77,20 @@ export async function getOrCreateTenantFromEnterprise(enterpriseId: string): Pro
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
+  // Check if tenant with this slug already exists
+  const existingTenant = await queryOne<{ id: string }>(
+    'SELECT id FROM tenants WHERE slug = $1 LIMIT 1',
+    [slug]
+  );
+
+  if (existingTenant) {
+    return existingTenant.id;
+  }
+
+  // Create new tenant
   const tenant = await insert<TenantRecord>(
     `INSERT INTO tenants (name, slug, domain, plan)
      VALUES ($1, $2, $3, 'enterprise')
-     ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
      RETURNING id, name, domain, created_at`,
     [enterprise.name, slug, enterprise.domain]
   );

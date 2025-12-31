@@ -12,6 +12,7 @@ import { createDefaultWorkspace } from '@/lib/db/workspaces';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
 import type { ResolvedContext } from '@/lib/auth/session/session-context';
 import bcrypt from 'bcryptjs';
+import { getOrCreateTenantFromEnterprise, warnTenantIdUsage } from '@/lib/db/tenant-bridge';
 
 function createSuperAdminContext(): ResolvedContext {
   return {
@@ -159,8 +160,10 @@ export async function POST(request: NextRequest) {
       'Default Workspace'
     );
 
-    // Create admin user
+    // Create admin user (with legacy tenant_id for DB constraint)
     const passwordHash = await bcrypt.hash(adminPassword, 12);
+    warnTenantIdUsage('superadmin/demos POST - legacy constraint');
+    const tenantId = await getOrCreateTenantFromEnterprise(enterprise.enterprise_id);
     const adminUser = await insert<{
       id: string;
       email: string;
@@ -168,9 +171,9 @@ export async function POST(request: NextRequest) {
     }>(
       `INSERT INTO users (
         email, password_hash, name, role,
-        enterprise_id, workspace_id, is_demo, demo_type
+        enterprise_id, workspace_id, is_demo, demo_type, tenant_id
       )
-      VALUES ($1, $2, $3, 'ENTERPRISE_ADMIN', $4, $5, true, 'ENTERPRISE')
+      VALUES ($1, $2, $3, 'ENTERPRISE_ADMIN', $4, $5, true, 'ENTERPRISE', $6)
       RETURNING id, email, role`,
       [
         body.admin_email,
@@ -178,6 +181,7 @@ export async function POST(request: NextRequest) {
         body.admin_name || 'Demo Admin',
         enterprise.enterprise_id,
         workspace.workspace_id,
+        tenantId,
       ]
     );
 

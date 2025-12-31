@@ -10,6 +10,7 @@ import { query, insert } from '@/lib/db/client';
 import { emitBusinessEvent } from '@/lib/events/event-emitter';
 import type { ResolvedContext, ValidRole } from '@/lib/auth/session/session-context';
 import bcrypt from 'bcryptjs';
+import { getOrCreateTenantFromEnterprise, warnTenantIdUsage } from '@/lib/db/tenant-bridge';
 
 function createSuperAdminContext(): ResolvedContext {
   return {
@@ -190,7 +191,15 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await bcrypt.hash(body.password, 12);
 
-    // Create user (enterprise-first, no tenant_id in new code)
+    // Get tenant_id from enterprise_id (legacy compatibility)
+    // The DB still has NOT NULL constraint on tenant_id
+    let tenantId: string | null = null;
+    if (body.enterprise_id) {
+      warnTenantIdUsage('superadmin/users POST - legacy constraint');
+      tenantId = await getOrCreateTenantFromEnterprise(body.enterprise_id);
+    }
+
+    // Create user (enterprise-first, tenant_id for legacy compatibility only)
     const user = await insert<{
       id: string;
       email: string;
@@ -204,9 +213,9 @@ export async function POST(request: NextRequest) {
     }>(
       `INSERT INTO users (
         email, password_hash, name, role,
-        enterprise_id, workspace_id, is_demo, demo_type
+        enterprise_id, workspace_id, is_demo, demo_type, tenant_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id, email, name, role, enterprise_id, workspace_id, is_demo, demo_type, created_at`,
       [
         body.email,
@@ -217,6 +226,7 @@ export async function POST(request: NextRequest) {
         body.workspace_id || null,
         body.is_demo || false,
         body.demo_type || null,
+        tenantId,
       ]
     );
 
