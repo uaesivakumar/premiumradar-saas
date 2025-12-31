@@ -11,10 +11,37 @@ import { getEnterpriseById } from '@/lib/db/enterprises';
 import { getWorkspaceById, getDefaultWorkspace } from '@/lib/db/workspaces';
 import { evaluateDemoPolicy, getDemoStatus, DemoEvaluationResult } from '@/lib/db/demo-policies';
 import { toEnterpriseRole, ROLE_HIERARCHY, hasRequiredRole } from '../rbac/types';
+import { queryOne } from '@/lib/db/client';
 
 // ============================================================
 // TYPES
 // ============================================================
+
+/**
+ * S340: Canonical Resolved Context (Admin Plane v1.1)
+ *
+ * Flat 8-field structure for all Admin Plane APIs.
+ * Resolved once per request, logged on all mutations.
+ */
+export type ValidRole = 'SUPER_ADMIN' | 'ENTERPRISE_ADMIN' | 'ENTERPRISE_USER' | 'INDIVIDUAL_USER';
+
+export interface ResolvedContext {
+  // User identity
+  user_id: string;
+  role: ValidRole;
+
+  // Organization hierarchy (enterprise-first)
+  enterprise_id: string | null;
+  workspace_id: string | null;
+
+  // Vertical binding
+  sub_vertical_id: string | null;
+  region_code: string | null; // e.g., 'UAE', 'US' (string, not UUID)
+
+  // Demo state
+  is_demo: boolean;
+  demo_type: 'SYSTEM' | 'ENTERPRISE' | null;
+}
 
 export interface EnterpriseContext {
   enterpriseId: string;
@@ -144,6 +171,105 @@ export async function getFullSessionContext(): Promise<FullSessionContext | null
     },
   };
 }
+
+// ============================================================
+// S340: RESOLVED CONTEXT (Admin Plane v1.1)
+// ============================================================
+
+/**
+ * Normalize role to valid Admin Plane role.
+ * Maps deprecated roles to their modern equivalents.
+ */
+function normalizeRole(role: string | undefined): ValidRole {
+  const roleMap: Record<string, ValidRole> = {
+    'SUPER_ADMIN': 'SUPER_ADMIN',
+    'ENTERPRISE_ADMIN': 'ENTERPRISE_ADMIN',
+    'ENTERPRISE_USER': 'ENTERPRISE_USER',
+    'INDIVIDUAL_USER': 'INDIVIDUAL_USER',
+    // Deprecated role mappings
+    'TENANT_ADMIN': 'ENTERPRISE_ADMIN',
+    'TENANT_USER': 'ENTERPRISE_USER',
+    'READ_ONLY': 'INDIVIDUAL_USER',
+  };
+  return roleMap[role || ''] || 'INDIVIDUAL_USER';
+}
+
+/**
+ * S340: Get Resolved Context (Admin Plane v1.1)
+ *
+ * Returns flat 8-field context for Admin Plane APIs.
+ * Resolves all fields from session + DB lookups.
+ *
+ * Resolution order:
+ * 1. user_id, role from session
+ * 2. enterprise_id, workspace_id from session
+ * 3. sub_vertical_id from workspace
+ * 4. region_code from enterprise.region
+ * 5. is_demo, demo_type from users table
+ */
+export async function getResolvedContext(): Promise<ResolvedContext | null> {
+  const session = await getServerSession();
+
+  if (!session) {
+    return null;
+  }
+
+  // Get user's demo state from DB
+  const userRecord = await queryOne<{
+    is_demo: boolean;
+    demo_type: 'SYSTEM' | 'ENTERPRISE' | null;
+  }>(
+    'SELECT is_demo, demo_type FROM users WHERE id = $1',
+    [session.user.id]
+  );
+
+  // Get workspace for sub_vertical_id
+  let subVerticalId: string | null = null;
+  if (session.workspaceId) {
+    const workspace = await getWorkspaceById(session.workspaceId);
+    if (workspace) {
+      subVerticalId = workspace.sub_vertical_id || null;
+    }
+  }
+
+  // Get enterprise for region_code
+  let regionCode: string | null = null;
+  if (session.enterpriseId) {
+    const enterprise = await getEnterpriseById(session.enterpriseId);
+    if (enterprise) {
+      regionCode = enterprise.region || null;
+    }
+  }
+
+  return {
+    user_id: session.user.id,
+    role: normalizeRole(session.user.role),
+    enterprise_id: session.enterpriseId || null,
+    workspace_id: session.workspaceId || null,
+    sub_vertical_id: subVerticalId,
+    region_code: regionCode,
+    is_demo: userRecord?.is_demo ?? false,
+    demo_type: userRecord?.demo_type ?? null,
+  };
+}
+
+/**
+ * S340: Require Resolved Context
+ * Throws if context cannot be resolved (not authenticated).
+ */
+export async function requireResolvedContext(): Promise<ResolvedContext> {
+  const context = await getResolvedContext();
+
+  if (!context) {
+    throw new Error('Authentication required');
+  }
+
+  return context;
+}
+
+// ============================================================
+// LEGACY CONTEXT FUNCTIONS (kept for backward compatibility)
+// ============================================================
 
 /**
  * Get enterprise context for current session
@@ -385,7 +511,11 @@ export async function requireSuperAdmin(): Promise<void> {
 }
 
 export default {
-  // Context resolution
+  // S340: Admin Plane v1.1 Resolved Context
+  getResolvedContext,
+  requireResolvedContext,
+
+  // Legacy context resolution (kept for backward compatibility)
   getFullSessionContext,
   getEnterpriseContext,
   getWorkspaceContext,
