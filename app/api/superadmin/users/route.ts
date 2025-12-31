@@ -1,12 +1,30 @@
 /**
- * Super Admin - Users API
- * List all users across all enterprises
+ * S342: Super Admin - Users API (Admin Plane v1.1)
+ * List and create users across all enterprises
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { verifySession } from '@/lib/superadmin/security';
-import { query } from '@/lib/db/client';
+import { query, insert } from '@/lib/db/client';
+import { emitBusinessEvent } from '@/lib/events/event-emitter';
+import type { ResolvedContext, ValidRole } from '@/lib/auth/session/session-context';
+import bcrypt from 'bcryptjs';
+
+function createSuperAdminContext(): ResolvedContext {
+  return {
+    user_id: '00000000-0000-0000-0000-000000000001',
+    role: 'SUPER_ADMIN',
+    enterprise_id: null,
+    workspace_id: null,
+    sub_vertical_id: null,
+    region_code: null,
+    is_demo: false,
+    demo_type: null,
+  };
+}
+
+const VALID_ROLES: ValidRole[] = ['SUPER_ADMIN', 'ENTERPRISE_ADMIN', 'ENTERPRISE_USER', 'INDIVIDUAL_USER'];
 
 export async function GET(request: NextRequest) {
   try {
@@ -120,6 +138,119 @@ export async function GET(request: NextRequest) {
     console.error('[SuperAdmin] GET /api/superadmin/users error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch users' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/superadmin/users
+ * Create a new user
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const headersList = await headers();
+    const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+               headersList.get('x-real-ip') || 'unknown';
+    const userAgent = headersList.get('user-agent') || 'unknown';
+
+    const sessionResult = await verifySession(ip, userAgent);
+    if (!sessionResult.valid) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+
+    // Validate required fields
+    if (!body.email) {
+      return NextResponse.json(
+        { success: false, error: 'email is required' },
+        { status: 400 }
+      );
+    }
+    if (!body.password) {
+      return NextResponse.json(
+        { success: false, error: 'password is required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate role
+    const role = body.role || 'ENTERPRISE_USER';
+    if (!VALID_ROLES.includes(role)) {
+      return NextResponse.json(
+        { success: false, error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(body.password, 12);
+
+    // Create user (enterprise-first, no tenant_id in new code)
+    const user = await insert<{
+      id: string;
+      email: string;
+      name: string | null;
+      role: string;
+      enterprise_id: string | null;
+      workspace_id: string | null;
+      is_demo: boolean;
+      demo_type: string | null;
+      created_at: Date;
+    }>(
+      `INSERT INTO users (
+        email, password_hash, name, role,
+        enterprise_id, workspace_id, is_demo, demo_type
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, email, name, role, enterprise_id, workspace_id, is_demo, demo_type, created_at`,
+      [
+        body.email,
+        passwordHash,
+        body.name || null,
+        role,
+        body.enterprise_id || null,
+        body.workspace_id || null,
+        body.is_demo || false,
+        body.demo_type || null,
+      ]
+    );
+
+    // Emit business event
+    const ctx = createSuperAdminContext();
+    await emitBusinessEvent(ctx, {
+      event_type: 'USER_CREATED',
+      entity_type: 'USER',
+      entity_id: user.id,
+      metadata: {
+        email: user.email,
+        role: user.role,
+        enterprise_id: user.enterprise_id,
+        actor_email: sessionResult.session?.email,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: user,
+    }, { status: 201 });
+  } catch (error: unknown) {
+    console.error('[SuperAdmin] POST /api/superadmin/users error:', error);
+
+    // Handle unique constraint violation
+    if (error instanceof Error && error.message.includes('unique')) {
+      return NextResponse.json(
+        { success: false, error: 'Email already exists' },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Failed to create user' },
       { status: 500 }
     );
   }

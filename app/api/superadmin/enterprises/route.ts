@@ -1,12 +1,29 @@
 /**
- * Super Admin - Enterprises API
- * List all enterprises (tenants)
+ * S341: Super Admin - Enterprises API (Admin Plane v1.1)
+ * List and create enterprises
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { verifySession } from '@/lib/superadmin/security';
 import { query } from '@/lib/db/client';
+import { createEnterprise, type CreateEnterpriseInput } from '@/lib/db/enterprises';
+import { emitBusinessEvent } from '@/lib/events/event-emitter';
+import type { ResolvedContext } from '@/lib/auth/session/session-context';
+
+// Helper to create super admin context for event emission
+function createSuperAdminContext(email: string): ResolvedContext {
+  return {
+    user_id: '00000000-0000-0000-0000-000000000001',
+    role: 'SUPER_ADMIN',
+    enterprise_id: null,
+    workspace_id: null,
+    sub_vertical_id: null,
+    region_code: null,
+    is_demo: false,
+    demo_type: null,
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -127,6 +144,83 @@ export async function GET(request: NextRequest) {
     console.error('[SuperAdmin] GET /api/superadmin/enterprises error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch enterprises' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/superadmin/enterprises
+ * Create a new enterprise
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const headersList = await headers();
+    const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+               headersList.get('x-real-ip') || 'unknown';
+    const userAgent = headersList.get('user-agent') || 'unknown';
+
+    const sessionResult = await verifySession(ip, userAgent);
+    if (!sessionResult.valid) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+
+    // Validate required fields
+    if (!body.name) {
+      return NextResponse.json(
+        { success: false, error: 'name is required' },
+        { status: 400 }
+      );
+    }
+
+    // Build create input
+    const input: CreateEnterpriseInput = {
+      name: body.name,
+      region: body.region || 'UAE',
+      type: body.type || 'REAL',
+      domain: body.domain,
+      industry: body.industry,
+      plan: body.plan || 'free',
+      max_users: body.max_users || 10,
+      max_workspaces: body.max_workspaces || 3,
+      max_discoveries_per_month: body.max_discoveries_per_month || 100,
+    };
+
+    // Handle demo enterprise
+    if (body.type === 'DEMO') {
+      const daysUntilExpiry = body.demo_days || 30;
+      input.demo_expires_at = new Date(Date.now() + daysUntilExpiry * 24 * 60 * 60 * 1000);
+    }
+
+    const enterprise = await createEnterprise(input);
+
+    // Emit business event
+    const ctx = createSuperAdminContext(sessionResult.session?.email || 'unknown');
+    await emitBusinessEvent(ctx, {
+      event_type: 'ENTERPRISE_CREATED',
+      entity_type: 'ENTERPRISE',
+      entity_id: enterprise.enterprise_id,
+      metadata: {
+        enterprise_name: enterprise.name,
+        enterprise_type: enterprise.type,
+        plan: enterprise.plan,
+        actor_email: sessionResult.session?.email,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: enterprise,
+    }, { status: 201 });
+  } catch (error) {
+    console.error('[SuperAdmin] POST /api/superadmin/enterprises error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to create enterprise' },
       { status: 500 }
     );
   }
