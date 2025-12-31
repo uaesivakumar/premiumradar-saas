@@ -190,9 +190,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         mvtCertified = false;
       }
 
-      // Check for compliance rule
-      const hasComplianceRule = (killRules as Array<{ rule?: string }>).some(
+      // Check for compliance rule (explicit is_compliance flag OR text match)
+      const hasComplianceRule = (killRules as Array<{ rule?: string; is_compliance?: boolean }>).some(
         (r) =>
+          r.is_compliance === true ||
           r.rule?.toLowerCase().includes('compliance') ||
           r.rule?.toLowerCase().includes('gdpr')
       );

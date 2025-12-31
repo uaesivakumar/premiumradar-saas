@@ -41,6 +41,7 @@ interface KillRule {
   rule: string;
   action: string;
   reason: string;
+  is_compliance?: boolean;
 }
 
 interface SeedScenario {
@@ -146,12 +147,17 @@ function validateMVT(
       if (!rule.action) errors.push(`kill_rules[${i}].action is required`);
       if (!rule.reason) errors.push(`kill_rules[${i}].reason is required`);
     }
+    // Check for compliance rule (explicit is_compliance flag OR text match)
     const complianceKeywords = ['compliance', 'regulatory', 'legal', 'aml', 'kyc', 'sanction'];
     const hasComplianceRule = kill_rules.some(rule =>
-      complianceKeywords.some(keyword => rule.reason?.toLowerCase().includes(keyword))
+      rule.is_compliance === true ||
+      complianceKeywords.some(keyword =>
+        rule.reason?.toLowerCase().includes(keyword) ||
+        rule.rule?.toLowerCase().includes(keyword)
+      )
     );
     if (!hasComplianceRule) {
-      errors.push('At least 1 compliance/regulatory kill_rule required');
+      errors.push('At least 1 compliance/regulatory kill_rule required (check the Compliance Rule checkbox)');
     }
   }
 
@@ -375,8 +381,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       kill_rules !== undefined ||
       seed_scenarios !== undefined;
 
-    let newMVTVersion: MVTVersion | null = null;
-
     // ========================================
     // ICP-ONLY UPDATE PATH (buyer_role, decision_owner)
     // Allow saving ICP fields without full MVT validation
@@ -517,101 +521,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // ========================================
-    // LEGACY: Full MVT version creation (only if mvt_valid would be true)
-    // Keep this path for when MVT versioning is re-enabled
-    // ========================================
-    if (false && hasMVTFields && !hasICPOnlyFields) {
-      // Merge with existing MVT values (partial updates allowed)
-      const mergedBuyerRole = buyer_role ?? existing.current_buyer_role ?? '';
-      const mergedDecisionOwner = decision_owner ?? existing.current_decision_owner ?? '';
-      const mergedAllowedSignals = allowed_signals ?? (existing.allowed_signals as AllowedSignal[]) ?? [];
-      const mergedKillRules = kill_rules ?? (existing.kill_rules as KillRule[]) ?? [];
-      const mergedSeedScenarios = seed_scenarios ?? (existing.seed_scenarios as SeedScenarios) ?? { golden: [], kill: [] };
-
-      // Validate full MVT
-      const mvtValidation = validateMVT(
-        existing.primary_entity_type,
-        mergedBuyerRole,
-        mergedDecisionOwner,
-        mergedAllowedSignals,
-        mergedKillRules,
-        mergedSeedScenarios
-      );
-
-      if (!mvtValidation.valid) {
-        await logControlPlaneAudit({
-          actorUser,
-          action: 'update_sub_vertical_mvt',
-          targetType: 'sub_vertical',
-          targetId: id,
-          requestJson: body,
-          success: false,
-          errorMessage: `MVT validation failed: ${mvtValidation.errors.join(', ')}`,
-        });
-        return Response.json(
-          {
-            success: false,
-            error: 'MVT_INCOMPLETE',
-            message: 'Minimum Viable Truth validation failed',
-            mvt_errors: mvtValidation.errors,
-          },
-          { status: 400 }
-        );
-      }
-
-      // Create new MVT version via DB function
-      // This function: deprecates old version, creates new one, updates pointer
-      try {
-        newMVTVersion = await queryOne<MVTVersion>(
-          `SELECT * FROM create_mvt_version($1, $2, $3, $4, $5, $6, $7)`,
-          [
-            id, // sub_vertical_id
-            mergedBuyerRole,
-            mergedDecisionOwner,
-            JSON.stringify(mergedAllowedSignals),
-            JSON.stringify(mergedKillRules),
-            JSON.stringify(mergedSeedScenarios),
-            actorUser, // created_by
-          ]
-        );
-      } catch (dbError) {
-        // Handle DB-level constraint violations
-        const errorMessage = dbError instanceof Error ? dbError.message : 'Unknown error';
-        if (errorMessage.includes('MVT_CONSTRAINT_VIOLATION')) {
-          await logControlPlaneAudit({
-            actorUser,
-            action: 'update_sub_vertical_mvt',
-            targetType: 'sub_vertical',
-            targetId: id,
-            requestJson: body,
-            success: false,
-            errorMessage: errorMessage,
-          });
-          return Response.json(
-            {
-              success: false,
-              error: 'MVT_CONSTRAINT_VIOLATION',
-              message: errorMessage,
-            },
-            { status: 400 }
-          );
-        }
-        throw dbError;
-      }
-
-      // Log MVT version creation
-      await logControlPlaneAudit({
-        actorUser,
-        action: 'create_mvt_version',
-        targetType: 'mvt_version',
-        targetId: newMVTVersion?.id || id,
-        requestJson: body,
-        resultJson: newMVTVersion as unknown as Record<string, unknown>,
-        success: true,
-      });
-    }
-
-    // ========================================
     // BASIC FIELDS UPDATE PATH
     // ========================================
     // Validation: key (if provided)
@@ -747,32 +656,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       targetType: 'sub_vertical',
       targetId: id,
       requestJson: body,
-      resultJson: {
-        ...result,
-        mvt_version_created: newMVTVersion ? true : false,
-        new_mvt_version: newMVTVersion?.mvt_version,
-      } as unknown as Record<string, unknown>,
+      resultJson: result as unknown as Record<string, unknown>,
       success: true,
     });
 
-    // Build response with MVT info
-    const response: Record<string, unknown> = {
+    return Response.json({
       success: true,
       data: result,
-    };
-
-    if (newMVTVersion) {
-      response.mvt_version_created = true;
-      response.new_mvt_version = {
-        id: newMVTVersion.id,
-        mvt_version: newMVTVersion.mvt_version,
-        status: newMVTVersion.status,
-        mvt_valid: newMVTVersion.mvt_valid,
-        mvt_validated_at: newMVTVersion.mvt_validated_at,
-      };
-    }
-
-    return Response.json(response);
+    });
   } catch (error) {
     console.error('[SubVertical PUT] Error:', error);
     return serverError('Failed to update sub-vertical');

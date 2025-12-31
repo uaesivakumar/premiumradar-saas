@@ -47,7 +47,7 @@ interface SubVerticalAudit {
   buyer_role: string | null;
   decision_owner: string | null;
   allowed_signals: Array<{ signal_key: string; entity_type: string; justification: string }>;
-  kill_rules: Array<{ rule: string; action: string; reason: string }>;
+  kill_rules: Array<{ rule: string; action: string; reason: string; is_compliance?: boolean }>;
   seed_scenarios: { golden: unknown[]; kill: unknown[] } | null;
   mvt_version: number;
   mvt_valid: boolean;
@@ -89,7 +89,7 @@ export default function SubVerticalHardenPage() {
 
   // MVT editable fields
   const [allowedSignals, setAllowedSignals] = useState<Array<{ signal_key: string; entity_type: string; justification: string }>>([]);
-  const [killRules, setKillRules] = useState<Array<{ rule: string; action: string; reason: string }>>([]);
+  const [killRules, setKillRules] = useState<Array<{ rule: string; action: string; reason: string; is_compliance?: boolean }>>([]);
   const [seedScenarios, setSeedScenarios] = useState<{ golden: Array<{ name: string; description: string }>; kill: Array<{ name: string; description: string }> }>({ golden: [], kill: [] });
 
   // Form visibility
@@ -100,7 +100,7 @@ export default function SubVerticalHardenPage() {
 
   // New item forms
   const [newSignal, setNewSignal] = useState({ signal_key: '', entity_type: '', justification: '' });
-  const [newKillRule, setNewKillRule] = useState({ rule: '', action: 'BLOCK', reason: '' });
+  const [newKillRule, setNewKillRule] = useState({ rule: '', action: 'BLOCK', reason: '', is_compliance: false });
   const [newGolden, setNewGolden] = useState({ name: '', description: '' });
   const [newKillScenario, setNewKillScenario] = useState({ name: '', description: '' });
 
@@ -262,9 +262,10 @@ export default function SubVerticalHardenPage() {
     setKillRules([...killRules, {
       rule: newKillRule.rule,
       action: newKillRule.action || 'BLOCK',
-      reason: newKillRule.reason
+      reason: newKillRule.reason,
+      is_compliance: newKillRule.is_compliance
     }]);
-    setNewKillRule({ rule: '', action: 'BLOCK', reason: '' });
+    setNewKillRule({ rule: '', action: 'BLOCK', reason: '', is_compliance: false });
     setShowAddKillRule(false);
   };
 
@@ -667,11 +668,22 @@ export default function SubVerticalHardenPage() {
                   </select>
                   <input
                     type="text"
-                    placeholder="Reason (include 'compliance' or 'regulatory' for compliance rules)"
+                    placeholder="Reason for this rule"
                     value={newKillRule.reason}
                     onChange={(e) => setNewKillRule({ ...newKillRule, reason: e.target.value })}
                     className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-xs text-white placeholder:text-neutral-600"
                   />
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newKillRule.is_compliance}
+                      onChange={(e) => setNewKillRule({ ...newKillRule, is_compliance: e.target.checked })}
+                      className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span className="text-xs text-amber-400">
+                      Compliance Rule (GDPR, regulatory, legal requirement)
+                    </span>
+                  </label>
                   <div className="flex gap-2">
                     <button
                       onClick={addKillRule}
@@ -694,17 +706,38 @@ export default function SubVerticalHardenPage() {
                   {killRules.map((rule, i) => (
                     <div
                       key={i}
-                      className="p-2 bg-red-500/5 border border-red-500/20 rounded text-xs"
+                      className={`p-2 border rounded text-xs ${
+                        rule.is_compliance
+                          ? 'bg-amber-500/10 border-amber-500/30'
+                          : 'bg-red-500/5 border-red-500/20'
+                      }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-red-400">{rule.rule}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-red-300 text-[10px] px-1.5 py-0.5 bg-red-500/20 rounded">
+                          <span className={rule.is_compliance ? 'text-amber-400' : 'text-red-400'}>
+                            {rule.rule}
+                          </span>
+                          {rule.is_compliance && (
+                            <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/30 text-amber-300 rounded font-medium">
+                              COMPLIANCE
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            rule.is_compliance
+                              ? 'text-amber-300 bg-amber-500/20'
+                              : 'text-red-300 bg-red-500/20'
+                          }`}>
                             {rule.action}
                           </span>
                           <button
                             onClick={() => removeKillRule(i)}
-                            className="p-1 text-red-400 hover:bg-red-500/20 rounded"
+                            className={`p-1 rounded ${
+                              rule.is_compliance
+                                ? 'text-amber-400 hover:bg-amber-500/20'
+                                : 'text-red-400 hover:bg-red-500/20'
+                            }`}
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>

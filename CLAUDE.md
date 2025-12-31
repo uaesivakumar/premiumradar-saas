@@ -1,5 +1,40 @@
 # PremiumRadar-SAAS - TC Context File
 
+## DEPLOYMENT RULES (MANDATORY)
+
+**NEVER deploy using raw `gcloud run deploy` commands.**
+
+### Protected Deployment Process:
+```bash
+# ONLY use this script for staging deployments:
+./scripts/deploy-staging.sh
+```
+
+### Why This Matters:
+On 2025-12-30, secrets were accidentally wiped during deployment because:
+1. `--set-secrets` REPLACES all secrets (wrong)
+2. `--update-secrets` ADDS to existing secrets (correct)
+3. Manual gcloud commands are error-prone
+
+### Required Secrets (8 total):
+| Env Var | Secret Name | Purpose |
+|---------|-------------|---------|
+| DATABASE_URL | DB_URL_SAAS | PostgreSQL connection |
+| NOTION_TOKEN | NOTION_TOKEN_SAAS | Sprint management |
+| ENCRYPTION_KEY | ENCRYPTION_KEY_SAAS | TOTP encryption |
+| RESEND_API_KEY | RESEND_API_KEY_SAAS | Email service |
+| JWT_SECRET | JWT_SECRET_SAAS | JWT signing |
+| SUPER_ADMIN_EMAILS | SUPER_ADMIN_EMAILS | Allowed admin emails |
+| SUPER_ADMIN_SECRET | SUPER_ADMIN_SECRET | Admin access code |
+| SUPER_ADMIN_SESSION_KEY | SUPER_ADMIN_SESSION_KEY | Session encryption |
+
+### Before ANY Deployment:
+```bash
+./scripts/validate-secrets.sh
+```
+
+---
+
 ## CRITICAL PRODUCT MODEL (READ FIRST)
 
 **PremiumRadar is NOT an industry-intelligence engine.**
