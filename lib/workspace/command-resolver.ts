@@ -16,6 +16,7 @@ import {
   createSystemCard,
 } from './card-state';
 import { getExpiryTime } from './ttl-engine';
+import { handleRecallQuery } from './recall-engine';
 
 // =============================================================================
 // TYPES
@@ -283,23 +284,21 @@ async function handleRecall(resolution: CommandResolution): Promise<ResolveResul
     };
   }
 
-  // TODO: S375 - Call recall engine
-  return {
-    success: true,
-    cards: [
-      {
-        type: 'recall',
-        priority: 400,
-        title: `Recall: ${entityName}`,
-        summary: 'Searching past decisions...',
-        expiresAt: getExpiryTime('recall'),
-        sourceType: 'recall',
-        entityName,
-        actions: [],
-        tags: ['recall', 'pending'],
-      },
-    ],
-  };
+  // S375: Use recall engine to search past decisions
+  try {
+    const recallCards = await handleRecallQuery(entityName);
+    return {
+      success: true,
+      cards: recallCards,
+    };
+  } catch (error) {
+    console.error('[CommandResolver] Recall error:', error);
+    return {
+      success: false,
+      cards: [],
+      error: 'Failed to recall past decisions.',
+    };
+  }
 }
 
 async function handlePreference(resolution: CommandResolution): Promise<ResolveResult> {

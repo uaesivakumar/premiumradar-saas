@@ -1,5 +1,6 @@
 /**
  * Action Handlers - S374: NBA → Card Wiring
+ * S375: Decision Persistence & Recall
  *
  * Central registry for all card action handlers.
  * Each card type has its own action handlers.
@@ -7,6 +8,7 @@
 
 import { Card } from '../card-state';
 import { nbaActionHandlers, executeNBAAction, ActionContext, ActionResult } from './nba';
+import { recallActionHandlers, executeRecallAction } from './recall';
 
 // Re-export types
 export type { ActionContext, ActionResult } from './nba';
@@ -38,16 +40,16 @@ export async function dispatchAction(
       return executeNBAAction(handlerId, card, context);
 
     case 'signal':
-      // TODO: S375 - Signal action handlers
+      // TODO: S376+ - Signal action handlers
       return handleGenericAction(handlerId, card, context);
 
     case 'decision':
-      // TODO: S376 - Decision action handlers
+      // TODO: S376+ - Decision action handlers
       return handleGenericAction(handlerId, card, context);
 
     case 'recall':
-      // TODO: S376 - Recall action handlers
-      return handleGenericAction(handlerId, card, context);
+      // S375: Recall action handlers
+      return executeRecallAction(handlerId, card, context);
 
     case 'system':
       return handleSystemAction(handlerId, card, context);
@@ -118,3 +120,4 @@ async function handleSystemAction(
 // =============================================================================
 
 export { nbaActionHandlers, executeNBAAction };
+export { recallActionHandlers, executeRecallAction };
