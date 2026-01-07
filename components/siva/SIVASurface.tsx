@@ -1,9 +1,16 @@
 'use client';
 
 /**
- * SIVA Surface - AI-Native Pageless Experience
+ * @deprecated S371: This component is deprecated.
+ * Use WorkspaceSurface from components/workspace/core instead.
  *
- * DESIGN PRINCIPLES (Non-Negotiable):
+ * SIVASurface used chat-based message rendering which violates
+ * WORKSPACE_UX_DECISION.md. The new WorkspaceSurface uses
+ * card-based rendering with no conversation history.
+ *
+ * TODO: Delete this file in S372 after migration is complete.
+ *
+ * OLD DESIGN PRINCIPLES (no longer apply):
  * - SIVA is the product, not an assistant inside it
  * - User expresses intent, SIVA decides, UI renders
  * - No feature buttons (Discovery/Ranking/Outreach)

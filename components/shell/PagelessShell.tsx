@@ -21,7 +21,8 @@ import { motion } from 'framer-motion';
 import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useSIVAStore } from '@/lib/stores/siva-store';
-import { SIVASurface } from '@/components/siva/SIVASurface';
+// S371: Replaced SIVASurface with WorkspaceSurface (card-centric)
+import { WorkspaceSurface } from '@/components/workspace/core';
 import { PremiumRadarLogo } from '@/components/brand/PremiumRadarLogo';
 import { Settings, HelpCircle, Shield, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
@@ -137,7 +138,8 @@ export function PagelessShell({ children }: PagelessShellProps) {
 
       {/* Main Content - Full Width SIVA */}
       <main className="flex-1 relative overflow-hidden">
-        <SIVASurface />
+        {/* S371: Card-centric WorkspaceSurface replaces SIVASurface */}
+        <WorkspaceSurface />
       </main>
     </div>
   );

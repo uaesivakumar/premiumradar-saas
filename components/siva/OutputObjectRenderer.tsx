@@ -1,10 +1,16 @@
 'use client';
 
 /**
- * Output Object Renderer - Sprint S26/S27
- * Renders AI-generated output objects in the result surface
+ * @deprecated S371: This component is deprecated.
+ * Use Card from components/workspace/core instead.
  *
- * UX PRINCIPLES:
+ * OutputObjectRenderer rendered OutputObjects from siva-store.
+ * The new Card component renders Cards from card-store with
+ * proper TTL, priority, and action handling.
+ *
+ * TODO: Delete this file in S372 after migration is complete.
+ *
+ * OLD UX PRINCIPLES (no longer apply):
  * - AI-native: Actions trigger SIVA queries
  * - User-friendly: Click to expand, clear labels
  * - Actionable: Find Contacts, Generate Outreach buttons
