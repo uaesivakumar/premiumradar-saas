@@ -3,15 +3,16 @@
 /**
  * Pageless Shell - LEFT SIDEBAR LAYOUT
  * S369: Updated for LOCKED Workspace UX
+ * S372: Dynamic Left Rail integration
  *
  * SIVA-first interface with sidebar for maximum content width.
- * Sidebar: Logo + Context + SIVA Status + Settings
+ * Sidebar: Logo + Context + Dynamic Left Rail
  * Main: Full-width AI surface
  *
  * UX PRINCIPLES (LOCKED per WORKSPACE_UX_DECISION.md):
  * - Single persistent canvas
  * - Full page width for content
- * - Sidebar is minimal and informative (will become dynamic in S372)
+ * - Sidebar is dynamic (sections appear/disappear based on state)
  * - Logo: PremiumRadar (radar + AI symbol)
  * - No page navigation - all state-driven
  */
@@ -22,9 +23,10 @@ import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useSIVAStore } from '@/lib/stores/siva-store';
 // S371: Replaced SIVASurface with WorkspaceSurface (card-centric)
-import { WorkspaceSurface } from '@/components/workspace/core';
+// S372: Added LeftRail for dynamic sidebar
+import { WorkspaceSurface, LeftRail } from '@/components/workspace/core';
 import { PremiumRadarLogo } from '@/components/brand/PremiumRadarLogo';
-import { Settings, HelpCircle, Shield, ChevronRight } from 'lucide-react';
+import { Shield, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 interface PagelessShellProps {
@@ -101,38 +103,21 @@ export function PagelessShell({ children }: PagelessShellProps) {
           </div>
         </motion.div>
 
-        {/* Spacer */}
-        <div className="flex-1" />
+        {/* S372: Dynamic Left Rail - Sections appear/disappear based on state */}
+        <div className="flex-1 overflow-y-auto hidden lg:block">
+          <LeftRail />
+        </div>
 
-        {/* Bottom Actions */}
-        {/* S369: These links will be replaced by dynamic left rail in S372 */}
-        {/* For now, admin routes remain until full workspace migration */}
-        <div className="p-2 border-t border-white/5 space-y-1">
+        {/* Admin Link - Only for superadmins */}
+        <div className="p-2 border-t border-white/5 hidden lg:block">
           <Link
             href="/superadmin"
             className="flex items-center gap-3 p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
             title="Admin"
           >
             <Shield className="w-5 h-5" />
-            <span className="text-sm hidden lg:inline">Admin</span>
+            <span className="text-sm">Admin</span>
           </Link>
-          {/* S369: Settings will become Preferences (NL-driven) in S376 */}
-          <button
-            onClick={() => console.log('[S369] Preferences panel - pending S376')}
-            className="w-full flex items-center gap-3 p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-            title="Preferences"
-          >
-            <Settings className="w-5 h-5" />
-            <span className="text-sm hidden lg:inline">Preferences</span>
-          </button>
-          <button
-            onClick={() => console.log('[S369] Help panel - pending')}
-            className="w-full flex items-center gap-3 p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-            title="Help"
-          >
-            <HelpCircle className="w-5 h-5" />
-            <span className="text-sm hidden lg:inline">Help</span>
-          </button>
         </div>
       </aside>
 

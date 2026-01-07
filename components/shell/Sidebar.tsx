@@ -1,8 +1,16 @@
 'use client';
 
 /**
- * Sidebar Component - Sprint 3
- * Responsive collapsible sidebar
+ * @deprecated S372: This component is deprecated.
+ * Use LeftRail from components/workspace/core instead.
+ *
+ * Static navigation sidebar has been replaced by the dynamic
+ * LeftRail that shows sections based on state (LOCKED UX).
+ *
+ * TODO: Delete this file after confirming no dependencies.
+ *
+ * OLD: Sidebar Component - Sprint 3
+ * OLD: Responsive collapsible sidebar
  */
 
 import React from 'react';

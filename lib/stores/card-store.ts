@@ -35,16 +35,30 @@ import {
 // STORE INTERFACE
 // =============================================================================
 
+// S372: Filter type for left rail sections
+export type CardFilter =
+  | { type: 'all' }
+  | { type: 'today' }
+  | { type: 'saved-leads' }
+  | { type: 'follow-ups' }
+  | { type: 'reports' }
+  | { type: 'entity'; entityId: string };
+
 interface CardStore {
   // State
   cards: Card[];
   lastUpdated: Date | null;
+  activeFilter: CardFilter;
 
   // Getters
   getActiveCards: () => Card[];
+  getFilteredCards: () => Card[];  // S372: Get cards matching active filter
   getNBA: () => Card | null;
   getByEntity: (entityId: string) => Card[];
   getByType: (type: Card['type']) => Card[];
+
+  // S372: Filter
+  setFilter: (filter: CardFilter) => void;
 
   // Mutations
   addCard: (card: Omit<Card, 'id' | 'createdAt' | 'status'>) => string;
@@ -74,6 +88,7 @@ export const useCardStore = create<CardStore>()(
         // Initial state
         cards: [],
         lastUpdated: null,
+        activeFilter: { type: 'all' } as CardFilter,
 
         // =============================================================================
         // GETTERS
@@ -82,6 +97,47 @@ export const useCardStore = create<CardStore>()(
         getActiveCards: () => {
           const { cards } = get();
           return getDisplayCards(cards);
+        },
+
+        // S372: Get cards matching active filter
+        getFilteredCards: () => {
+          const { cards, activeFilter } = get();
+          const activeCards = getDisplayCards(cards);
+
+          switch (activeFilter.type) {
+            case 'all':
+              return activeCards;
+
+            case 'today': {
+              // Cards created today
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              return activeCards.filter((card) => card.createdAt >= today);
+            }
+
+            case 'saved-leads':
+              // Cards with 'saved' tag
+              return activeCards.filter(
+                (card) => card.tags?.includes('saved') || card.tags?.includes('saved-lead')
+              );
+
+            case 'follow-ups':
+              // Cards with 'follow-up' tag
+              return activeCards.filter(
+                (card) => card.tags?.includes('follow-up') || card.type === 'recall'
+              );
+
+            case 'reports':
+              // Report type cards
+              return activeCards.filter((card) => card.type === 'report');
+
+            case 'entity':
+              // Cards for a specific entity
+              return activeCards.filter((card) => card.entityId === activeFilter.entityId);
+
+            default:
+              return activeCards;
+          }
         },
 
         getNBA: () => {
@@ -99,6 +155,15 @@ export const useCardStore = create<CardStore>()(
           return sortByPriority(
             cards.filter(card => card.type === type && card.status === 'active')
           );
+        },
+
+        // =============================================================================
+        // S372: FILTER
+        // =============================================================================
+
+        setFilter: (filter) => {
+          set({ activeFilter: filter });
+          console.log('[CardStore] Filter set:', filter.type);
         },
 
         // =============================================================================
