@@ -13,7 +13,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, ArrowRight, Brain, Target, Users, Mail } from 'lucide-react';
+// S369: Sparkles removed - was used for message bubbles
+import { ArrowRight, Brain, Target, Users, Mail } from 'lucide-react';
 import { useSIVAStore } from '@/lib/stores/siva-store';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useSalesContextStore, selectVertical, selectSubVertical, selectRegions } from '@/lib/stores/sales-context-store';
@@ -24,7 +25,8 @@ import { OutputObjectRenderer } from './OutputObjectRenderer';
 import { ReasoningOverlay, ReasoningToggle } from './ReasoningOverlay';
 
 export function SIVASurface() {
-  const { messages, outputObjects, state, reasoningSteps, showReasoningOverlay, toggleReasoningOverlay, submitQuery } = useSIVAStore();
+  // S369: messages REMOVED - conversation is ephemeral, cards are the only visible artifacts
+  const { outputObjects, state, reasoningSteps, showReasoningOverlay, toggleReasoningOverlay, submitQuery } = useSIVAStore();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -58,11 +60,12 @@ export function SIVASurface() {
         behavior: 'smooth',
       });
     }
-  }, [messages, outputObjects]);
+  }, [outputObjects]); // S369: messages removed
 
   // Proactive SIVA - Auto-run discovery on load (only once)
+  // S369: messages.length replaced with outputObjects.length - cards are the only artifacts
   useEffect(() => {
-    if (!hasRunProactive && vertical && subVertical && messages.length === 0) {
+    if (!hasRunProactive && vertical && subVertical && outputObjects.length === 0) {
       setHasRunProactive(true);
       setIsProactiveLoading(true);
       setLoadingError(null);
@@ -79,7 +82,7 @@ export function SIVASurface() {
 
       // Timeout - if still no content after 20s, show error
       const timeoutTimer = setTimeout(() => {
-        if (messages.length === 0 && outputObjects.length === 0) {
+        if (outputObjects.length === 0) {
           setLoadingError('Taking longer than expected. Please refresh or try again.');
         }
       }, 20000);
@@ -89,9 +92,10 @@ export function SIVASurface() {
         clearTimeout(timeoutTimer);
       };
     }
-  }, [vertical, subVertical, hasRunProactive, messages.length, outputObjects.length, submitQuery]);
+  }, [vertical, subVertical, hasRunProactive, outputObjects.length, submitQuery]);
 
-  const hasContent = messages.length > 0 || outputObjects.length > 0;
+  // S369: hasContent based on outputObjects only - messages removed
+  const hasContent = outputObjects.length > 0;
 
   // STATE-DRIVEN RENDERING (not data truthiness)
   const isActivelyWorking = state === 'thinking' || state === 'listening' || state === 'generating';
@@ -242,53 +246,11 @@ export function SIVASurface() {
             )}
           </AnimatePresence>
 
-          {/* Conversation + Output Objects */}
+          {/* S369: Cards Only - No Chat Messages */}
+          {/* WORKSPACE UX (LOCKED): Cards are the only visible artifacts */}
           {showResults && (
             <div className="space-y-6">
-              {/* Messages with Reasoning Prelude */}
-              {messages.map((message, idx) => (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-2xl ${
-                      message.role === 'user'
-                        ? 'bg-blue-500/20 border-blue-500/30'
-                        : 'bg-slate-800/60 border-white/10'
-                    } rounded-2xl border px-5 py-4`}
-                  >
-                    {message.role === 'siva' && (
-                      <div className="flex items-center gap-2 mb-2">
-                        <div
-                          className="w-6 h-6 rounded-lg flex items-center justify-center"
-                          style={{
-                            background: `linear-gradient(135deg, ${industryConfig.primaryColor}, ${industryConfig.secondaryColor})`,
-                          }}
-                        >
-                          <Sparkles className="w-3 h-3 text-white" />
-                        </div>
-                        <span className="text-sm font-medium text-gray-400">SIVA</span>
-                      </div>
-                    )}
-                    <p className="text-white whitespace-pre-wrap">{message.content}</p>
-
-                    {/* Smart Next Steps - Only for last SIVA message */}
-                    {message.role === 'siva' && idx === messages.length - 1 && (
-                      <SmartNextSteps
-                        messageContent={message.content}
-                        outputObjects={message.outputObjects}
-                        onSelect={submitQuery}
-                        color={industryConfig.primaryColor}
-                      />
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-
-              {/* Output Objects - Single Column for Focus */}
+              {/* Output Objects as Cards - Single Column for Focus */}
               <AnimatePresence mode="popLayout">
                 <div className="space-y-4">
                   {outputObjects.map((obj) => (
@@ -545,101 +507,9 @@ function IntentStarter({
   );
 }
 
-// Smart Next Steps - Context-aware suggestions
-function SmartNextSteps({
-  messageContent,
-  outputObjects,
-  onSelect,
-  color,
-}: {
-  messageContent: string;
-  outputObjects?: Array<{ type: string }>;
-  onSelect: (query: string) => void;
-  color: string;
-}) {
-  // Determine context-aware suggestions based on what was just shown
-  const suggestions = getSmartSuggestions(messageContent, outputObjects);
-
-  if (suggestions.length === 0) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.5 }}
-      className="mt-4 pt-4 border-t border-white/5"
-    >
-      <p className="text-xs text-gray-500 mb-2">What would you like to do next?</p>
-      <div className="flex flex-wrap gap-2">
-        {suggestions.map((suggestion, idx) => (
-          <motion.button
-            key={idx}
-            onClick={() => onSelect(suggestion.query)}
-            className="px-3 py-1.5 rounded-lg text-sm bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all border border-white/5 hover:border-white/10"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            {suggestion.label}
-          </motion.button>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-// Generate context-aware suggestions
-function getSmartSuggestions(
-  messageContent: string,
-  outputObjects?: Array<{ type: string }>
-): Array<{ label: string; query: string }> {
-  const content = messageContent.toLowerCase();
-  const hasDiscovery = outputObjects?.some(o => o.type === 'discovery');
-  const hasRanking = outputObjects?.some(o => o.type === 'ranking');
-  const hasContacts = outputObjects?.some(o => o.type === 'contacts');
-  const hasOutreach = outputObjects?.some(o => o.type === 'outreach');
-
-  // After discovery
-  if (hasDiscovery) {
-    return [
-      { label: 'Rank these by opportunity', query: 'Rank these employers by payroll opportunity' },
-      { label: 'Find contacts at the top one', query: 'Find HR decision makers at the top employer' },
-      { label: 'Exclude enterprise brands', query: 'Show employers excluding large enterprise brands' },
-    ];
-  }
-
-  // After ranking
-  if (hasRanking) {
-    return [
-      { label: 'Show me contacts for #1', query: 'Find HR decision makers at the top ranked employer' },
-      { label: 'Draft outreach for the best', query: 'Draft outreach for the top ranked employer' },
-      { label: 'Why is #1 ranked highest?', query: 'Explain why the top employer is ranked first' },
-    ];
-  }
-
-  // After contacts
-  if (hasContacts) {
-    return [
-      { label: 'Draft outreach', query: 'Draft outreach for this contact' },
-      { label: 'Find more contacts', query: 'Find additional decision makers at this company' },
-      { label: 'Show company signals', query: 'Show me the hiring signals for this company' },
-    ];
-  }
-
-  // After outreach
-  if (hasOutreach) {
-    return [
-      { label: 'Make it shorter', query: 'Make the outreach more concise' },
-      { label: 'Change tone to formal', query: 'Rewrite with a more formal tone' },
-      { label: 'Find next best prospect', query: 'Show me the next best employer to contact' },
-    ];
-  }
-
-  // Default suggestions
-  return [
-    { label: 'Find new opportunities', query: 'Find employers with strong hiring signals' },
-    { label: 'Show my best prospects', query: 'Rank employers by payroll opportunity' },
-  ];
-}
+// S369: SmartNextSteps and getSmartSuggestions REMOVED
+// These were tied to chat message rendering which violates WORKSPACE_UX_DECISION.md
+// Future: Implement card-based NBA suggestions via NBA Engine instead
 
 // SIVA Heartbeat - Always visible state indicator (bottom-right)
 function SIVAHeartbeat({ state }: { state: string }) {

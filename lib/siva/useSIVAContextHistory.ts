@@ -1,15 +1,17 @@
 /**
  * SIVA Context History Hook - Sprint S137
  *
- * Bridges SIVA store with SalesContext-anchored chat history.
- * Ensures ONE CONSCIOUSNESS of SIVA across all surfaces:
- * - Every message is anchored to vertical/sub-vertical/region
- * - Context changes create new threads
- * - History is exportable and searchable
+ * S369 DEPRECATED: This hook was designed for chat-centric model.
+ * WORKSPACE UX (LOCKED): Conversation is ephemeral. Decisions persist.
+ * This file is scheduled for removal - see docs/WORKSPACE_UX_DECISION.md
+ *
+ * The hook remains for backward compatibility but no longer syncs
+ * with SIVA store messages (which have been removed).
  */
 
 import { useCallback, useEffect, useRef, useMemo } from 'react';
-import { useSIVAStore, type SIVAMessage as StoreSIVAMessage } from '@/lib/stores/siva-store';
+// S369: SIVAMessage type no longer exported from store - define minimal type for backward compat
+type StoreSIVAMessage = { content: string; role: 'user' | 'siva' };
 import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
 import {
   SIVAContextHistory,
@@ -59,7 +61,7 @@ export interface SIVAContextHistoryHook {
 
 export function useSIVAContextHistory(): SIVAContextHistoryHook {
   const { vertical, subVertical, regions } = useSalesContext();
-  const { messages } = useSIVAStore();
+  // S369: messages removed from SIVA store - this hook is deprecated
 
   const currentThreadIdRef = useRef<string | null>(null);
   const lastContextRef = useRef<{ vertical: string | null; subVertical: string | null; regions: string[] }>({
@@ -180,21 +182,9 @@ export function useSIVAContextHistory(): SIVAContextHistoryHook {
     }
   }, [vertical, subVertical, isContextChanged, createNewThread]);
 
-  // Sync SIVA store messages to context history
-  useEffect(() => {
-    if (messages.length === 0) return;
-
-    // Get last message
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage) return;
-
-    // Add to history (avoid duplicates by checking timestamp)
-    const llmMessages = getMessagesForLLM(1);
-    if (llmMessages.length === 0 ||
-        llmMessages[llmMessages.length - 1]?.content !== lastMessage.content) {
-      addMessageToHistory(lastMessage, lastMessage.role === 'user' ? 'user' : 'assistant');
-    }
-  }, [messages, addMessageToHistory, getMessagesForLLM]);
+  // S369: Message sync removed - SIVA store no longer has messages
+  // WORKSPACE UX (LOCKED): Conversation is ephemeral. Cards persist, not messages.
+  // This entire file is deprecated and scheduled for removal.
 
   return {
     currentThreadId: currentThreadIdRef.current,

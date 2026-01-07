@@ -88,14 +88,9 @@ export interface OutputObject {
 
 export type PartialOutputObject = Omit<OutputObject, 'id' | 'timestamp'>;
 
-export interface SIVAMessage {
-  id: string;
-  role: 'user' | 'siva';
-  content: string;
-  timestamp: Date;
-  agent?: AgentType;
-  outputObjects?: PartialOutputObject[];
-}
+// S369: SIVAMessage interface REMOVED
+// WORKSPACE UX (LOCKED): Conversation is ephemeral. Cards are the only visible artifacts.
+// See docs/WORKSPACE_UX_DECISION.md
 
 export interface ReasoningStep {
   id: string;
@@ -106,10 +101,12 @@ export interface ReasoningStep {
   duration?: number;
 }
 
+// S369: messages array REMOVED from store interface
+// WORKSPACE UX (LOCKED): No chat transcripts. Cards are the only visible artifacts.
 interface SIVAStore {
   state: SIVAState;
   activeAgent: AgentType | null;
-  messages: SIVAMessage[];
+  // messages: REMOVED - conversation is ephemeral
   outputObjects: OutputObject[];
   reasoningSteps: ReasoningStep[];
   inputValue: string;
@@ -117,7 +114,7 @@ interface SIVAStore {
 
   setState: (state: SIVAState) => void;
   setActiveAgent: (agent: AgentType | null) => void;
-  addMessage: (message: Omit<SIVAMessage, 'id' | 'timestamp'>) => void;
+  // addMessage: REMOVED - no chat bubbles
   addOutputObject: (obj: Omit<OutputObject, 'id' | 'timestamp'>) => void;
   removeOutputObject: (id: string) => void;
   togglePinObject: (id: string) => void;
@@ -126,7 +123,7 @@ interface SIVAStore {
   setReasoningSteps: (steps: ReasoningStep[]) => void;
   updateReasoningStep: (id: string, updates: Partial<ReasoningStep>) => void;
   toggleReasoningOverlay: () => void;
-  clearConversation: () => void;
+  clearOutputObjects: () => void; // S369: Renamed from clearConversation
   submitQuery: (query: string) => Promise<void>;
   reset: () => void; // Kills zombie sessions
 }
@@ -138,7 +135,7 @@ interface SIVAStore {
 export const useSIVAStore = create<SIVAStore>((set, get) => ({
   state: 'idle',
   activeAgent: null,
-  messages: [],
+  // S369: messages array REMOVED - conversation is ephemeral
   outputObjects: [],
   reasoningSteps: [],
   inputValue: '',
@@ -149,13 +146,7 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
   setInputValue: (value) => set({ inputValue: value }),
   toggleReasoningOverlay: () => set((s) => ({ showReasoningOverlay: !s.showReasoningOverlay })),
 
-  addMessage: (message) => set((s) => ({
-    messages: [...s.messages, {
-      ...message,
-      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      timestamp: new Date(),
-    }],
-  })),
+  // S369: addMessage REMOVED - no chat bubbles per WORKSPACE_UX_DECISION.md
 
   addOutputObject: (obj) => set((s) => ({
     outputObjects: [...s.outputObjects, {
@@ -189,8 +180,8 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
     ),
   })),
 
-  clearConversation: () => set({
-    messages: [],
+  // S369: Renamed from clearConversation - no conversation, only output objects
+  clearOutputObjects: () => set({
     outputObjects: [],
     reasoningSteps: [],
     state: 'idle',
@@ -202,7 +193,7 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
     set({
       state: 'idle',
       activeAgent: null,
-      messages: [],
+      // S369: messages REMOVED
       outputObjects: [],
       reasoningSteps: [],
       inputValue: '',
@@ -211,7 +202,8 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
   },
 
   submitQuery: async (query: string) => {
-    const { addMessage, setState, setActiveAgent, addOutputObject, setReasoningSteps, updateReasoningStep } = get();
+    // S369: addMessage REMOVED - no chat bubbles
+    const { setState, setActiveAgent, addOutputObject, setReasoningSteps, updateReasoningStep } = get();
 
     console.log('[SIVA] === ORCHESTRATION START ===');
     console.log('[SIVA] Query:', query);
@@ -232,17 +224,13 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
       if (currentState !== 'idle' && currentState !== 'complete') {
         console.error('[SIVA] AUTO-FAIL: Stuck in', currentState, 'for too long');
         setState('error');
-        // STAGING = PRODUCTION: Show error, no fake data
-        addMessage({
-          role: 'siva',
-          content: 'Request timed out. Please try again.',
-        });
+        // S369: No addMessage - error state drives UI, not chat bubbles
         setTimeout(() => setState('idle'), 1000);
       }
     }, autoFailTimeout);
 
     try {
-      addMessage({ role: 'user', content: query });
+      // S369: No addMessage for user query - conversation is ephemeral
       set({ inputValue: '' });
 
       console.log('[SIVA] State: LISTENING');
@@ -277,18 +265,12 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
       );
       console.log('[SIVA] Output received:', output.message?.substring(0, 50), '... objects:', output.objects?.length);
 
-      addMessage({
-        role: 'siva',
-        content: output.message,
-        agent,
-        outputObjects: output.objects,
-      });
-      console.log('[SIVA] Message added');
-
+      // S369: addMessage REMOVED - cards are the only visible artifacts
+      // Output objects become cards on the workspace surface
       output.objects.forEach((obj) => {
         addOutputObject(obj);
       });
-      console.log('[SIVA] Output objects added');
+      console.log('[SIVA] Output objects added as cards');
 
       console.log('[SIVA] State: COMPLETE');
       setState('complete');
@@ -306,11 +288,9 @@ export const useSIVAStore = create<SIVAStore>((set, get) => ({
       console.error('[SIVA] === ORCHESTRATION ERROR ===', error);
       clearTimeout(autoFailTimer);
 
-      // STAGING = PRODUCTION: Show error, no fake data
-      addMessage({
-        role: 'siva',
-        content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
-      });
+      // S369: No addMessage - error state drives UI rendering
+      // Error information stored for card-based error display
+      console.log('[SIVA] Error:', error instanceof Error ? error.message : 'Unknown error');
 
       setState('error');
       setTimeout(() => {

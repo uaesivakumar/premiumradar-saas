@@ -3,14 +3,14 @@
 /**
  * Hero Section - AI-First Landing Experience
  * Sprint 1: AI Orb + Vertical Morphing + Responsive
- * Sprint 2: Chat Interface Integration
  * Sprint S21: Premium Motion Engine Integration
+ * S369: Chat Interface removed per WORKSPACE_UX_DECISION.md
  */
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { AIOrb } from '@/components/ai-orb/AIOrb';
-import { ChatInterface } from '@/components/chat';
+// S369: ChatInterface removed - chat UI forbidden per WORKSPACE_UX_DECISION.md
 import { useIndustryStore, getIndustryConfig, Industry } from '@/lib/stores/industry-store';
 import { useTranslation } from '@/lib/stores/locale-store';
 import {
@@ -25,7 +25,7 @@ import { useReducedMotion } from '@/lib/motion/hooks';
 export function Hero() {
   const { detectedIndustry, setSelectedIndustry } = useIndustryStore();
   const { translations, isRTL } = useTranslation();
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  // S369: isChatOpen removed - chat UI forbidden per WORKSPACE_UX_DECISION.md
   const industryConfig = getIndustryConfig(detectedIndustry);
   const prefersReducedMotion = useReducedMotion();
 
@@ -33,8 +33,10 @@ export function Hero() {
     setSelectedIndustry(industry);
   };
 
+  // S369: handleOrbClick now navigates to workspace instead of opening chat
   const handleOrbClick = () => {
-    setIsChatOpen(true);
+    // Future: Navigate to /workspace
+    console.log('[Hero] Orb clicked - workspace navigation pending S369 completion');
   };
 
   return (
@@ -125,11 +127,7 @@ export function Hero() {
             />
           </motion.div>
 
-          {/* Chat Interface - Sprint 2 */}
-          <ChatInterface
-            isOpen={isChatOpen}
-            onClose={() => setIsChatOpen(false)}
-          />
+          {/* S369: ChatInterface removed - chat UI forbidden per WORKSPACE_UX_DECISION.md */}
 
           {/* CTA Buttons - S21 Enhanced */}
           <motion.div

@@ -2,15 +2,18 @@
 
 /**
  * Pageless Shell - LEFT SIDEBAR LAYOUT
+ * S369: Updated for LOCKED Workspace UX
  *
  * SIVA-first interface with sidebar for maximum content width.
  * Sidebar: Logo + Context + SIVA Status + Settings
  * Main: Full-width AI surface
  *
- * UX PRINCIPLES:
+ * UX PRINCIPLES (LOCKED per WORKSPACE_UX_DECISION.md):
+ * - Single persistent canvas
  * - Full page width for content
- * - Sidebar is minimal and informative
+ * - Sidebar is minimal and informative (will become dynamic in S372)
  * - Logo: PremiumRadar (radar + AI symbol)
+ * - No page navigation - all state-driven
  */
 
 import React from 'react';
@@ -40,7 +43,8 @@ export function PagelessShell({ children }: PagelessShellProps) {
       {/* Left Sidebar - Compact */}
       <aside className="w-16 lg:w-56 flex-shrink-0 bg-slate-900/80 border-r border-white/5 flex flex-col">
         {/* Logo - PremiumRadar Brand Mark */}
-        <Link href="/dashboard" className="p-3 lg:p-4 flex items-center gap-3 border-b border-white/5 hover:bg-white/5 transition-colors">
+        {/* S369: Links to /workspace, not /dashboard */}
+        <Link href="/workspace" className="p-3 lg:p-4 flex items-center gap-3 border-b border-white/5 hover:bg-white/5 transition-colors">
           <PremiumRadarLogo size="md" color={industryConfig.primaryColor} animate={isProcessing} />
           <span className="font-bold text-white hidden lg:inline">PremiumRadar</span>
         </Link>
@@ -100,31 +104,34 @@ export function PagelessShell({ children }: PagelessShellProps) {
         <div className="flex-1" />
 
         {/* Bottom Actions */}
+        {/* S369: These links will be replaced by dynamic left rail in S372 */}
+        {/* For now, admin routes remain until full workspace migration */}
         <div className="p-2 border-t border-white/5 space-y-1">
           <Link
-            href="/dashboard/admin"
+            href="/superadmin"
             className="flex items-center gap-3 p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
             title="Admin"
           >
             <Shield className="w-5 h-5" />
             <span className="text-sm hidden lg:inline">Admin</span>
           </Link>
-          <Link
-            href="/dashboard/settings"
-            className="flex items-center gap-3 p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-            title="Settings"
+          {/* S369: Settings will become Preferences (NL-driven) in S376 */}
+          <button
+            onClick={() => console.log('[S369] Preferences panel - pending S376')}
+            className="w-full flex items-center gap-3 p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            title="Preferences"
           >
             <Settings className="w-5 h-5" />
-            <span className="text-sm hidden lg:inline">Settings</span>
-          </Link>
-          <Link
-            href="/dashboard/help"
-            className="flex items-center gap-3 p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            <span className="text-sm hidden lg:inline">Preferences</span>
+          </button>
+          <button
+            onClick={() => console.log('[S369] Help panel - pending')}
+            className="w-full flex items-center gap-3 p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
             title="Help"
           >
             <HelpCircle className="w-5 h-5" />
             <span className="text-sm hidden lg:inline">Help</span>
-          </Link>
+          </button>
         </div>
       </aside>
 

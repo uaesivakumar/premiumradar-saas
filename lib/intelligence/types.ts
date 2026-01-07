@@ -5,7 +5,8 @@
  * These types EXTEND (not replace) existing types from lib/agents/types.ts
  */
 
-import { AgentType, OutputObject, SIVAMessage } from '@/lib/stores/siva-store';
+// S369: SIVAMessage removed from siva-store per WORKSPACE_UX_DECISION.md
+import { AgentType, OutputObject } from '@/lib/stores/siva-store';
 import { AgentContext, AgentResponse } from '@/lib/agents/types';
 
 // =============================================================================
