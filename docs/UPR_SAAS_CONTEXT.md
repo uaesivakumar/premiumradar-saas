@@ -1165,4 +1165,74 @@ Self-learning means:
 
 ---
 
+## 17. Workspace UX Decision (LOCKED)
+
+**Status:** LOCKED
+**Reference:** `docs/WORKSPACE_UX_DECISION.md`
+
+### 17.1 Core Philosophy
+
+> **PremiumRadar's workspace is not a chat interface.**
+> **It is a pageless, state-driven decision cockpit.**
+> **Conversation is ephemeral. Decisions are permanent.**
+> **The system speaks only when it has a reason.**
+
+### 17.2 Key UX Principles (Non-Negotiable)
+
+| Principle | Rule |
+|-----------|------|
+| Pageless | Single persistent canvas, no page navigation |
+| Card-based | Priority-ordered cards, not chronological |
+| Single NBA | Only ONE next best action visible at any time |
+| Ephemeral conversation | No chat bubbles, no scrolling transcript |
+| Persistent artifacts | Only decisions and actions persist |
+| Dynamic left rail | Sections appear/disappear based on user actions |
+| Natural language preferences | Free-form text input, validated by system |
+
+### 17.3 Visual Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  TOP CONTEXT BAR (Orientation only)                              │
+├─────────────┬───────────────────────────────────────────────────┤
+│  LEFT RAIL  │           MAIN INTELLIGENCE SURFACE               │
+│  (Dynamic)  │           (Card-based, priority-ordered)          │
+├─────────────┴───────────────────────────────────────────────────┤
+│  BOTTOM COMMAND PALETTE (Natural language → card resolution)    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 17.4 What Workspace IS NOT
+
+- Not a chat app (no threads, no history replay)
+- Not a CRM (no entity management)
+- Not a dashboard (no metrics overload)
+
+### 17.5 Recall Model
+
+Instead of conversation history:
+- Decision recall
+- Event recall
+- Similar-case recall
+
+Example: "You evaluated a similar company last month. Decision: Reject."
+
+### 17.6 Silence as Feature
+
+- "No new signals today" is allowed
+- No forced engagement
+- No hallucination to fill space
+- Builds trust through restraint
+
+### 17.7 Change Process
+
+Any UX changes require:
+1. Explicit proposal document
+2. Founder approval
+3. Version increment
+
+**No incremental "small tweaks" allowed.**
+
+---
+
 **End of UPR_SAAS_CONTEXT.md**
