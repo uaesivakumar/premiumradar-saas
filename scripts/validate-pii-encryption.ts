@@ -178,9 +178,8 @@ async function validatePIIEncryption(): Promise<boolean> {
   console.log('Test 9: No email patterns in non-PII columns...');
   const emailPatternCheck = await queryOne<{ count: string }>(`
     SELECT COUNT(*) as count FROM leads
-    WHERE company_name ~ '@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'
-       OR company_domain ~ '@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'
-       OR notes ~ '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'
+    WHERE company ~ '@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'
+       OR role ~ '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'
     LIMIT 10
   `);
   const emailLeaks = parseInt(emailPatternCheck?.count || '0');
@@ -188,7 +187,7 @@ async function validatePIIEncryption(): Promise<boolean> {
     test: 'No email patterns in non-PII columns',
     passed: emailLeaks === 0,
     details: emailLeaks === 0
-      ? 'No email patterns found in company_name, company_domain, or notes'
+      ? 'No email patterns found in company or role columns'
       : `WARNING: Found ${emailLeaks} potential email leaks in other columns`,
   });
 
