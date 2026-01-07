@@ -24,6 +24,7 @@ import {
   createPreferenceRejectedCard,
   createPreferenceParseFailedCard,
 } from './preference-validator';
+import { usePreferenceStore } from './preference-store';
 
 // =============================================================================
 // TYPES
@@ -342,8 +343,16 @@ async function handlePreference(resolution: CommandResolution): Promise<ResolveR
     };
   }
 
-  // Valid preference - persist and return success card
-  // TODO: S377+ - Actually persist to user preferences store
+  // Valid preference - persist to store and return success card
+  // S377: Actually persist to user preferences store
+  const { setPreference } = usePreferenceStore.getState();
+  setPreference(
+    preference.key,
+    preference.value,
+    preference.category,
+    preference.originalText
+  );
+
   console.log('[CommandResolver] Preference applied:', preference.key, '=', preference.value);
 
   return {

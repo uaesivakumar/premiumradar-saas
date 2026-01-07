@@ -30,6 +30,7 @@ import {
   markExpired,
   TTLEngine,
 } from '@/lib/workspace/ttl-engine';
+import { useSilenceStore, filterSilenced } from '@/lib/workspace/silence-store';
 
 // =============================================================================
 // STORE INTERFACE
@@ -96,7 +97,9 @@ export const useCardStore = create<CardStore>()(
 
         getActiveCards: () => {
           const { cards } = get();
-          return getDisplayCards(cards);
+          const displayCards = getDisplayCards(cards);
+          // S377: Filter out silenced cards
+          return filterSilenced(displayCards);
         },
 
         // S372: Get cards matching active filter
