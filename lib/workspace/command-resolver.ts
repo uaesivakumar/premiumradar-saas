@@ -17,6 +17,13 @@ import {
 } from './card-state';
 import { getExpiryTime } from './ttl-engine';
 import { handleRecallQuery } from './recall-engine';
+import { parsePreference, ParseResult } from './preference-parser';
+import {
+  validatePreference,
+  createPreferenceAppliedCard,
+  createPreferenceRejectedCard,
+  createPreferenceParseFailedCard,
+} from './preference-validator';
 
 // =============================================================================
 // TYPES
@@ -94,6 +101,15 @@ const INTENT_PATTERNS: Array<{
       /^I\s+(prefer|want|like)/i,
       /^don't\s+show\s+me/i,
       /^always\s+show\s+me/i,
+      // S376: NL preference patterns
+      /\b(daily|weekly|monthly)\s+(email|report|summary)/i,
+      /\bsend\s+(?:me\s+)?(?:a\s+)?(daily|weekly|monthly)/i,
+      /\bsales\s+cycle\s+(?:is\s+)?\d+/i,
+      /\bavoid\s+(?:borderline|low)\s+leads/i,
+      /\bonly\s+(?:high|strong)\s+confidence/i,
+      /\bworking\s+hours?\s+(?:are\s+)?\d+/i,
+      /\b(dark|light)\s+(?:mode|theme)/i,
+      /\b(disable|enable|turn\s+off|turn\s+on)\s+(?:email|notification)/i,
     ],
     priority: 70,
   },
@@ -302,22 +318,37 @@ async function handleRecall(resolution: CommandResolution): Promise<ResolveResul
 }
 
 async function handlePreference(resolution: CommandResolution): Promise<ResolveResult> {
-  // TODO: S376 - Call preference parser
+  // S376: Parse natural language preference
+  const parseResult = parsePreference(resolution.query);
+
+  // Parse failed - return helpful card with suggestions
+  if (!parseResult.success || !parseResult.preference) {
+    return {
+      success: true,
+      cards: [createPreferenceParseFailedCard(resolution.query, parseResult.suggestions)],
+    };
+  }
+
+  const preference = parseResult.preference;
+
+  // Validate against policy
+  const validation = validatePreference(preference);
+
+  if (!validation.valid) {
+    // Rejected by policy - return rejection card
+    return {
+      success: true,
+      cards: [createPreferenceRejectedCard(preference, validation)],
+    };
+  }
+
+  // Valid preference - persist and return success card
+  // TODO: S377+ - Actually persist to user preferences store
+  console.log('[CommandResolver] Preference applied:', preference.key, '=', preference.value);
+
   return {
     success: true,
-    cards: [
-      {
-        type: 'system',
-        priority: 100,
-        title: 'Preference Update',
-        summary: 'Preference parsing coming in S376. For now, use the Preferences section in the sidebar.',
-        expiresAt: getExpiryTime('system'),
-        sourceType: 'system',
-        actions: [
-          { id: 'dismiss', label: 'OK', type: 'dismiss', handler: 'system.dismiss' },
-        ],
-      },
-    ],
+    cards: [createPreferenceAppliedCard(preference)],
   };
 }
 
