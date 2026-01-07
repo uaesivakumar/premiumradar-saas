@@ -1,10 +1,21 @@
 'use client';
 
 /**
- * SIVA Input Bar - Sprint S26
- * Always-visible global command bar at the bottom of the AI Surface
+ * @deprecated S373: This component is deprecated.
+ * Use CommandPalette from components/workspace/core instead.
  *
- * P2 VERTICALISATION: Now uses dynamic quick actions based on sales context vertical.
+ * The chat-based input bar has been replaced by the card-centric
+ * CommandPalette that resolves queries to cards, not chat messages.
+ *
+ * WORKSPACE UX (LOCKED):
+ * - Input resolves to cards, not chat bubbles
+ * - No scrolling transcript
+ * - No conversation history
+ *
+ * OLD: SIVA Input Bar - Sprint S26
+ * OLD: Always-visible global command bar at the bottom of the AI Surface
+ *
+ * TODO: Delete this file after confirming no dependencies.
  */
 
 import { useState, useRef, useEffect } from 'react';

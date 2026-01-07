@@ -136,6 +136,15 @@ interface SIVAStore {
   updateReasoningStep: (id: string, updates: Partial<ReasoningStep>) => void;
   toggleReasoningOverlay: () => void;
   clearOutputObjects: () => void; // S369: Renamed from clearConversation
+  /**
+   * @deprecated S373: Use CommandPalette + command-resolver instead.
+   * This method orchestrates the old chat-based SIVA flow.
+   * New workspace UX uses resolveCommand() from lib/workspace/command-resolver.ts
+   * which creates cards directly, bypassing this store.
+   *
+   * WORKSPACE UX (LOCKED): Input resolves to cards, not chat messages.
+   * See docs/WORKSPACE_UX_DECISION.md
+   */
   submitQuery: (query: string) => Promise<void>;
   reset: () => void; // Kills zombie sessions
 }

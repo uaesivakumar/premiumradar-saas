@@ -13,7 +13,10 @@ export { CardActions } from './CardActions';
 export { ContextBar } from './ContextBar';
 export type { SystemStateType } from './ContextBar';
 export { SystemState } from './SystemState';
+
+// S373: Command Palette (Non-Chat)
 export { CommandPalette } from './CommandPalette';
+export { CommandHints } from './CommandHints';
 
 // S372: Dynamic Left Rail
 export { LeftRail } from './LeftRail';
