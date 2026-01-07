@@ -2,6 +2,11 @@
  * Workspace Module
  *
  * Multi-tenant workspace management.
+ *
+ * S370: Card State Foundation added:
+ * - Card types and state management
+ * - TTL engine for card expiry
+ * - Priority sorting for cards
  */
 
 // Types
@@ -66,3 +71,49 @@ export { useWorkspaceIntelligence } from './useWorkspaceIntelligence';
 export type { DerivedScore } from './useOpportunityScore';
 export type { DerivedBlocker, DerivedBooster } from './useBlockersAndBoosters';
 export type { WorkspaceIntelligenceConfig, WorkspaceIntelligenceResult } from './useWorkspaceIntelligence';
+
+// S370: Card State Foundation
+export type {
+  Card,
+  CardType,
+  CardStatus,
+  CardAction,
+  CardSourceType,
+  CardEntityType,
+} from './card-state';
+
+export {
+  createCard,
+  createNBACard,
+  createDecisionCard,
+  createSignalCard,
+  createSystemCard,
+  DEFAULT_PRIORITIES,
+} from './card-state';
+
+export {
+  TTL_CONFIG,
+  getExpiryTime,
+  shouldExpire,
+  getTimeToExpiry,
+  getExpiryDisplayString,
+  filterExpired,
+  markExpired,
+  getExpiringCards,
+  TTLEngine,
+} from './ttl-engine';
+
+export {
+  sortByPriority,
+  getDisplayCards,
+  ensureNBAFirst,
+  boostPriority,
+  reducePriority,
+  getPriorityLabel,
+  hasActiveNBA,
+  getActiveNBA,
+  findDuplicateNBAs,
+  groupByType,
+  groupByEntity,
+  getCardsForEntity,
+} from './card-priority';

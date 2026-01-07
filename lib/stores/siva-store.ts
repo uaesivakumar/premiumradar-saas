@@ -65,6 +65,12 @@ export type AgentType =
   | 'demo'
   | 'deal-evaluation'; // S SaaS Sales vertical
 
+/**
+ * S370 DEPRECATED: OutputObjectType
+ * This type is being replaced by CardType from lib/workspace/card-state.ts
+ * Kept for backward compatibility during migration.
+ * TODO: Remove in S371 after UI migration to Card components
+ */
 export type OutputObjectType =
   | 'discovery'
   | 'scoring'
@@ -75,6 +81,12 @@ export type OutputObjectType =
   | 'message'
   | 'deal-verdict'; // SaaS Sales deal evaluation result
 
+/**
+ * S370 DEPRECATED: OutputObject
+ * This interface is being replaced by Card from lib/workspace/card-state.ts
+ * Kept for backward compatibility during migration.
+ * TODO: Remove in S371 after UI migration to Card components
+ */
 export interface OutputObject {
   id: string;
   type: OutputObjectType;
