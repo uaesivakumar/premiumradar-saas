@@ -5,6 +5,7 @@
  * SECURITY:
  * - Requires authenticated session
  * - NEVER trusts client-sent tenant_id - injected from session
+ * - S351: Rate limiting enforced (Behavior Contract B002)
  *
  * UPL v0.1: Injects user_preferences into payload (S253)
  * - user_preferences is LEAF-ONLY (soft overrides for tone, depth, pacing)
@@ -17,8 +18,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { osClient } from '@/lib/os-client';
 import { getServerSession } from '@/lib/auth/session';
 import { getResolvedUserPrefs } from '@/lib/db/user-preferences';
+import { enforceRateLimit, OS_RATE_LIMITS, addRateLimitHeaders } from '@/lib/middleware/rate-limit';
 
 export async function POST(request: NextRequest) {
+  // S351: Enforce rate limiting (Behavior Contract B002)
+  const rateLimit = await enforceRateLimit(request, OS_RATE_LIMITS.discovery);
+  if (!rateLimit.allowed) return rateLimit.response;
+
   try {
     // VS1: Require authenticated session
     const session = await getServerSession();

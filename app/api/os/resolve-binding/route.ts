@@ -1,13 +1,15 @@
 /**
  * OS Workspace Binding Resolution API (Control Plane v2.0)
  *
- * GET /api/os/resolve-binding?tenant_id=...&workspace_id=...
+ * GET /api/os/resolve-binding?workspace_id=...
+ *
+ * S350: Security Hole Remediation - Added auth, tenant_id from session
  *
  * Resolves runtime configuration purely from workspace binding.
  * This is the v2.0 path - NO manual config, NO hardcoded defaults.
  *
  * Resolution Flow:
- * 1. Lookup binding by tenant_id + workspace_id
+ * 1. Lookup binding by tenant_id (from session) + workspace_id
  * 2. Validate all 5 layers are active
  * 3. Return full configuration including persona + policy
  *
@@ -24,6 +26,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db/client';
+import { requireAuth } from '@/lib/middleware/auth-gate';
 
 interface BindingResolution {
   // Binding info
@@ -65,16 +68,23 @@ interface BindingResolution {
 }
 
 export async function GET(request: NextRequest) {
+  // S350: Enforce authentication
+  const auth = await requireAuth();
+  if (!auth.success) return auth.response;
+
+  const { session } = auth;
+  // VS1: CRITICAL - tenant_id from session, NOT from query params
+  const tenant_id = session.tenantId;
+
   const { searchParams } = new URL(request.url);
-  const tenant_id = searchParams.get('tenant_id');
   const workspace_id = searchParams.get('workspace_id');
 
-  // Validate required params
-  if (!tenant_id || !workspace_id) {
+  // Validate required params (tenant_id now comes from session)
+  if (!workspace_id) {
     return NextResponse.json({
       success: false,
       error: 'MISSING_PARAMS',
-      message: 'tenant_id and workspace_id are required',
+      message: 'workspace_id is required',
     }, { status: 400 });
   }
 

@@ -466,8 +466,14 @@ async function trackTooltipDismissal(tooltipId: string): Promise<void> {
         tooltipId,
         timestamp: new Date().toISOString(),
       }),
-    }).catch(() => {});
-  } catch {}
+    }).catch((error) => {
+      // S352: Log analytics errors (non-blocking)
+      console.warn('[Tooltip Analytics] Failed to track dismiss:', error);
+    });
+  } catch (error) {
+    // S352: Log all errors instead of silent failure
+    console.warn('[Tooltip Analytics] Failed to track dismiss:', error);
+  }
 }
 
 export async function trackTooltipView(tooltipId: string): Promise<void> {
@@ -480,8 +486,14 @@ export async function trackTooltipView(tooltipId: string): Promise<void> {
         tooltipId,
         timestamp: new Date().toISOString(),
       }),
-    }).catch(() => {});
-  } catch {}
+    }).catch((error) => {
+      // S352: Log analytics errors (non-blocking)
+      console.warn('[Tooltip Analytics] Failed to track view:', error);
+    });
+  } catch (error) {
+    // S352: Log all errors instead of silent failure
+    console.warn('[Tooltip Analytics] Failed to track view:', error);
+  }
 }
 
 export default {

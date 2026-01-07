@@ -520,7 +520,9 @@ async function handleHealthQuery(
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/status`);
     healthData = await response.json();
-  } catch {
+  } catch (error) {
+    // S352: Log all errors instead of silent failure
+    console.error('[AI-Query] Health check failed:', error);
     healthData = { status: 'unknown', services: [] };
   }
 
@@ -615,7 +617,9 @@ async function fetchCosts(): Promise<{
 
     costs.total = costs.openai + costs.anthropic + costs.apollo + costs.serp + costs.gcp + costs.domains;
     return costs;
-  } catch {
+  } catch (error) {
+    // S352: Log all errors instead of silent failure
+    console.error('[AI-Query] fetchCosts failed:', error);
     return { openai: 320, anthropic: 0, apollo: 120, serp: 60, gcp: 290, domains: 100, total: 890 };
   }
 }
@@ -633,7 +637,10 @@ async function fetchRevenue(): Promise<{ total: number; count: number }> {
         count: parseInt(result.count) || 0,
       };
     }
-  } catch {}
+  } catch (error) {
+    // S352: Log all errors instead of silent failure
+    console.error('[AI-Query] fetchRevenue failed:', error);
+  }
 
   return { total: 4200, count: 5 };
 }
@@ -650,7 +657,9 @@ async function fetchRecentErrors(): Promise<Array<{ type: string; message: strin
     `);
 
     return result || [];
-  } catch {
+  } catch (error) {
+    // S352: Log all errors instead of silent failure
+    console.error('[AI-Query] fetchRecentErrors failed:', error);
     return [];
   }
 }
@@ -679,7 +688,10 @@ async function fetchUserStats(): Promise<{ total: number; active: number; demo: 
         pending: parseInt(result.pending) || 0,
       };
     }
-  } catch {}
+  } catch (error) {
+    // S352: Log all errors instead of silent failure
+    console.error('[AI-Query] fetchUserStats failed:', error);
+  }
 
   return { total: 47, active: 38, demo: 5, pending: 4 };
 }

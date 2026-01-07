@@ -1089,4 +1089,80 @@ Any schema changes require:
 
 ---
 
+## 16. Workspace Intelligence Framework (LOCKED)
+
+**Status:** 🔒 LOCKED
+**Reference:** `docs/WORKSPACE_INTELLIGENCE_FRAMEWORK.md`
+
+### 16.1 Core Truth
+
+**All product value is realized only inside the Workspace.**
+
+Everything else (Admin, Control Plane, Engines, SIVA, OS) exists only to serve the Workspace.
+
+### 16.2 Design Principles (Non-Negotiable)
+
+| Principle | Rule |
+|-----------|------|
+| Quality > Cost | Never sacrifice accuracy to save API cost |
+| Memory > Cache | Cache is temporary. Memory is advisory and long-lived |
+| Single NBA Rule | At any moment, only ONE next best action exists |
+| Self-Learning by Events | Every action updates confidence. No black boxes |
+| No Hard-Coding | All logic must be UI-manageable |
+| Patterns are Global | Content is Private |
+
+### 16.3 What Intelligence Means
+
+**Intelligence IS:**
+- correct timing
+- correct prioritization
+- correct restraint
+- correct recall of past actions
+
+**Intelligence IS NOT:**
+- dashboards
+- scores
+- rankings
+- multiple suggestions
+
+### 16.4 Three-Layer Resolution Hierarchy (MANDATORY)
+
+| Layer | Name | Cost | When |
+|-------|------|------|------|
+| 1 | Internal Memory | 0 cost | Always check first |
+| 2 | Inference | Low cost | Generate from known patterns |
+| 3 | External APIs | Last resort | Only when 1 & 2 fail |
+
+### 16.5 Entity Model (Critical Distinction)
+
+| Type | Sub-Verticals | Discovery | Flow |
+|------|---------------|-----------|------|
+| **Company-Based** | Employee Banking, Working Capital | YES | Discovery → Enrichment → Action |
+| **Individual-Based** | Personal Loan, Home Loan | NO | Reveal → Act → Convert |
+
+**Rule:** PremiumRadar optimizes conversion, not acquisition for individual-based sub-verticals.
+
+### 16.6 Self-Learning Definition
+
+Self-learning means:
+- Every event updates confidence
+- Every outcome reshapes future behavior
+- No manual tuning required
+
+**This is event-reinforced intelligence, NOT continuous model retraining.**
+
+### 16.7 Email Patterns (Global Asset)
+
+- Email patterns are **GLOBAL** (not enterprise-isolated)
+- Patterns are structural, not competitive IP
+- Never store: full emails, content, campaign text
+- Always store: domain, pattern, confidence, success/failure counts
+
+### 16.8 Final Lock Statement
+
+> **PremiumRadar is a memory-driven, self-correcting sales intelligence system.**
+> Patterns are global, content is private, intelligence is earned over time, and the Workspace is the only place where value exists.
+
+---
+
 **End of UPR_SAAS_CONTEXT.md**

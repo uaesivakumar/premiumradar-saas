@@ -67,14 +67,10 @@ describe('VS1: OS Security Wall', () => {
 
   describe('VS1.2: OIDC Token for Cloud Run', () => {
     it('should skip OIDC in development mode', async () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
-
-      // In development, OIDC should be skipped
-      const shouldSkipOidc = process.env.NODE_ENV !== 'production';
+      // Test the logic without modifying NODE_ENV directly
+      const testEnv: string = 'development';
+      const shouldSkipOidc = testEnv !== 'production';
       expect(shouldSkipOidc).toBe(true);
-
-      process.env.NODE_ENV = originalEnv;
     });
 
     it('should include Authorization header in production', async () => {

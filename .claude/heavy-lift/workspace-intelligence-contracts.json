@@ -1,0 +1,365 @@
+{
+  "program_id": "workspace-intelligence-v1",
+  "program_name": "Workspace Intelligence Framework",
+  "sprints": "S350-S367",
+  "phases": 6,
+  "created_at": "2026-01-06T00:00:00Z",
+
+  "behavior_contracts": [
+    {
+      "behavior_id": "B001",
+      "name": "All API endpoints require authentication",
+      "phase": 1,
+      "entry_points": ["app/api/os/pipeline/route.ts"],
+      "trigger": "Any unauthenticated request",
+      "expected_behavior": ["Returns 401 Unauthorized", "No data exposed"],
+      "must_call": ["getServerSession"],
+      "verification_test": "curl without auth returns 401"
+    },
+    {
+      "behavior_id": "B002",
+      "name": "Rate limiting enforced via Redis",
+      "phase": 1,
+      "entry_points": ["app/api/os/discovery/route.ts", "app/api/os/score/route.ts"],
+      "trigger": "Exceed rate limit",
+      "expected_behavior": ["Returns 429 Too Many Requests", "Retry-After header present"],
+      "must_call": ["checkRateLimit"],
+      "verification_test": "11th request in 60s returns 429"
+    },
+    {
+      "behavior_id": "B003",
+      "name": "No silent failures - all errors logged",
+      "phase": 1,
+      "entry_points": ["app/api/superadmin/ai-query/route.ts", "lib/costs/api-costs.ts"],
+      "trigger": "Any error condition",
+      "expected_behavior": ["Error logged to Cloud Logging", "No empty catch blocks"],
+      "must_not_contain": ["catch {}"],
+      "verification_test": "Force error, verify log entry created"
+    },
+    {
+      "behavior_id": "B004",
+      "name": "Memory survives server restart",
+      "phase": 2,
+      "entry_points": ["lib/memory/persistent-store.ts"],
+      "trigger": "Server restart",
+      "expected_behavior": ["Cached data persists", "TTL respected"],
+      "db_writes": {
+        "memory_store": { "required": true, "columns": ["store_key", "store_value", "expires_at"] }
+      },
+      "verification_test": "Store value, restart, retrieve value"
+    },
+    {
+      "behavior_id": "B005",
+      "name": "Duplicate actions detected via fingerprint",
+      "phase": 2,
+      "entry_points": ["lib/memory/fingerprint-engine.ts"],
+      "trigger": "Same request twice",
+      "expected_behavior": ["Fingerprint generated", "Second request flagged as duplicate"],
+      "db_writes": {
+        "action_fingerprints": { "required": true, "columns": ["fingerprint_hash", "action_type"] }
+      },
+      "verification_test": "Same discovery request twice, second shows warning"
+    },
+    {
+      "behavior_id": "B006",
+      "name": "Historical recall advisory shown",
+      "phase": 2,
+      "entry_points": ["lib/memory/action-history.ts"],
+      "trigger": "Similar action attempted",
+      "expected_behavior": ["Advisory message returned", "User can proceed anyway"],
+      "verification_test": "Enrich company X twice, see recall banner"
+    },
+    {
+      "behavior_id": "B007",
+      "name": "Events consumed via Pub/Sub",
+      "phase": 3,
+      "entry_points": ["lib/events/event-consumer.ts"],
+      "trigger": "BTE event emitted",
+      "expected_behavior": ["Event arrives in BigQuery within 5s", "No message loss"],
+      "verification_test": "Emit test event, verify in BigQuery"
+    },
+    {
+      "behavior_id": "B008",
+      "name": "Confidence updates from events",
+      "phase": 3,
+      "entry_points": ["lib/intelligence/confidence-engine.ts"],
+      "trigger": "Success or failure event",
+      "expected_behavior": ["Confidence increases on success", "Confidence decreases on failure"],
+      "db_writes": {
+        "confidence_scores": { "required": true, "columns": ["confidence", "success_count", "failure_count"] }
+      },
+      "verification_test": "Success event increases confidence"
+    },
+    {
+      "behavior_id": "B009",
+      "name": "Cache decay over time",
+      "phase": 3,
+      "entry_points": ["lib/memory/decay-engine.ts"],
+      "trigger": "Time passes",
+      "expected_behavior": ["30-day old patterns decay by 50%", "Bounces zero out confidence"],
+      "verification_test": "Old pattern has reduced confidence"
+    },
+    {
+      "behavior_id": "B010",
+      "name": "Single NBA returned",
+      "phase": 4,
+      "entry_points": ["lib/nba/single-nba-engine.ts", "app/api/workspace/now/route.ts"],
+      "trigger": "Request NBA",
+      "expected_behavior": ["Exactly 1 NBA returned", "Deterministic selection"],
+      "must_not_return": ["array of recommendations"],
+      "verification_test": "10 opportunities, exactly 1 NBA"
+    },
+    {
+      "behavior_id": "B011",
+      "name": "NOW panel visible on dashboard",
+      "phase": 4,
+      "entry_points": ["components/workspace/NOWPanel.tsx"],
+      "trigger": "Dashboard load",
+      "expected_behavior": ["NOW panel renders", "Single action displayed"],
+      "verification_test": "Dashboard shows NOW panel"
+    },
+    {
+      "behavior_id": "B012",
+      "name": "User maturity gates NBA prominence",
+      "phase": 4,
+      "entry_points": ["lib/user/maturity-engine.ts"],
+      "trigger": "User login",
+      "expected_behavior": ["Login count tracked", "NOW panel gated by maturity"],
+      "db_writes": {
+        "users": { "required": true, "columns": ["login_count", "maturity_score"] }
+      },
+      "verification_test": "New user sees no NOW panel"
+    },
+    {
+      "behavior_id": "B013",
+      "name": "Leads can be assigned to users",
+      "phase": 5,
+      "entry_points": ["lib/distribution/lead-store.ts"],
+      "trigger": "Lead created",
+      "expected_behavior": ["Lead stored", "Assignment created"],
+      "db_writes": {
+        "leads": { "required": true, "columns": ["id", "enterprise_id", "status"] },
+        "lead_assignments": { "required": true, "columns": ["lead_id", "user_id"] }
+      },
+      "verification_test": "Create lead, verify assignment"
+    },
+    {
+      "behavior_id": "B014",
+      "name": "Distribution algorithms work",
+      "phase": 5,
+      "entry_points": ["lib/distribution/distributor.ts"],
+      "trigger": "10 leads, 5 users",
+      "expected_behavior": ["Even distribution", "No collisions"],
+      "verification_test": "10 leads to 5 users = 2 each"
+    },
+    {
+      "behavior_id": "B015",
+      "name": "No double lead assignments",
+      "phase": 5,
+      "entry_points": ["lib/distribution/distributor.ts"],
+      "trigger": "Concurrent assignment attempts",
+      "expected_behavior": ["Unique constraint prevents double", "Second attempt rejected"],
+      "verification_test": "Assign same lead twice fails"
+    },
+    {
+      "behavior_id": "B016",
+      "name": "Individual leads can be ingested",
+      "phase": 6,
+      "entry_points": ["app/api/intake/leads/route.ts"],
+      "trigger": "POST /api/intake/leads",
+      "expected_behavior": ["Lead validated", "Fields normalized"],
+      "verification_test": "Valid lead returns 201"
+    },
+    {
+      "behavior_id": "B017",
+      "name": "PII tokenized before storage",
+      "phase": 6,
+      "entry_points": ["lib/intake/tokenizer.ts"],
+      "trigger": "Lead with phone/email",
+      "expected_behavior": ["PII encrypted via KMS", "Token stored instead of raw PII"],
+      "must_not_log": ["phone numbers", "email addresses"],
+      "verification_test": "Ingest lead, verify no raw PII in logs"
+    },
+    {
+      "behavior_id": "B018",
+      "name": "Leads routed to workspace",
+      "phase": 6,
+      "entry_points": ["lib/intake/router.ts"],
+      "trigger": "Lead with product_type",
+      "expected_behavior": ["Lead routed to correct workspace", "NBA generated"],
+      "verification_test": "Personal loan lead routes to loan workspace"
+    }
+  ],
+
+  "entry_point_contracts": [
+    {
+      "entry_point": "app/api/os/pipeline/route.ts",
+      "wire_in_phase": 1,
+      "before_program": { "has_auth": false },
+      "after_program": { "has_auth": true, "calls": ["getServerSession"] }
+    },
+    {
+      "entry_point": "app/api/os/discovery/route.ts",
+      "wire_in_phase": 1,
+      "after_program": { "calls": ["checkRateLimit"] }
+    },
+    {
+      "entry_point": "app/api/superadmin/ai-query/route.ts",
+      "wire_in_phase": 1,
+      "after_program": { "must_not_contain": ["catch {}"] }
+    }
+  ],
+
+  "schema_contracts": [
+    {
+      "table": "memory_store",
+      "phase": 2,
+      "primary_key": "id",
+      "required_columns": ["id", "tenant_id", "store_key", "store_value", "ttl_seconds", "expires_at", "created_at"]
+    },
+    {
+      "table": "action_fingerprints",
+      "phase": 2,
+      "primary_key": "id",
+      "required_columns": ["id", "tenant_id", "user_id", "fingerprint_hash", "action_type", "created_at"]
+    },
+    {
+      "table": "confidence_scores",
+      "phase": 3,
+      "primary_key": "id",
+      "required_columns": ["id", "tenant_id", "entity_type", "entity_id", "confidence", "success_count", "failure_count"]
+    },
+    {
+      "table": "leads",
+      "phase": 5,
+      "primary_key": "id",
+      "required_columns": ["id", "tenant_id", "enterprise_id", "entity_type", "status", "created_at"]
+    },
+    {
+      "table": "lead_assignments",
+      "phase": 5,
+      "primary_key": "id",
+      "required_columns": ["id", "lead_id", "user_id", "assigned_at", "status"]
+    },
+    {
+      "table": "assignment_rules",
+      "phase": 5,
+      "primary_key": "id",
+      "required_columns": ["id", "enterprise_id", "rule_type", "config", "is_active"]
+    },
+    {
+      "table": "pii_vault",
+      "phase": 6,
+      "primary_key": "token",
+      "required_columns": ["token", "encrypted_value", "created_at"]
+    }
+  ],
+
+  "file_existence_contracts": [
+    {
+      "phase": 1,
+      "files": [
+        "lib/middleware/auth-gate.ts",
+        "lib/middleware/rate-limit.ts",
+        "lib/logging/structured-logger.ts",
+        "tests/security/auth-enforcement.test.ts",
+        "tests/security/rate-limiting.test.ts",
+        "tests/safety/no-silent-failures.test.ts"
+      ]
+    },
+    {
+      "phase": 2,
+      "files": [
+        "lib/memory/persistent-store.ts",
+        "lib/memory/fingerprint-engine.ts",
+        "lib/memory/action-history.ts",
+        "lib/memory/similarity-detector.ts",
+        "components/workspace/HistoricalRecallBanner.tsx",
+        "prisma/migrations/S353_memory_store.sql",
+        "prisma/migrations/S354_fingerprints.sql",
+        "tests/memory/persistence.test.ts",
+        "tests/memory/fingerprinting.test.ts",
+        "tests/memory/historical-recall.test.ts"
+      ]
+    },
+    {
+      "phase": 3,
+      "files": [
+        "lib/events/event-consumer.ts",
+        "lib/events/event-emitter.ts",
+        "lib/intelligence/confidence-engine.ts",
+        "lib/memory/decay-engine.ts",
+        "prisma/migrations/S357_confidence_tracking.sql",
+        "tests/events/pubsub-integration.test.ts",
+        "tests/intelligence/confidence-updates.test.ts",
+        "tests/memory/decay-engine.test.ts"
+      ]
+    },
+    {
+      "phase": 4,
+      "files": [
+        "lib/nba/single-nba-engine.ts",
+        "lib/user/maturity-engine.ts",
+        "components/workspace/NOWPanel.tsx",
+        "app/api/workspace/now/route.ts",
+        "prisma/migrations/S361_user_maturity.sql",
+        "tests/nba/single-nba-rule.test.ts",
+        "tests/nba/conflict-resolution.test.ts",
+        "tests/user/maturity-tracking.test.ts",
+        "tests/ui/now-panel.test.tsx"
+      ]
+    },
+    {
+      "phase": 5,
+      "files": [
+        "lib/distribution/lead-store.ts",
+        "lib/distribution/distributor.ts",
+        "lib/distribution/workload-tracker.ts",
+        "lib/distribution/algorithms/round-robin.ts",
+        "lib/distribution/algorithms/region-based.ts",
+        "lib/distribution/algorithms/role-based.ts",
+        "app/api/enterprise/leads/route.ts",
+        "app/api/enterprise/distribution/assign/route.ts",
+        "prisma/migrations/S362_lead_distribution.sql",
+        "tests/distribution/data-model.test.ts",
+        "tests/distribution/round-robin.test.ts",
+        "tests/distribution/load-balancing.test.ts",
+        "tests/distribution/collision-prevention.test.ts"
+      ]
+    },
+    {
+      "phase": 6,
+      "files": [
+        "app/api/intake/leads/route.ts",
+        "lib/intake/normalizer.ts",
+        "lib/intake/validator.ts",
+        "lib/intake/tokenizer.ts",
+        "lib/intake/pii-vault.ts",
+        "lib/intake/router.ts",
+        "prisma/migrations/S366_pii_vault.sql",
+        "tests/intake/endpoint.test.ts",
+        "tests/intake/normalization.test.ts",
+        "tests/intake/tokenization.test.ts",
+        "tests/intake/routing.test.ts",
+        "tests/security/pii-audit.test.ts"
+      ]
+    }
+  ],
+
+  "gcp_services": {
+    "phase_1": ["Cloud Audit Logs", "Cloud Memorystore (Redis)", "Error Reporting", "Cloud Logging", "Cloud Monitoring"],
+    "phase_2": ["Cloud Scheduler"],
+    "phase_3": ["Cloud Pub/Sub", "Cloud Functions", "BigQuery"],
+    "phase_6": ["Cloud KMS"]
+  },
+
+  "verification_queries": {
+    "auth_enforcement": "SELECT COUNT(*) FROM api_routes WHERE auth_required = false",
+    "rate_limit_redis": "redis-cli PING",
+    "memory_persistence": "SELECT COUNT(*) FROM memory_store",
+    "fingerprints_exist": "SELECT COUNT(*) FROM action_fingerprints",
+    "confidence_tracking": "SELECT COUNT(*) FROM confidence_scores",
+    "leads_exist": "SELECT COUNT(*) FROM leads",
+    "pii_encrypted": "SELECT COUNT(*) FROM pii_vault"
+  }
+}

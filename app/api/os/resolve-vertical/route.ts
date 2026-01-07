@@ -1,6 +1,8 @@
 /**
  * OS Vertical Resolver API (F3) - v2.1
  *
+ * S350: Security Hole Remediation - Added authentication requirement
+ *
  * GET /api/os/resolve-vertical?vertical=...&subVertical=...&region=...
  *
  * Resolves vertical/sub-vertical/region combination to:
@@ -30,6 +32,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db/client';
+import { requireAuth } from '@/lib/middleware/auth-gate';
 
 interface OSVertical {
   id: string;
@@ -94,6 +97,10 @@ interface OSPersonaPolicy {
 }
 
 export async function GET(request: NextRequest) {
+  // S350: Enforce authentication
+  const auth = await requireAuth();
+  if (!auth.success) return auth.response;
+
   const { searchParams } = new URL(request.url);
   const vertical = searchParams.get('vertical');
   const subVertical = searchParams.get('subVertical');
