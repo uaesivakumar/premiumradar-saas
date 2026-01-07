@@ -18,6 +18,7 @@
 import { query, queryOne } from '@/lib/db/client';
 import { logger } from '@/lib/logging/structured-logger';
 import { fingerprintEngine } from '@/lib/memory/fingerprint-engine';
+import { piiVault, encryptLeadPII } from '@/lib/security/pii-vault';
 
 // ============================================================
 // TYPES
@@ -201,19 +202,30 @@ class IndividualIntakeEngine {
       const fingerprint = fingerprintEngine.generateFingerprint('individual_intake', {
         companyName: data.companyName,
         companyDomain: data.companyDomain,
-        contactEmail: data.contactEmail,
+        // Use hash for fingerprint, not plain email
+        contactEmailHash: data.contactEmail ? piiVault.hashEmail(data.contactEmail) : null,
       });
 
-      // 4. Create the lead
+      // 4. Encrypt PII before storage (S368: Zero plain-text PII)
+      const encryptedPII = await encryptLeadPII(tenantId, {
+        contactEmail: data.contactEmail,
+        contactPhone: data.contactPhone,
+        contactName: data.contactName,
+      });
+
+      // 5. Create the lead with encrypted PII
       const leadResult = await query<{ id: string }>(
         `INSERT INTO leads (
           tenant_id,
           user_id,
           company_name,
           company_domain,
-          contact_name,
-          contact_email,
-          contact_phone,
+          contact_name_encrypted,
+          contact_name_hash,
+          contact_email_encrypted,
+          contact_email_hash,
+          contact_phone_encrypted,
+          contact_phone_hash,
           contact_title,
           region,
           vertical,
@@ -223,18 +235,22 @@ class IndividualIntakeEngine {
           source_detail,
           fingerprint,
           status,
-          score
+          score,
+          pii_encrypted
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'new', 50)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'new', 50, true)
         RETURNING id`,
         [
           tenantId,
           options.assignToUserId || userId,
           data.companyName,
           data.companyDomain || null,
-          data.contactName || null,
-          data.contactEmail || null,
-          data.contactPhone || null,
+          encryptedPII.contactNameEncrypted || null,
+          encryptedPII.contactNameHash || null,
+          encryptedPII.contactEmailEncrypted || null,
+          encryptedPII.contactEmailHash || null,
+          encryptedPII.contactPhoneEncrypted || null,
+          encryptedPII.contactPhoneHash || null,
           data.contactTitle || null,
           data.region || null,
           data.vertical || null,
@@ -248,7 +264,7 @@ class IndividualIntakeEngine {
 
       const leadId = leadResult[0]?.id;
 
-      // 5. Record fingerprint for future dedup
+      // 6. Record fingerprint for future dedup
       await fingerprintEngine.checkAndRecord({
         tenantId,
         userId,
@@ -294,12 +310,17 @@ class IndividualIntakeEngine {
 
   /**
    * Check for duplicate leads
+   * S368: Uses hash-based lookups for PII deduplication
    */
   async checkForDuplicates(
     tenantId: string,
     data: IndividualLeadInput
   ): Promise<DuplicateCheckResult> {
-    // Check exact matches first
+    // Generate hashes for dedup lookup (S368: no plain-text comparison)
+    const emailHash = data.contactEmail ? piiVault.hashEmail(data.contactEmail) : '';
+    const domainNormalized = data.companyDomain?.toLowerCase().trim() || '';
+
+    // Check exact matches first (domain OR email hash)
     const exactMatches = await query<{
       id: string;
       company_name: string;
@@ -311,11 +332,11 @@ class IndividualIntakeEngine {
        FROM leads
        WHERE tenant_id = $1
          AND (
-           (company_domain IS NOT NULL AND LOWER(company_domain) = LOWER($2))
-           OR (contact_email IS NOT NULL AND LOWER(contact_email) = LOWER($3))
+           (company_domain IS NOT NULL AND LOWER(company_domain) = $2)
+           OR (contact_email_hash IS NOT NULL AND contact_email_hash = $3)
          )
        LIMIT 1`,
-      [tenantId, data.companyDomain || '', data.contactEmail || '']
+      [tenantId, domainNormalized, emailHash]
     );
 
     if (exactMatches.length > 0) {
