@@ -2,6 +2,7 @@
 
 /**
  * CardContainer - S371: Pageless Core Surface
+ * S374: NBA → Card Wiring (action handler integration)
  *
  * Container for displaying cards in priority order.
  * NBA card always first (if exists).
@@ -21,28 +22,36 @@ import { Card } from './Card';
 interface CardContainerProps {
   cards: CardType[];
   nba: CardType | null;
+  /**
+   * S374: External action handler for wired actions
+   * If provided, actions are dispatched through this handler
+   */
+  onAction?: (cardId: string, actionId: string) => Promise<void> | void;
 }
 
-export function CardContainer({ cards, nba }: CardContainerProps) {
+export function CardContainer({ cards, nba, onAction }: CardContainerProps) {
   const { actOnCard, dismissCard } = useCardStore();
 
   const handleAction = useCallback(
-    (cardId: string, actionId: string) => {
+    async (cardId: string, actionId: string) => {
       console.log('[CardContainer] Action:', cardId, actionId);
 
-      // Handle dismiss actions
+      // Handle dismiss actions locally
       if (actionId === 'dismiss' || actionId === 'ignore') {
         dismissCard(cardId);
         return;
       }
 
-      // Mark card as acted
-      actOnCard(cardId, actionId);
+      // S374: If external handler provided, use it for wired actions
+      if (onAction) {
+        await onAction(cardId, actionId);
+        return;
+      }
 
-      // TODO: In Sprint 5, wire to actual action handlers
-      // e.g., nba.execute, decision.viewReasoning, etc.
+      // Fallback: Mark card as acted (legacy behavior)
+      actOnCard(cardId, actionId);
     },
-    [actOnCard, dismissCard]
+    [actOnCard, dismissCard, onAction]
   );
 
   // Separate NBA from other cards (it should already be first from sorting, but be explicit)

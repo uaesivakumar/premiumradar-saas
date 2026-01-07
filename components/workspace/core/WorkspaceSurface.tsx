@@ -2,6 +2,7 @@
 
 /**
  * WorkspaceSurface - S371: Pageless Core Surface
+ * S374: NBA → Card Wiring integration
  *
  * WORKSPACE UX (LOCKED):
  * - Single-canvas workspace surface
@@ -9,15 +10,18 @@
  * - Max 2-line summaries, expand on demand
  * - No chat bubbles, no conversation transcript
  * - Cards are the only visible artifacts
+ * - Only ONE NBA card at any time (enforced by CardStore)
  *
  * See docs/WORKSPACE_UX_DECISION.md (LOCKED)
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCardStore, startTTLEngine, stopTTLEngine } from '@/lib/stores/card-store';
 import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
+import { useWorkspaceNBA } from '@/lib/workspace/hooks';
+import { dispatchAction, ActionContext } from '@/lib/workspace/action-handlers';
 import { ContextBar } from './ContextBar';
 import { CardContainer } from './CardContainer';
 import { SystemState } from './SystemState';
@@ -25,16 +29,61 @@ import { CommandPalette } from './CommandPalette';
 
 export function WorkspaceSurface() {
   const cards = useCardStore((state) => state.getActiveCards());
-  const nba = useCardStore((state) => state.getNBA());
+  const actOnCard = useCardStore((state) => state.actOnCard);
+  const dismissCard = useCardStore((state) => state.dismissCard);
   const { subVerticalName, regionsDisplay, verticalName } = useSalesContext();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
+
+  // S374: NBA lifecycle management
+  const { nba, handleAction: handleNBAAction, getContext } = useWorkspaceNBA({
+    autoFetch: true,
+    autoRefresh: true,
+  });
 
   // Start TTL engine on mount
   useEffect(() => {
     startTTLEngine();
     return () => stopTTLEngine();
   }, []);
+
+  // S374: Handle card actions
+  const handleCardAction = useCallback(async (cardId: string, actionId: string) => {
+    const card = cards.find(c => c.id === cardId) || nba;
+    if (!card) {
+      console.warn('[WorkspaceSurface] Card not found:', cardId);
+      return;
+    }
+
+    const action = card.actions?.find(a => a.id === actionId);
+    if (!action) {
+      console.warn('[WorkspaceSurface] Action not found:', actionId);
+      return;
+    }
+
+    // Get action context
+    const nbaContext = getContext();
+    const actionContext: ActionContext = {
+      tenantId: nbaContext.tenantId,
+      userId: nbaContext.userId,
+      workspaceId: nbaContext.workspaceId,
+    };
+
+    console.log('[WorkspaceSurface] Dispatching action:', action.handler);
+
+    const result = await dispatchAction(action.handler, card, actionContext);
+
+    if (!result.success) {
+      console.error('[WorkspaceSurface] Action failed:', result.error);
+      // TODO: Show error card
+    }
+
+    // Handle navigation if needed
+    if (result.nextAction === 'navigate' && result.navigateTo) {
+      // For now, just log - navigation will be implemented later
+      console.log('[WorkspaceSurface] Navigate to:', result.navigateTo);
+    }
+  }, [cards, nba, getContext]);
 
   const hasCards = cards.length > 0;
   const systemState = hasCards ? (nba ? 'live' : 'waiting') : 'no-signals';
@@ -88,7 +137,7 @@ export function WorkspaceSurface() {
         <div className="max-w-4xl mx-auto">
           <AnimatePresence mode="popLayout">
             {hasCards ? (
-              <CardContainer cards={cards} nba={nba} />
+              <CardContainer cards={cards} nba={nba} onAction={handleCardAction} />
             ) : (
               <SystemState type="no-signals" primaryColor={industryConfig.primaryColor} />
             )}
