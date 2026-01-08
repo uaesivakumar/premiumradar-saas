@@ -25,15 +25,18 @@ import {
   Clock,
   FileText,
   Settings,
+  Trash2,
 } from 'lucide-react';
 import { useCardStore, CardFilter } from '@/lib/stores/card-store';
+import { useDiscoveryContextStore } from '@/lib/workspace/discovery-context';
 import { useLeftRailStore, LeftRailSection as SectionType } from '@/lib/stores/left-rail-store';
 import { LeftRailSection } from './LeftRailSection';
 import { LeftRailItem } from './LeftRailItem';
 
 export function LeftRail() {
-  const { activeFilter, setFilter, cards } = useCardStore();
+  const { activeFilter, setFilter, cards, clear: clearCards } = useCardStore();
   const { counts, getSectionVisibility, getSectionCount } = useLeftRailStore();
+  const resetDiscovery = useDiscoveryContextStore((s) => s.reset);
   const visibility = getSectionVisibility();
 
   // Helper to check if a section is active
@@ -42,6 +45,17 @@ export function LeftRail() {
   // Handle section click - filter cards, don't navigate
   const handleSectionClick = (section: SectionType, filterType: CardFilter['type']) => {
     setFilter({ type: filterType } as CardFilter);
+  };
+
+  // S381: Handle clear workspace
+  const handleClearWorkspace = () => {
+    clearCards();
+    resetDiscovery();
+    // Also clear localStorage to ensure clean slate
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('card-store');
+    }
+    console.log('[LeftRail] Workspace cleared');
   };
 
   return (
@@ -95,19 +109,31 @@ export function LeftRail() {
       {/* Spacer */}
       <div className="flex-shrink-0 border-t border-white/5 my-2" />
 
-      {/* PREFERENCES - Always at bottom */}
-      <div className="flex-shrink-0 px-2">
+      {/* Bottom actions */}
+      <div className="flex-shrink-0 px-2 space-y-1">
+        {/* PREFERENCES */}
         <LeftRailSection visible={visibility.preferences}>
           <LeftRailItem
             icon={Settings}
             label="Preferences"
-            isActive={false} // Preferences doesn't filter cards
+            isActive={false}
             onClick={() => {
-              // S376: Will open preferences surface
               console.log('[LeftRail] Preferences clicked - pending S376');
             }}
           />
         </LeftRailSection>
+
+        {/* S381: CLEAR WORKSPACE - Show if cards exist */}
+        {cards.length > 0 && (
+          <LeftRailSection visible={true}>
+            <LeftRailItem
+              icon={Trash2}
+              label="Clear"
+              isActive={false}
+              onClick={handleClearWorkspace}
+            />
+          </LeftRailSection>
+        )}
       </div>
     </nav>
   );

@@ -26,6 +26,8 @@ import { ContextBar } from './ContextBar';
 import { CardContainer } from './CardContainer';
 import { SystemState } from './SystemState';
 import { CommandPalette } from './CommandPalette';
+import { DiscoveryLoader } from './DiscoveryLoader';
+import { useDiscoveryContextStore, selectIsDiscoveryActive } from '@/lib/workspace/discovery-context';
 
 export function WorkspaceSurface() {
   const cards = useCardStore((state) => state.getActiveCards());
@@ -34,6 +36,9 @@ export function WorkspaceSurface() {
   const { subVerticalName, regionsDisplay, verticalName } = useSalesContext();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
+
+  // S381: Discovery loader state
+  const isDiscoveryActive = useDiscoveryContextStore(selectIsDiscoveryActive);
 
   // S374: NBA lifecycle management
   const { nba, handleAction: handleNBAAction, getContext } = useWorkspaceNBA({
@@ -86,7 +91,7 @@ export function WorkspaceSurface() {
   }, [cards, nba, getContext]);
 
   const hasCards = cards.length > 0;
-  const systemState = hasCards ? (nba ? 'live' : 'waiting') : 'no-signals';
+  const systemState = isDiscoveryActive ? 'discovering' : (hasCards ? (nba ? 'live' : 'waiting') : 'no-signals');
 
   return (
     <div className="absolute inset-0 flex flex-col bg-slate-950">
@@ -136,7 +141,13 @@ export function WorkspaceSurface() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-8 lg:px-16 py-6">
         <div className="max-w-4xl mx-auto">
           <AnimatePresence mode="popLayout">
-            {hasCards ? (
+            {isDiscoveryActive ? (
+              <DiscoveryLoader
+                region={regionsDisplay}
+                subVertical={subVerticalName}
+                primaryColor={industryConfig.primaryColor}
+              />
+            ) : hasCards ? (
               <CardContainer cards={cards} nba={nba} onAction={handleCardAction} />
             ) : (
               <SystemState type="no-signals" primaryColor={industryConfig.primaryColor} />

@@ -31,6 +31,7 @@ import {
   getLoaderText,
   WorkspaceContext,
 } from './discovery-context';
+import { useCardStore } from '@/lib/stores/card-store';
 
 // =============================================================================
 // TYPES
@@ -43,6 +44,7 @@ export type CommandIntent =
   | 'preference'
   | 'nba_request'
   | 'system_status_query'  // S380: Meta questions about workspace state
+  | 'clear_workspace'      // S381: Clear all cards
   | 'help'
   | 'unknown';
 
@@ -86,9 +88,13 @@ const INTENT_PATTERNS: Array<{
     patterns: [
       /^find\s+(.+)/i,
       /^search\s+for\s+(.+)/i,
+      /^search\s+(.+)/i,           // S381: "search X" without "for"
       /^discover\s+(.+)/i,
       /^show\s+me\s+(.+)/i,
       /^get\s+(.+)/i,
+      /^(.+)\s+companies$/i,       // S381: "ADGM companies", "tech companies"
+      /^(.+)\s+leads$/i,           // S381: "ADGM leads", "banking leads"
+      /^list\s+(.+)/i,             // S381: "list companies in X"
     ],
     priority: 90,
   },
@@ -158,6 +164,19 @@ const INTENT_PATTERNS: Array<{
       /^\?$/,
     ],
     priority: 50,
+  },
+  // S381: Clear workspace command
+  {
+    intent: 'clear_workspace',
+    patterns: [
+      /^clear$/i,
+      /^clear\s+(all|screen|workspace|cards)/i,
+      /^reset$/i,
+      /^reset\s+(workspace|cards)/i,
+      /^start\s+over$/i,
+      /^new\s+session$/i,
+    ],
+    priority: 120, // Highest priority - always execute
   },
 ];
 
@@ -253,6 +272,10 @@ export async function resolveCommand(input: string): Promise<ResolveResult> {
       case 'help':
         return handleHelp();
 
+      // S381: Clear workspace command
+      case 'clear_workspace':
+        return handleClearWorkspace();
+
       default:
         // S380: Check context before showing "I didn't understand"
         return handleUnknownWithContext(resolution);
@@ -301,6 +324,13 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
   const query = resolution.entityName || resolution.query;
   const context = buildSIVAContext();
 
+  // S381: Start discovery loader animation
+  useDiscoveryContextStore.getState().startDiscovery({
+    vertical: context.vertical,
+    subVertical: context.subVertical,
+    region: context.region,
+  });
+
   // S380: Call OS discovery API
   try {
     const response = await fetch('/api/os/discovery', {
@@ -322,6 +352,8 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
     const result = await response.json();
 
     if (!result.success || !result.data?.companies?.length) {
+      // S381: Complete discovery (no results)
+      useDiscoveryContextStore.getState().completeDiscovery();
       return {
         success: true,
         cards: [
@@ -369,12 +401,17 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
       tags: ['signal', 'discovery', `tier-${company.sivaScores?.tier?.toLowerCase() || 'warm'}`],
     }));
 
+    // S381: Complete discovery (success)
+    useDiscoveryContextStore.getState().completeDiscovery();
+
     return {
       success: true,
       cards: signalCards,
     };
   } catch (error) {
     console.error('[CommandResolver] Discovery error:', error);
+    // S381: Fail discovery on error
+    useDiscoveryContextStore.getState().failDiscovery(error instanceof Error ? error.message : 'Unknown error');
     return {
       success: true,
       cards: [
@@ -468,22 +505,97 @@ async function handlePreference(resolution: CommandResolution): Promise<ResolveR
 }
 
 async function handleNBARequest(resolution: CommandResolution): Promise<ResolveResult> {
-  // TODO: S374 - Call NBA engine
-  return {
-    success: true,
-    cards: [
-      {
-        type: 'system',
-        priority: 100,
-        title: 'Finding Next Best Action',
-        summary: 'Analyzing your context to suggest the best next step...',
-        expiresAt: getExpiryTime('system'),
-        sourceType: 'system',
-        actions: [],
-        tags: ['nba-request'],
-      },
-    ],
-  };
+  const context = buildSIVAContext();
+
+  try {
+    // Call NBA API endpoint
+    const params = new URLSearchParams();
+    if (context.subVertical) params.set('workspaceId', context.subVertical);
+    params.set('activity', 'active');
+
+    const response = await fetch(`/api/workspace/nba?${params.toString()}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+
+    const result = await response.json();
+
+    if (!result.success || !result.data) {
+      // No NBA available - show helpful message
+      return {
+        success: true,
+        cards: [
+          {
+            type: 'system',
+            priority: 100,
+            title: 'No Actions Available',
+            summary: result.meta?.selectionReason || 'No actionable leads at the moment. Try discovering new companies first.',
+            expiresAt: getExpiryTime('system'),
+            sourceType: 'system',
+            actions: [
+              { id: 'discover', label: 'Discover Leads', type: 'primary', handler: 'system.discover' },
+              { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
+            ],
+            tags: ['nba-empty'],
+          },
+        ],
+      };
+    }
+
+    // NBA found - card is automatically added by the adapter via addCard
+    // Return empty cards array since NBA adapter handles it
+    const nba = result.data;
+    return {
+      success: true,
+      cards: [
+        {
+          type: 'nba',
+          priority: 1000, // Highest priority
+          title: nba.actionText,
+          summary: nba.reason,
+          expandedContent: {
+            supportingInfo: nba.supportingInfo,
+            urgency: nba.urgency,
+            score: nba.score,
+            companyName: nba.companyName,
+            contactName: nba.contactName,
+          },
+          expiresAt: nba.expiresAt || getExpiryTime('nba'),
+          sourceType: 'nba',
+          sourceId: nba.id,
+          entityId: nba.leadId,
+          entityName: nba.companyName,
+          entityType: 'company',
+          actions: [
+            { id: 'do-now', label: 'Do Now', type: 'primary', handler: 'nba.execute' },
+            { id: 'defer', label: 'Defer', type: 'secondary', handler: 'nba.defer' },
+          ],
+          tags: [`nba-${nba.type?.toLowerCase().replace('_', '-') || 'action'}`, `urgency-${nba.urgency || 'medium'}`],
+        },
+      ],
+    };
+  } catch (error) {
+    console.error('[CommandResolver] NBA request error:', error);
+    return {
+      success: true,
+      cards: [
+        {
+          type: 'system',
+          priority: 100,
+          title: 'Unable to Find Actions',
+          summary: 'Could not retrieve recommendations. Please try again.',
+          expiresAt: getExpiryTime('system'),
+          sourceType: 'system',
+          actions: [
+            { id: 'retry', label: 'Retry', type: 'primary', handler: 'system.retry' },
+            { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
+          ],
+          tags: ['nba-error'],
+        },
+      ],
+    };
+  }
 }
 
 function handleHelp(): ResolveResult {
@@ -494,17 +606,55 @@ function handleHelp(): ResolveResult {
         type: 'system',
         priority: 100,
         title: 'How Can I Help?',
-        summary: 'Try: "Check ABC Corp", "Find expanding companies", or "What should I do next?"',
+        summary: 'Try: "Check ABC Corp", "Find expanding companies", "clear" to reset, or "What should I do next?"',
         expiresAt: getExpiryTime('system'),
         sourceType: 'system',
         reasoning: [
           'Check [company name] - Evaluate a specific company',
           'Find [criteria] - Discover leads matching your criteria',
           'What should I do next? - Get your next best action',
+          'clear - Reset workspace and remove all cards',
         ],
         actions: [
           { id: 'dismiss', label: 'Got it', type: 'dismiss', handler: 'system.dismiss' },
         ],
+      },
+    ],
+  };
+}
+
+// =============================================================================
+// S381: CLEAR WORKSPACE HANDLER
+// =============================================================================
+
+/**
+ * Clear all cards from workspace
+ * Returns a confirmation card, actual clearing happens via special flag
+ */
+function handleClearWorkspace(): ResolveResult {
+  // Clear the card store
+  useCardStore.getState().clear();
+
+  // Clear discovery context
+  useDiscoveryContextStore.getState().reset();
+
+  console.log('[CommandResolver] Workspace cleared');
+
+  // Return a brief confirmation card
+  return {
+    success: true,
+    cards: [
+      {
+        type: 'system',
+        priority: 100,
+        title: 'Workspace Cleared',
+        summary: 'All cards have been removed. Start fresh with a new search.',
+        expiresAt: getExpiryTime('system'),
+        sourceType: 'system',
+        actions: [
+          { id: 'dismiss', label: 'Got it', type: 'dismiss', handler: 'system.dismiss' },
+        ],
+        tags: ['workspace-cleared'],
       },
     ],
   };

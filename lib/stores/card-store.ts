@@ -185,6 +185,35 @@ export const useCardStore = create<CardStore>()(
             status: 'active',
           });
 
+          // S381: Check for duplicates before adding
+          const existingCards = get().cards;
+
+          // Dedup: Check if card with same entityId and type already exists (for signals)
+          if (newCard.entityId && newCard.type === 'signal') {
+            const duplicate = existingCards.find(
+              card => card.entityId === newCard.entityId &&
+                      card.type === newCard.type &&
+                      card.status === 'active'
+            );
+            if (duplicate) {
+              console.log('[CardStore] Duplicate signal skipped:', newCard.entityId);
+              return duplicate.id;
+            }
+          }
+
+          // Dedup: Check if system card with same title already exists
+          if (newCard.type === 'system') {
+            const duplicate = existingCards.find(
+              card => card.type === 'system' &&
+                      card.title === newCard.title &&
+                      card.status === 'active'
+            );
+            if (duplicate) {
+              console.log('[CardStore] Duplicate system card skipped:', newCard.title);
+              return duplicate.id;
+            }
+          }
+
           set(state => {
             let updatedCards = [...state.cards];
 
