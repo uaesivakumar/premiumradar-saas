@@ -205,6 +205,185 @@ function intentToHumanReadable(intent: CommandIntent, entityName?: string): stri
 }
 
 // =============================================================================
+// S382: INTENT GATING - Location Constraint Extraction & Validation
+// =============================================================================
+
+/**
+ * Known UAE locations for constraint matching
+ * Used to extract explicit location requirements from queries
+ */
+const UAE_LOCATIONS: Record<string, string[]> = {
+  // Cities
+  'dubai': ['dubai'],
+  'abu dhabi': ['abu dhabi', 'abudhabi', 'abu-dhabi'],
+  'sharjah': ['sharjah'],
+  'ajman': ['ajman'],
+  'ras al khaimah': ['ras al khaimah', 'rak'],
+  'fujairah': ['fujairah'],
+  'umm al quwain': ['umm al quwain', 'uaq'],
+  // Free zones / Special areas
+  'masdar city': ['masdar city', 'masdar'],
+  'difc': ['difc', 'dubai international financial centre'],
+  'adgm': ['adgm', 'abu dhabi global market'],
+  'jafza': ['jafza', 'jebel ali free zone'],
+  'dafza': ['dafza', 'dubai airport free zone'],
+  'dmcc': ['dmcc', 'dubai multi commodities centre'],
+  'twofour54': ['twofour54'],
+  'khalifa industrial zone': ['kizad', 'khalifa industrial zone'],
+  'saadiyat': ['saadiyat', 'saadiyat island'],
+  'yas island': ['yas island', 'yas'],
+  'silicon oasis': ['dso', 'dubai silicon oasis', 'silicon oasis'],
+};
+
+/**
+ * Location constraints extracted from a query
+ */
+interface LocationConstraints {
+  hasLocationFilter: boolean;
+  city?: string;           // e.g., "Abu Dhabi"
+  specificArea?: string;   // e.g., "Masdar City"
+  originalQuery: string;
+}
+
+/**
+ * Parse location constraints from user query
+ * Returns explicit location requirements that MUST be satisfied
+ */
+function parseLocationConstraints(query: string): LocationConstraints {
+  const lowerQuery = query.toLowerCase();
+  const constraints: LocationConstraints = {
+    hasLocationFilter: false,
+    originalQuery: query,
+  };
+
+  // Check for specific areas first (more specific = higher priority)
+  for (const [canonical, variants] of Object.entries(UAE_LOCATIONS)) {
+    for (const variant of variants) {
+      if (lowerQuery.includes(variant)) {
+        constraints.hasLocationFilter = true;
+        // Determine if it's a city or specific area
+        const cities = ['dubai', 'abu dhabi', 'sharjah', 'ajman', 'ras al khaimah', 'fujairah', 'umm al quwain'];
+        if (cities.includes(canonical)) {
+          constraints.city = canonical;
+        } else {
+          constraints.specificArea = canonical;
+          // Infer city from specific area
+          if (['masdar city', 'adgm', 'saadiyat', 'yas island', 'khalifa industrial zone'].includes(canonical)) {
+            constraints.city = 'abu dhabi';
+          } else if (['difc', 'jafza', 'dafza', 'dmcc', 'silicon oasis', 'twofour54'].includes(canonical)) {
+            constraints.city = 'dubai';
+          }
+        }
+        break;
+      }
+    }
+    if (constraints.hasLocationFilter) break;
+  }
+
+  // Also check for explicit location keywords
+  const locationPatterns = [
+    /\b(?:in|located in|based in|from|at)\s+([A-Za-z\s]+?)(?:\s*,|\s+(?:uae|emirates)|$)/i,
+    /\b([A-Za-z\s]+?)\s+companies\b/i,
+    /\bcompanies\s+(?:in|at|from)\s+([A-Za-z\s]+)/i,
+  ];
+
+  for (const pattern of locationPatterns) {
+    const match = query.match(pattern);
+    if (match) {
+      const extractedLocation = match[1]?.toLowerCase().trim();
+      // Validate against known locations
+      for (const [canonical, variants] of Object.entries(UAE_LOCATIONS)) {
+        if (variants.some(v => extractedLocation.includes(v) || v.includes(extractedLocation))) {
+          constraints.hasLocationFilter = true;
+          const cities = ['dubai', 'abu dhabi', 'sharjah', 'ajman', 'ras al khaimah', 'fujairah', 'umm al quwain'];
+          if (cities.includes(canonical)) {
+            constraints.city = canonical;
+          } else {
+            constraints.specificArea = canonical;
+          }
+          break;
+        }
+      }
+    }
+    if (constraints.hasLocationFilter) break;
+  }
+
+  if (constraints.hasLocationFilter) {
+    console.log('[IntentGating] Location constraints detected:', constraints);
+  }
+
+  return constraints;
+}
+
+/**
+ * Validate a company result against location constraints
+ * Returns true if company satisfies the constraint, false otherwise
+ *
+ * RULE: If location constraint exists, company MUST match. No exceptions.
+ */
+function validateResultAgainstLocation(
+  company: { name: string; location?: string; city?: string; region?: string },
+  constraints: LocationConstraints
+): boolean {
+  // No location filter = all companies pass
+  if (!constraints.hasLocationFilter) {
+    return true;
+  }
+
+  // Get company location info (normalize to lowercase)
+  const companyLocation = (company.location || '').toLowerCase();
+  const companyCity = (company.city || '').toLowerCase();
+  const companyRegion = (company.region || '').toLowerCase();
+  const allLocationText = `${companyLocation} ${companyCity} ${companyRegion}`.toLowerCase();
+
+  // Check specific area constraint (strictest)
+  if (constraints.specificArea) {
+    const areaVariants = UAE_LOCATIONS[constraints.specificArea] || [constraints.specificArea];
+    const matchesArea = areaVariants.some(variant =>
+      allLocationText.includes(variant.toLowerCase())
+    );
+    if (!matchesArea) {
+      console.log(`[IntentGating] REJECTED: ${company.name} - not in ${constraints.specificArea} (location: ${allLocationText || 'none'})`);
+      return false;
+    }
+  }
+
+  // Check city constraint
+  if (constraints.city) {
+    const cityVariants = UAE_LOCATIONS[constraints.city] || [constraints.city];
+    const matchesCity = cityVariants.some(variant =>
+      allLocationText.includes(variant.toLowerCase())
+    );
+    if (!matchesCity) {
+      console.log(`[IntentGating] REJECTED: ${company.name} - not in ${constraints.city} (location: ${allLocationText || 'none'})`);
+      return false;
+    }
+  }
+
+  console.log(`[IntentGating] ACCEPTED: ${company.name} - matches location constraints`);
+  return true;
+}
+
+/**
+ * Get human-readable location constraint for user feedback
+ */
+function getLocationConstraintDisplay(constraints: LocationConstraints): string {
+  if (constraints.specificArea && constraints.city) {
+    return `${constraints.specificArea}, ${constraints.city}`.split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+  if (constraints.specificArea) {
+    return constraints.specificArea.split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+  if (constraints.city) {
+    return constraints.city.split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+  return 'UAE';
+}
+
+// =============================================================================
 // INTENT CLASSIFICATION
 // =============================================================================
 
@@ -348,6 +527,9 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
   const query = resolution.entityName || resolution.query;
   const context = buildSIVAContext();
 
+  // S382: INTENT GATING - Parse location constraints from query
+  const locationConstraints = parseLocationConstraints(query);
+
   // S381: Start discovery loader animation
   useDiscoveryContextStore.getState().startDiscovery({
     vertical: context.vertical,
@@ -371,6 +553,11 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
         sub_vertical_id: context.subVertical?.toLowerCase().replace(/\s+/g, '_') || 'employee_banking',
         region_code: context.region || 'UAE',
         query: query,
+        // S382: Pass location constraints explicitly to OS
+        location_filter: locationConstraints.hasLocationFilter ? {
+          city: locationConstraints.city,
+          area: locationConstraints.specificArea,
+        } : undefined,
       }),
     });
 
@@ -388,6 +575,9 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
       }
       // S381: Complete discovery (no results)
       useDiscoveryContextStore.getState().completeDiscovery();
+
+      // S382: Show location-specific empty state if constraint was set
+      const locationDisplay = getLocationConstraintDisplay(locationConstraints);
       return {
         success: true,
         cards: [
@@ -395,7 +585,9 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
             type: 'system',
             priority: 500,
             title: 'No Matches Found',
-            summary: `No companies found for "${query}". Try a different search term.`,
+            summary: locationConstraints.hasLocationFilter
+              ? `No companies found in ${locationDisplay}. I'll notify you when new ones appear.`
+              : `No companies found for "${query}". Try a different search term.`,
             expiresAt: getExpiryTime('system'),
             sourceType: 'system',
             actions: [
@@ -407,8 +599,56 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
       };
     }
 
-    // Convert OS companies to signal cards
-    const signalCards = result.data.companies.slice(0, 10).map((company: any, index: number) => ({
+    // S382: INTENT GATING - Filter results against location constraints
+    // RULE: If result violates intent, it MUST NOT render. No exceptions.
+    const allCompanies = result.data.companies as any[];
+    const validCompanies = allCompanies.filter(company =>
+      validateResultAgainstLocation(company, locationConstraints)
+    );
+
+    // S382: Log gating statistics
+    if (locationConstraints.hasLocationFilter) {
+      const rejected = allCompanies.length - validCompanies.length;
+      console.log(`[IntentGating] Location filter applied: ${validCompanies.length}/${allCompanies.length} passed (${rejected} rejected)`);
+    }
+
+    // S382: If ALL results were filtered out, show proper empty state
+    if (validCompanies.length === 0) {
+      const elapsed = Date.now() - loaderStartTime;
+      if (elapsed < MIN_LOADER_TIME_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_LOADER_TIME_MS - elapsed));
+      }
+      useDiscoveryContextStore.getState().completeDiscovery();
+
+      const locationDisplay = getLocationConstraintDisplay(locationConstraints);
+      return {
+        success: true,
+        cards: [
+          {
+            type: 'system',
+            priority: 500,
+            title: 'No Matches in Location',
+            summary: `No companies found specifically in ${locationDisplay}. ` +
+              `${allCompanies.length} companies were found elsewhere but filtered out to match your query.`,
+            expiresAt: getExpiryTime('system'),
+            sourceType: 'system',
+            reasoning: [
+              `Your query specified: "${locationDisplay}"`,
+              `${allCompanies.length} companies found, but none matched the location constraint`,
+              'Only exact location matches are shown to ensure relevance',
+            ],
+            actions: [
+              { id: 'broaden', label: 'Search All UAE', type: 'primary', handler: 'system.broadenSearch' },
+              { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
+            ],
+            tags: ['discovery', 'no-results', 'location-filtered'],
+          },
+        ],
+      };
+    }
+
+    // Convert validated companies to signal cards
+    const signalCards = validCompanies.slice(0, 10).map((company: any, index: number) => ({
       type: 'signal' as const,
       priority: 800 - index * 20,
       title: company.name,
