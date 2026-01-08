@@ -214,6 +214,9 @@ export const useCardStore = create<CardStore>()(
             }
           }
 
+          // S381: Context cards - only ONE at a time (dismiss previous)
+          // Do not dedup, instead mark previous as dismissed in mutation
+
           set(state => {
             let updatedCards = [...state.cards];
 
@@ -222,6 +225,16 @@ export const useCardStore = create<CardStore>()(
               // Dismiss any existing active NBA
               updatedCards = updatedCards.map(card =>
                 card.type === 'nba' && card.status === 'active'
+                  ? { ...card, status: 'dismissed' as CardStatus }
+                  : card
+              );
+            }
+
+            // S381: Only ONE context card can exist
+            if (newCard.type === 'context') {
+              // Dismiss any existing active context card
+              updatedCards = updatedCards.map(card =>
+                card.type === 'context' && card.status === 'active'
                   ? { ...card, status: 'dismissed' as CardStatus }
                   : card
               );

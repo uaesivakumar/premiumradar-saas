@@ -24,6 +24,7 @@ export const TTL_CONFIG: Record<CardType, number | null> = {
   report: 7 * 24 * 60 * 60 * 1000,  // 7 days
   recall: 30 * 60 * 1000,           // 30 minutes
   system: 1 * 60 * 60 * 1000,       // 1 hour
+  context: 10 * 60 * 1000,          // S381: 10 minutes for query context
 };
 
 // =============================================================================

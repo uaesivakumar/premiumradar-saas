@@ -14,7 +14,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp, Zap, Brain, Bell, FileText, Clock, Info } from 'lucide-react';
+import { ChevronDown, ChevronUp, Zap, Brain, Bell, FileText, Clock, Info, Search } from 'lucide-react';
 import type { Card as CardType, CardType as CardTypeEnum } from '@/lib/workspace/card-state';
 import { getExpiryDisplayString } from '@/lib/workspace/ttl-engine';
 import { CardActions } from './CardActions';
@@ -32,6 +32,7 @@ const cardTypeIcons: Record<CardTypeEnum, React.ComponentType<{ className?: stri
   report: FileText,
   recall: Clock,
   system: Info,
+  context: Search,  // S381: Query context card
 };
 
 const cardTypeColors: Record<CardTypeEnum, string> = {
@@ -41,6 +42,7 @@ const cardTypeColors: Record<CardTypeEnum, string> = {
   report: 'border-green-500/50 bg-green-500/10',
   recall: 'border-gray-500/50 bg-gray-500/10',
   system: 'border-gray-500/30 bg-gray-500/5',
+  context: 'border-cyan-500/50 bg-cyan-500/10',  // S381: Query context card - cyan
 };
 
 const cardTypeLabels: Record<CardTypeEnum, string> = {
@@ -50,6 +52,7 @@ const cardTypeLabels: Record<CardTypeEnum, string> = {
   report: 'Report',
   recall: 'Recall',
   system: 'System',
+  context: 'Query',  // S381: Query context card
 };
 
 export function Card({ card, onAction, isNBA = false }: CardProps) {

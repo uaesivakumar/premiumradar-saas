@@ -24,6 +24,7 @@
  * - report: Report cards (expire by TTL)
  * - recall: Recall cards (temporary)
  * - system: System messages (expire quickly)
+ * - context: S381 Query context card (shows user's query)
  */
 export type CardType =
   | 'nba'       // Next Best Action - max 1
@@ -31,7 +32,8 @@ export type CardType =
   | 'signal'    // Signal/discovery card
   | 'report'    // Report card
   | 'recall'    // Recall card
-  | 'system';   // System message
+  | 'system'    // System message
+  | 'context';  // S381: Query context - shows user's query
 
 /**
  * Card Status Lifecycle
@@ -45,7 +47,7 @@ export type CardStatus = 'active' | 'acted' | 'dismissed' | 'expired';
 /**
  * Source of the card
  */
-export type CardSourceType = 'nba' | 'signal' | 'decision' | 'report' | 'system' | 'recall';
+export type CardSourceType = 'nba' | 'signal' | 'decision' | 'report' | 'system' | 'recall' | 'context';
 
 /**
  * Entity type for card context
@@ -131,6 +133,7 @@ export interface Card {
  */
 export const DEFAULT_PRIORITIES: Record<CardType, number> = {
   nba: 1000,      // NBA always on top
+  context: 900,   // S381: Context card below NBA, above others
   decision: 800,  // Decisions are important
   signal: 600,    // Signals are actionable
   recall: 400,    // Recall is informational
@@ -268,5 +271,49 @@ export function createSystemCard(params: {
     actions: [
       { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
     ],
+  });
+}
+
+/**
+ * S381: Create a Context card (shows user's query)
+ *
+ * Context cards:
+ * - Show what the user typed
+ * - Display the interpreted intent
+ * - Show the scope (region, vertical)
+ * - Auto-expire after 10 minutes
+ * - Only ONE context card at a time (dismiss previous)
+ */
+export function createContextCard(params: {
+  query: string;
+  intent: string;
+  interpretedAs: string;
+  scope: {
+    vertical: string;
+    subVertical: string;
+    region: string;
+  };
+  expiresAt?: Date | null;
+}): Card {
+  return createCard({
+    type: 'context',
+    priority: DEFAULT_PRIORITIES.context,
+    title: 'Your Query',
+    summary: `"${params.query}"`,
+    expandedContent: {
+      intent: params.intent,
+      interpretedAs: params.interpretedAs,
+      scope: params.scope,
+    },
+    expiresAt: params.expiresAt ?? null,
+    sourceType: 'context',
+    reasoning: [
+      `Interpreted as: ${params.interpretedAs}`,
+      `Scope: ${params.scope.subVertical} in ${params.scope.region}`,
+    ],
+    actions: [
+      { id: 'clear', label: 'Clear', type: 'dismiss', handler: 'context.clear' },
+    ],
+    tags: ['query-context', params.intent],
   });
 }

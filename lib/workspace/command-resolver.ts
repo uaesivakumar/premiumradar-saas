@@ -14,6 +14,7 @@ import {
   createSignalCard,
   createDecisionCard,
   createSystemCard,
+  createContextCard,
 } from './card-state';
 import { getExpiryTime } from './ttl-engine';
 import { handleRecallQuery } from './recall-engine';
@@ -179,6 +180,29 @@ const INTENT_PATTERNS: Array<{
     priority: 120, // Highest priority - always execute
   },
 ];
+
+// =============================================================================
+// S381: INTENT TO HUMAN-READABLE
+// =============================================================================
+
+/**
+ * Convert intent enum to human-readable description
+ */
+function intentToHumanReadable(intent: CommandIntent, entityName?: string): string {
+  const descriptions: Record<CommandIntent, string> = {
+    check_company: entityName ? `Evaluating "${entityName}"` : 'Company evaluation',
+    find_leads: entityName ? `Finding ${entityName}` : 'Discovering leads',
+    recall: entityName ? `Recalling decisions about "${entityName}"` : 'Looking up history',
+    preference: 'Setting preference',
+    nba_request: 'Finding your next best action',
+    system_status_query: 'Checking workspace status',
+    clear_workspace: 'Clearing workspace',
+    help: 'Showing help',
+    unknown: 'Processing request',
+  };
+
+  return descriptions[intent] || 'Processing request';
+}
 
 // =============================================================================
 // INTENT CLASSIFICATION

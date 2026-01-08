@@ -15,9 +15,10 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Send, Loader2, AlertCircle } from 'lucide-react';
 import { useCardStore } from '@/lib/stores/card-store';
-import { createCard, createSystemCard } from '@/lib/workspace/card-state';
+import { createCard, createSystemCard, createContextCard } from '@/lib/workspace/card-state';
 import { getExpiryTime } from '@/lib/workspace/ttl-engine';
-import { resolveCommand } from '@/lib/workspace/command-resolver';
+import { resolveCommand, classifyIntent } from '@/lib/workspace/command-resolver';
+import { useDiscoveryContextStore, buildSIVAContext } from '@/lib/workspace/discovery-context';
 import { CommandHints } from './CommandHints';
 
 interface CommandPaletteProps {
@@ -58,6 +59,41 @@ export function CommandPalette({
 
       try {
         console.log('[CommandPalette] Resolving command:', query);
+
+        // S381: Classify intent first to show context card immediately
+        const classification = classifyIntent(query);
+        const context = buildSIVAContext();
+
+        // S381: Intent to human-readable mapping
+        const intentDescriptions: Record<string, string> = {
+          check_company: classification.entityName ? `Evaluating "${classification.entityName}"` : 'Company evaluation',
+          find_leads: classification.entityName ? `Finding ${classification.entityName}` : 'Discovering leads',
+          recall: classification.entityName ? `Recalling decisions about "${classification.entityName}"` : 'Looking up history',
+          preference: 'Setting preference',
+          nba_request: 'Finding your next best action',
+          system_status_query: 'Checking workspace status',
+          clear_workspace: 'Clearing workspace',
+          help: 'Showing help',
+          unknown: 'Processing request',
+        };
+
+        // S381: Add context card IMMEDIATELY before processing
+        // Skip for clear/help commands (no need to show context)
+        if (!['clear_workspace', 'help', 'system_status_query'].includes(classification.intent)) {
+          addCard(
+            createContextCard({
+              query: query,
+              intent: classification.intent,
+              interpretedAs: intentDescriptions[classification.intent] || 'Processing request',
+              scope: {
+                vertical: context.vertical || 'Banking',
+                subVertical: context.subVertical || 'Employee Banking',
+                region: context.region || 'UAE',
+              },
+              expiresAt: getExpiryTime('context'),
+            })
+          );
+        }
 
         // S373: Use command resolver for intent → card resolution
         const result = await resolveCommand(query);
