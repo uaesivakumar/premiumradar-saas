@@ -42,6 +42,15 @@ export function getExpiryTime(type: CardType, fromDate: Date = new Date()): Date
 }
 
 /**
+ * Safely convert expiresAt to Date (handles string from JSON deserialization)
+ */
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  return new Date(value);
+}
+
+/**
  * Check if a card should be expired
  */
 export function shouldExpire(card: Card, now: Date = new Date()): boolean {
@@ -51,8 +60,12 @@ export function shouldExpire(card: Card, now: Date = new Date()): boolean {
   // No expiry set
   if (!card.expiresAt) return false;
 
+  // Convert to Date if string (from JSON deserialization)
+  const expiresAt = toDate(card.expiresAt);
+  if (!expiresAt) return false;
+
   // Check if expiry time has passed
-  return now >= card.expiresAt;
+  return now >= expiresAt;
 }
 
 /**
@@ -63,7 +76,11 @@ export function shouldExpire(card: Card, now: Date = new Date()): boolean {
 export function getTimeToExpiry(card: Card, now: Date = new Date()): number | null {
   if (!card.expiresAt) return null;
 
-  const remaining = card.expiresAt.getTime() - now.getTime();
+  // Convert to Date if string (from JSON deserialization)
+  const expiresAt = toDate(card.expiresAt);
+  if (!expiresAt) return null;
+
+  const remaining = expiresAt.getTime() - now.getTime();
   return remaining > 0 ? remaining : 0;
 }
 

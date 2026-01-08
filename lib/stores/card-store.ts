@@ -115,7 +115,13 @@ export const useCardStore = create<CardStore>()(
               // Cards created today
               const today = new Date();
               today.setHours(0, 0, 0, 0);
-              return activeCards.filter((card) => card.createdAt >= today);
+              return activeCards.filter((card) => {
+                // Handle string dates from JSON deserialization
+                const createdAt = card.createdAt instanceof Date
+                  ? card.createdAt
+                  : new Date(card.createdAt);
+                return createdAt >= today;
+              });
             }
 
             case 'saved-leads':
@@ -328,6 +334,23 @@ export const useCardStore = create<CardStore>()(
             (card.type === 'decision' && card.status !== 'expired')
           ),
         }),
+        // Convert date strings back to Date objects on rehydration
+        onRehydrateStorage: () => (state) => {
+          if (state && state.cards) {
+            state.cards = state.cards.map(card => ({
+              ...card,
+              createdAt: card.createdAt instanceof Date
+                ? card.createdAt
+                : new Date(card.createdAt),
+              expiresAt: card.expiresAt
+                ? (card.expiresAt instanceof Date
+                    ? card.expiresAt
+                    : new Date(card.expiresAt))
+                : null,
+            }));
+            console.log('[CardStore] Rehydrated', state.cards.length, 'cards from storage');
+          }
+        },
       }
     ),
     { name: 'CardStore' }

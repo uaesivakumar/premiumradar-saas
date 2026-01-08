@@ -181,7 +181,11 @@ export const useDemoModeStore = create<DemoModeStore>((set, get) => ({
   getRemainingTime: () => {
     const { state } = get();
     if (!state) return Infinity;
-    const remaining = state.expiresAt.getTime() - Date.now();
+    // Handle string from JSON deserialization
+    const expiresAt = state.expiresAt instanceof Date
+      ? state.expiresAt
+      : new Date(state.expiresAt);
+    const remaining = expiresAt.getTime() - Date.now();
     return Math.max(0, Math.floor(remaining / 1000 / 60)); // Minutes
   },
 
