@@ -89,7 +89,7 @@ const INTENT_PATTERNS: Array<{
     intent: 'recall',
     patterns: [
       /^remember\s+(.+)/i,
-      /^what\s+did\s+(I|we)\s+decide\s+about\s+(.+)/i,
+      /^what\s+did\s+(?:I|we)\s+decide\s+about\s+(.+)/i,
       /^history\s+(.+)/i,
       /^previous\s+(.+)/i,
     ],

@@ -122,19 +122,25 @@ const PREFERENCE_PATTERNS: PreferencePattern[] = [
   // Timing - Working hours
   {
     patterns: [
-      /\bworking\s+hours?\s+(?:are\s+)?(\d{1,2})(?::?\d{2})?\s*(?:am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::?\d{2})?\s*(?:am|pm)?/i,
-      /\bi\s+work\s+(?:from\s+)?(\d{1,2})(?::?\d{2})?\s*(?:am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::?\d{2})?\s*(?:am|pm)?/i,
+      /\bworking\s+hours?\s+(?:are\s+)?(\d{1,2})(?::?\d{2})?\s*(am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::?\d{2})?\s*(am|pm)?/i,
+      /\bi\s+work\s+(?:from\s+)?(\d{1,2})(?::?\d{2})?\s*(am|pm)?\s*(?:to|-)\s*(\d{1,2})(?::?\d{2})?\s*(am|pm)?/i,
     ],
     category: 'timing',
     key: 'working_hours',
-    extractor: (match, text) => {
+    extractor: (match) => {
       let start = parseInt(match[1], 10);
-      let end = parseInt(match[2], 10);
-      // Convert to 24h if PM mentioned
-      if (/pm/i.test(text)) {
-        if (start < 12) start += 12;
-        if (end < 12) end += 12;
-      }
+      const startPeriod = match[2]?.toLowerCase();
+      let end = parseInt(match[3], 10);
+      const endPeriod = match[4]?.toLowerCase();
+
+      // Convert to 24h based on AM/PM per-hour
+      // If PM and hour < 12, add 12
+      // If AM and hour == 12, set to 0
+      if (startPeriod === 'pm' && start < 12) start += 12;
+      if (startPeriod === 'am' && start === 12) start = 0;
+      if (endPeriod === 'pm' && end < 12) end += 12;
+      if (endPeriod === 'am' && end === 12) end = 0;
+
       return { start, end };
     },
     confidence: 80,
