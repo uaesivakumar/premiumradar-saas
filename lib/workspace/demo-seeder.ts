@@ -21,7 +21,8 @@ export type DemoScenario =
   | 'fresh'           // Fresh workspace, just starting
   | 'active_pipeline' // Active pipeline with saved leads
   | 'recall_demo'     // Demo showing decision recall
-  | 'silent_day';     // No signals today (silence state)
+  | 'silent_day'      // No signals today (silence state)
+  | 'first_run';      // S380: First login seed signals
 
 // =============================================================================
 // DEMO COMPANIES
@@ -87,6 +88,55 @@ const DEMO_COMPANIES = {
     },
   ],
 };
+
+// =============================================================================
+// FIRST-RUN SEED SIGNALS (S380)
+// =============================================================================
+// These are NOT fake results. They are initial radar sweep signals
+// with low confidence, clearly marked, and replaceable by real signals.
+
+const FIRST_RUN_SEEDS = [
+  {
+    name: 'Acme Holdings DMCC',
+    id: 'seed-acme-001',
+    signal: 'Detected recent company registration',
+    score: 35, // Low confidence
+    reason: 'Initial radar sweep — newly incorporated entity detected',
+    marker: '🔍 Initial sweep',
+  },
+  {
+    name: 'BlueSky Trading LLC',
+    id: 'seed-bluesky-002',
+    signal: 'Activity pattern indicates growth',
+    score: 42,
+    reason: 'Initial radar sweep — preliminary growth indicators',
+    marker: '🔍 Initial sweep',
+  },
+  {
+    name: 'Global Ventures FZ',
+    id: 'seed-global-003',
+    signal: 'New market presence detected',
+    score: 38,
+    reason: 'Initial radar sweep — market entry signals detected',
+    marker: '🔍 Initial sweep',
+  },
+  {
+    name: 'Summit Industries',
+    id: 'seed-summit-004',
+    signal: 'Workforce activity change',
+    score: 45,
+    reason: 'Initial radar sweep — workforce pattern suggests expansion',
+    marker: '🔍 Initial sweep',
+  },
+  {
+    name: 'Horizon Group',
+    id: 'seed-horizon-005',
+    signal: 'Business profile update detected',
+    score: 32,
+    reason: 'Initial radar sweep — profile changes may indicate needs',
+    marker: '🔍 Initial sweep',
+  },
+];
 
 // =============================================================================
 // CARD GENERATORS
@@ -214,6 +264,45 @@ function createDemoRecallCards(): Omit<Card, 'id' | 'createdAt' | 'status'>[] {
   }));
 }
 
+/**
+ * S380: Create first-run seed signal cards
+ *
+ * These are NOT fake results. They represent initial radar sweep signals
+ * with LOW confidence, clearly marked, and replaceable by real signals.
+ *
+ * Purpose:
+ * - Prevents empty workspace on first login
+ * - Shows radar is working (building trust)
+ * - Low confidence = honest about uncertainty
+ * - Replaceable = real signals overwrite these
+ */
+function createFirstRunSeedCards(): Omit<Card, 'id' | 'createdAt' | 'status'>[] {
+  // Only take 3-5 seeds (per S380 spec)
+  return FIRST_RUN_SEEDS.slice(0, 5).map((seed, index) => ({
+    type: 'signal' as const,
+    priority: 200 - index * 10, // Lower priority than real signals
+    title: seed.name,
+    summary: `${seed.marker}: ${seed.signal}`,
+    expandedContent: {
+      score: seed.score,
+      reasoning: seed.reason,
+      isSeedSignal: true, // Marker for replacement logic
+      confidenceLabel: 'Low Confidence',
+    },
+    expiresAt: getExpiryTime('signal'),
+    sourceType: 'signal' as const,
+    entityId: seed.id,
+    entityName: seed.name,
+    entityType: 'company' as const,
+    reasoning: [seed.reason],
+    actions: [
+      { id: 'investigate', label: 'Investigate', type: 'secondary' as const, handler: 'signal.evaluate' },
+      { id: 'dismiss', label: 'Dismiss', type: 'dismiss' as const, handler: 'signal.dismiss' },
+    ] as CardAction[],
+    tags: ['signal', 'seed', 'low-confidence', `score-${seed.score}`],
+  }));
+}
+
 // =============================================================================
 // SEEDER FUNCTIONS
 // =============================================================================
@@ -253,6 +342,12 @@ export function seedDemoData(scenario: DemoScenario): void {
       // Silent day: No cards (system shows "No new signals")
       // Just clear - no cards added
       break;
+
+    case 'first_run':
+      // S380: First login - low-confidence seed signals
+      // NOT fake, just preliminary radar sweep results
+      createFirstRunSeedCards().forEach((card) => store.addCard(card));
+      break;
   }
 
   console.log(`[DemoSeeder] Seeded ${store.cards.length} cards`);
@@ -283,6 +378,11 @@ export function getDemoScenarios(): { key: DemoScenario; label: string; descript
       label: 'Silent Day',
       description: 'No new signals (shows silence state)',
     },
+    {
+      key: 'first_run',
+      label: 'First Run',
+      description: 'Initial radar sweep (low-confidence seeds)',
+    },
   ];
 }
 
@@ -300,4 +400,50 @@ export function isDemoSeeded(): boolean {
 export function clearDemoData(): void {
   useCardStore.getState().clear();
   console.log('[DemoSeeder] Demo data cleared');
+}
+
+/**
+ * S380: Check if workspace has only seed signals (first-run state)
+ */
+export function hasOnlySeedSignals(): boolean {
+  const cards = useCardStore.getState().cards;
+  if (cards.length === 0) return false;
+
+  // Check if ALL cards are seed signals
+  return cards.every((card) => card.entityId?.startsWith('seed-'));
+}
+
+/**
+ * S380: Clear seed signals (called when real signals arrive)
+ *
+ * Real signals should replace seed signals automatically.
+ * This function removes all seed-* entity cards.
+ */
+export function clearSeedSignals(): void {
+  const store = useCardStore.getState();
+  const seedCards = store.cards.filter((card) => card.entityId?.startsWith('seed-'));
+
+  seedCards.forEach((card) => {
+    store.removeCard(card.id);
+  });
+
+  console.log(`[DemoSeeder] Cleared ${seedCards.length} seed signals (replaced by real signals)`);
+}
+
+/**
+ * S380: Seed first-run signals if workspace is empty
+ *
+ * Called on workspace mount. Seeds low-confidence signals
+ * if no cards exist. These get replaced by real signals.
+ */
+export function seedFirstRunIfEmpty(): boolean {
+  const cards = useCardStore.getState().cards;
+
+  if (cards.length === 0) {
+    seedDemoData('first_run');
+    console.log('[DemoSeeder] First-run seed signals injected');
+    return true;
+  }
+
+  return false;
 }

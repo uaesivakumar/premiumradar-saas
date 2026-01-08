@@ -25,6 +25,12 @@ import {
   createPreferenceParseFailedCard,
 } from './preference-validator';
 import { usePreferenceStore } from './preference-store';
+import {
+  useDiscoveryContextStore,
+  buildSIVAContext,
+  getLoaderText,
+  WorkspaceContext,
+} from './discovery-context';
 
 // =============================================================================
 // TYPES
@@ -36,6 +42,7 @@ export type CommandIntent =
   | 'recall'
   | 'preference'
   | 'nba_request'
+  | 'system_status_query'  // S380: Meta questions about workspace state
   | 'help'
   | 'unknown';
 
@@ -123,6 +130,24 @@ const INTENT_PATTERNS: Array<{
       /^suggest\s+something/i,
     ],
     priority: 95,
+  },
+  // S380: System status query - HIGH PRIORITY, must bypass fallback
+  {
+    intent: 'system_status_query',
+    patterns: [
+      /^what('s|\s+is)\s+(happening|going\s+on)/i,
+      /^what\s+happened/i,
+      /^are\s+you\s+stuck/i,
+      /^where\s+are\s+(my\s+)?results/i,
+      /^why\s+(no|aren't\s+there\s+any)\s+results/i,
+      /^why\s+no\s+results\s+yet/i,
+      /^status/i,
+      /^is\s+(it|discovery)\s+(working|running)/i,
+      /^how\s+long\s+(will|has)\s+(this|it)/i,
+      /^what('s|\s+is)\s+the\s+status/i,
+      /^anything\s+(yet|new)/i,
+    ],
+    priority: 110, // Higher than all others to catch meta questions
   },
   {
     intent: 'help',
@@ -221,11 +246,16 @@ export async function resolveCommand(input: string): Promise<ResolveResult> {
       case 'nba_request':
         return await handleNBARequest(resolution);
 
+      // S380: System status query - context-aware response
+      case 'system_status_query':
+        return handleSystemStatusQuery(resolution);
+
       case 'help':
         return handleHelp();
 
       default:
-        return handleUnknown(resolution);
+        // S380: Check context before showing "I didn't understand"
+        return handleUnknownWithContext(resolution);
     }
   } catch (error) {
     console.error('[CommandResolver] Error:', error);
@@ -404,23 +434,218 @@ function handleHelp(): ResolveResult {
   };
 }
 
-function handleUnknown(resolution: CommandResolution): ResolveResult {
+// =============================================================================
+// S380: SYSTEM STATUS QUERY HANDLER
+// =============================================================================
+
+/**
+ * Handle meta questions about workspace state
+ * CRITICAL: Must respond with context, NEVER with "I didn't understand"
+ */
+function handleSystemStatusQuery(resolution: CommandResolution): ResolveResult {
+  const context = buildSIVAContext();
+
+  // Discovery is actively running
+  if (context.activeDiscovery) {
+    return createDiscoveryStatusCard(context);
+  }
+
+  // Discovery recently completed
+  if (context.discoveryStatus === 'complete' && context.cardCount > 0) {
+    return createCompletionStatusCard(context);
+  }
+
+  // Has cards but no active discovery
+  if (context.cardCount > 0) {
+    return createIdleWithCardsCard(context);
+  }
+
+  // No context - provide helpful guidance
+  return createNoContextCard(context);
+}
+
+/**
+ * Create card explaining active discovery status
+ */
+function createDiscoveryStatusCard(context: WorkspaceContext): ResolveResult {
+  const loaderText = getLoaderText(context.progressPhase);
+
+  const statusMessages: Record<string, string> = {
+    starting: 'Discovery is starting up.',
+    searching: `${loaderText}`,
+    filtering: `${loaderText}`,
+    scoring: 'Scoring leads for relevance.',
+    shortlisting: 'Creating your shortlist.',
+    complete: 'Discovery is complete.',
+    error: 'Discovery encountered an issue.',
+  };
+
+  const summary = statusMessages[context.discoveryStatus] || 'Discovery is in progress.';
+
+  const details = [
+    context.elapsedTime ? `Elapsed: ${context.elapsedTime}` : null,
+    `Region: ${context.region}`,
+    context.expectedNext === 'signal_cards'
+      ? 'Early signals usually appear within a few minutes.'
+      : null,
+  ].filter(Boolean).join(' • ');
+
+  return {
+    success: true,
+    cards: [
+      {
+        type: 'system',
+        priority: 150, // Higher than default system cards
+        title: 'Discovery in Progress',
+        summary: `${summary} ${details}`,
+        expiresAt: getExpiryTime('system'),
+        sourceType: 'system',
+        reasoning: [
+          `I'm scanning ${context.region} for ${context.subVertical} opportunities.`,
+          'Deeper validation may take longer.',
+          'Results will appear as signal cards.',
+        ],
+        actions: [
+          { id: 'dismiss', label: 'Got it', type: 'dismiss', handler: 'system.dismiss' },
+        ],
+        tags: ['discovery-status', 'system-status'],
+      },
+    ],
+  };
+}
+
+/**
+ * Create card for completed discovery
+ */
+function createCompletionStatusCard(context: WorkspaceContext): ResolveResult {
+  const hasNBAText = context.hasNBA
+    ? 'I\'ve identified a top recommendation for you.'
+    : '';
+
+  return {
+    success: true,
+    cards: [
+      {
+        type: 'system',
+        priority: 120,
+        title: 'Discovery Complete',
+        summary: `Found ${context.cardCount} result${context.cardCount !== 1 ? 's' : ''}. ${hasNBAText}`,
+        expiresAt: getExpiryTime('system'),
+        sourceType: 'system',
+        reasoning: [
+          `Discovery completed for ${context.subVertical} in ${context.region}.`,
+          context.cardsPresent.includes('signal') ? 'Signal cards are ready for review.' : null,
+          context.hasNBA ? 'Check the top card for your next best action.' : null,
+        ].filter(Boolean) as string[],
+        actions: [
+          { id: 'dismiss', label: 'Got it', type: 'dismiss', handler: 'system.dismiss' },
+        ],
+        tags: ['discovery-complete', 'system-status'],
+      },
+    ],
+  };
+}
+
+/**
+ * Create card when cards exist but no active discovery
+ */
+function createIdleWithCardsCard(context: WorkspaceContext): ResolveResult {
+  const cardTypes = context.cardsPresent.join(', ');
+
   return {
     success: true,
     cards: [
       {
         type: 'system',
         priority: 100,
-        title: "I didn't quite understand",
-        summary: `Try: "Check [company name]" or "Find leads in [region]"`,
+        title: 'Workspace Status',
+        summary: `You have ${context.cardCount} active card${context.cardCount !== 1 ? 's' : ''} (${cardTypes}).`,
         expiresAt: getExpiryTime('system'),
         sourceType: 'system',
+        reasoning: [
+          'No discovery is currently running.',
+          context.hasNBA ? 'A recommended action is available.' : null,
+          'Try "Find expanding companies" to start a new search.',
+        ].filter(Boolean) as string[],
         actions: [
-          { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
+          { id: 'dismiss', label: 'Got it', type: 'dismiss', handler: 'system.dismiss' },
         ],
+        tags: ['workspace-status', 'system-status'],
       },
     ],
   };
+}
+
+/**
+ * Create card when no context exists
+ */
+function createNoContextCard(context: WorkspaceContext): ResolveResult {
+  return {
+    success: true,
+    cards: [
+      {
+        type: 'system',
+        priority: 100,
+        title: 'Ready to Start',
+        summary: `No active discovery. Try "Find companies hiring in ${context.region}" to begin.`,
+        expiresAt: getExpiryTime('system'),
+        sourceType: 'system',
+        reasoning: [
+          `Workspace is set to ${context.subVertical} in ${context.region}.`,
+          'Start a discovery to find leads.',
+        ],
+        actions: [
+          { id: 'dismiss', label: 'Got it', type: 'dismiss', handler: 'system.dismiss' },
+        ],
+        tags: ['no-context', 'system-status'],
+      },
+    ],
+  };
+}
+
+// =============================================================================
+// S380: CONTEXT-AWARE UNKNOWN HANDLER
+// =============================================================================
+
+/**
+ * Handle unknown intent WITH context awareness
+ * RULE: If context exists, explain state - DON'T show "I didn't understand"
+ */
+function handleUnknownWithContext(resolution: CommandResolution): ResolveResult {
+  const context = buildSIVAContext();
+
+  // If ANY context exists, explain instead of showing error
+  if (context.activeDiscovery || context.cardCount > 0 || context.jobId) {
+    return handleSystemStatusQuery(resolution);
+  }
+
+  // No context - show gentle guidance (not error)
+  return {
+    success: true,
+    cards: [
+      {
+        type: 'system',
+        priority: 100,
+        title: 'How Can I Help?',
+        summary: `Try: "Check [company name]" or "Find leads in ${context.region}"`,
+        expiresAt: getExpiryTime('system'),
+        sourceType: 'system',
+        reasoning: [
+          'I can help you discover leads, check companies, or recall past decisions.',
+          `Your workspace is set to ${context.subVertical} in ${context.region}.`,
+        ],
+        actions: [
+          { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
+        ],
+        tags: ['guidance', 'no-match'],
+      },
+    ],
+  };
+}
+
+// DEPRECATED: Use handleUnknownWithContext instead
+function handleUnknown(resolution: CommandResolution): ResolveResult {
+  return handleUnknownWithContext(resolution);
 }
 
 // =============================================================================
