@@ -531,10 +531,12 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
   const locationConstraints = parseLocationConstraints(query);
 
   // S381: Start discovery loader animation
+  // S382: Pass query for inline display (like ChatGPT)
   useDiscoveryContextStore.getState().startDiscovery({
     vertical: context.vertical,
     subVertical: context.subVertical,
     region: context.region,
+    query: query,
   });
 
   // S381: Minimum loader display time (2 seconds) to ensure user sees progress

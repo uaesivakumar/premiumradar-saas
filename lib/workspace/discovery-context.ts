@@ -51,6 +51,9 @@ export interface WorkspaceContext {
   subVertical: string;
   region: string;
 
+  // S382: User query for inline display (like ChatGPT)
+  lastQuery: string | null;
+
   // Job tracking (for long-running operations)
   jobId: string | null;
   jobStatus: 'pending' | 'running' | 'complete' | 'failed' | null;
@@ -74,7 +77,7 @@ export const DISCOVERY_LOADER_STATES = [
 
 interface DiscoveryContextStore extends WorkspaceContext {
   // Actions
-  startDiscovery: (params?: { vertical?: string; subVertical?: string; region?: string }) => void;
+  startDiscovery: (params?: { vertical?: string; subVertical?: string; region?: string; query?: string }) => void;
   updateStatus: (status: DiscoveryStatus) => void;
   advancePhase: () => void;
   completeDiscovery: () => void;
@@ -86,6 +89,7 @@ interface DiscoveryContextStore extends WorkspaceContext {
   // Context setters
   setUserContext: (vertical: string, subVertical: string, region: string) => void;
   setJobId: (jobId: string | null, status?: 'pending' | 'running' | 'complete' | 'failed') => void;
+  setLastQuery: (query: string | null) => void;
 
   // Utilities
   getContext: () => WorkspaceContext;
@@ -106,6 +110,7 @@ const initialState: WorkspaceContext = {
   vertical: 'Banking',
   subVertical: 'Employee Banking',
   region: 'All UAE',
+  lastQuery: null,
   jobId: null,
   jobStatus: null,
 };
@@ -125,9 +130,10 @@ export const useDiscoveryContextStore = create<DiscoveryContextStore>()(
           ...(params?.vertical && { vertical: params.vertical }),
           ...(params?.subVertical && { subVertical: params.subVertical }),
           ...(params?.region && { region: params.region }),
+          ...(params?.query && { lastQuery: params.query }),
         });
 
-        console.log('[DiscoveryContext] Discovery started');
+        console.log('[DiscoveryContext] Discovery started', params?.query ? `for: "${params.query}"` : '');
       },
 
       updateStatus: (status) => {
@@ -224,6 +230,10 @@ export const useDiscoveryContextStore = create<DiscoveryContextStore>()(
         });
       },
 
+      setLastQuery: (query) => {
+        set({ lastQuery: query });
+      },
+
       getContext: () => {
         const state = get();
         return {
@@ -239,6 +249,7 @@ export const useDiscoveryContextStore = create<DiscoveryContextStore>()(
           vertical: state.vertical,
           subVertical: state.subVertical,
           region: state.region,
+          lastQuery: state.lastQuery,
           jobId: state.jobId,
           jobStatus: state.jobStatus,
         };

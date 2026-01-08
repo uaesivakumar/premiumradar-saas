@@ -29,6 +29,22 @@ import { CommandPalette } from './CommandPalette';
 import { DiscoveryLoader } from './DiscoveryLoader';
 import { useDiscoveryContextStore, selectIsDiscoveryActive } from '@/lib/workspace/discovery-context';
 
+/**
+ * S382: Inline query display (like ChatGPT)
+ * Shows user's query above results, not as a card
+ */
+function QueryDisplay({ query }: { query: string | null }) {
+  if (!query) return null;
+
+  return (
+    <div className="flex justify-end mb-4">
+      <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-md bg-blue-600 text-white text-sm">
+        {query}
+      </div>
+    </div>
+  );
+}
+
 export function WorkspaceSurface() {
   const cards = useCardStore((state) => state.getActiveCards());
   const actOnCard = useCardStore((state) => state.actOnCard);
@@ -39,6 +55,8 @@ export function WorkspaceSurface() {
 
   // S381: Discovery loader state
   const isDiscoveryActive = useDiscoveryContextStore(selectIsDiscoveryActive);
+  // S382: User's query for inline display
+  const lastQuery = useDiscoveryContextStore((state) => state.lastQuery);
 
   // S374: NBA lifecycle management
   const { nba, handleAction: handleNBAAction, getContext } = useWorkspaceNBA({
@@ -140,6 +158,9 @@ export function WorkspaceSurface() {
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-8 lg:px-16 py-6">
         <div className="max-w-4xl mx-auto">
+          {/* S382: Show user's query inline (like ChatGPT) */}
+          {lastQuery && <QueryDisplay query={lastQuery} />}
+
           <AnimatePresence mode="popLayout">
             {isDiscoveryActive ? (
               <DiscoveryLoader
