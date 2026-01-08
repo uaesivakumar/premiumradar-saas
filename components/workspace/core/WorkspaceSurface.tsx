@@ -109,7 +109,8 @@ export function WorkspaceSurface() {
   }, [cards, nba, getContext]);
 
   const hasCards = cards.length > 0;
-  const systemState = isDiscoveryActive ? 'discovering' : (hasCards ? (nba ? 'live' : 'waiting') : 'no-signals');
+  // S382: Show "Live" when cards exist (not just when NBA exists)
+  const systemState = isDiscoveryActive ? 'discovering' : (hasCards ? 'live' : 'no-signals');
 
   return (
     <div className="absolute inset-0 flex flex-col bg-slate-950">
