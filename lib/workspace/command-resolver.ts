@@ -299,25 +299,101 @@ async function handleCheckCompany(resolution: CommandResolution): Promise<Resolv
 
 async function handleFindLeads(resolution: CommandResolution): Promise<ResolveResult> {
   const query = resolution.entityName || resolution.query;
+  const context = buildSIVAContext();
 
-  // TODO: S374 - Call OS discovery API
-  return {
-    success: true,
-    cards: [
-      {
-        type: 'signal',
-        priority: 600,
-        title: `Searching: ${query}`,
-        summary: 'Discovery in progress. Results will appear as signal cards.',
-        expiresAt: getExpiryTime('signal'),
-        sourceType: 'signal',
-        actions: [
-          { id: 'cancel', label: 'Cancel', type: 'dismiss', handler: 'signal.cancel' },
+  // S380: Call OS discovery API
+  try {
+    const response = await fetch('/api/os/discovery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenant_id: 'workspace',
+        vertical_id: context.vertical?.toLowerCase() || 'banking',
+        sub_vertical_id: context.subVertical?.toLowerCase().replace(/\s+/g, '_') || 'employee_banking',
+        region_code: context.region || 'UAE',
+        query: query,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Discovery failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.success || !result.data?.companies?.length) {
+      return {
+        success: true,
+        cards: [
+          {
+            type: 'system',
+            priority: 500,
+            title: 'No Matches Found',
+            summary: `No companies found for "${query}". Try a different search term.`,
+            expiresAt: getExpiryTime('system'),
+            sourceType: 'system',
+            actions: [
+              { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
+            ],
+            tags: ['discovery', 'no-results'],
+          },
         ],
-        tags: ['discovery', 'pending'],
+      };
+    }
+
+    // Convert OS companies to signal cards
+    const signalCards = result.data.companies.slice(0, 10).map((company: any, index: number) => ({
+      type: 'signal' as const,
+      priority: 800 - index * 20,
+      title: company.name,
+      summary: company.signals?.[0]?.title || 'Potential opportunity detected',
+      expandedContent: {
+        score: company.sivaScores?.overall || company.confidenceScore * 100,
+        reasoning: company.sivaScores?.reasoning?.join(' ') || 'Signal detected via live discovery',
+        tier: company.sivaScores?.tier || 'WARM',
+        products: company.sivaScores?.recommendedProducts || [],
+        location: company.location || company.city,
+        industry: company.industry,
       },
-    ],
-  };
+      expiresAt: getExpiryTime('signal'),
+      sourceType: 'signal' as const,
+      entityId: company.id,
+      entityName: company.name,
+      entityType: 'company' as const,
+      reasoning: company.sivaScores?.reasoning || ['Live discovery signal'],
+      actions: [
+        { id: 'evaluate', label: 'Evaluate', type: 'primary' as const, handler: 'signal.evaluate' },
+        { id: 'save', label: 'Save', type: 'secondary' as const, handler: 'signal.save' },
+        { id: 'dismiss', label: 'Skip', type: 'dismiss' as const, handler: 'signal.dismiss' },
+      ],
+      tags: ['signal', 'discovery', `tier-${company.sivaScores?.tier?.toLowerCase() || 'warm'}`],
+    }));
+
+    return {
+      success: true,
+      cards: signalCards,
+    };
+  } catch (error) {
+    console.error('[CommandResolver] Discovery error:', error);
+    return {
+      success: true,
+      cards: [
+        {
+          type: 'system',
+          priority: 500,
+          title: 'Discovery Failed',
+          summary: 'Unable to search at this time. Please try again.',
+          expiresAt: getExpiryTime('system'),
+          sourceType: 'system',
+          actions: [
+            { id: 'retry', label: 'Try Again', type: 'primary', handler: 'system.retry' },
+            { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
+          ],
+          tags: ['discovery', 'error'],
+        },
+      ],
+    };
+  }
 }
 
 async function handleRecall(resolution: CommandResolution): Promise<ResolveResult> {
