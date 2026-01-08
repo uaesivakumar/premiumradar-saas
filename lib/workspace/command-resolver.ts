@@ -331,11 +331,16 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
     region: context.region,
   });
 
+  // S381: Minimum loader display time (2 seconds) to ensure user sees progress
+  const loaderStartTime = Date.now();
+  const MIN_LOADER_TIME_MS = 2000;
+
   // S380: Call OS discovery API
   try {
     const response = await fetch('/api/os/discovery', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // S381: Required for session cookie
       body: JSON.stringify({
         tenant_id: 'workspace',
         vertical_id: context.vertical?.toLowerCase() || 'banking',
@@ -352,6 +357,11 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
     const result = await response.json();
 
     if (!result.success || !result.data?.companies?.length) {
+      // S381: Wait for minimum loader time before completing
+      const elapsed = Date.now() - loaderStartTime;
+      if (elapsed < MIN_LOADER_TIME_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_LOADER_TIME_MS - elapsed));
+      }
       // S381: Complete discovery (no results)
       useDiscoveryContextStore.getState().completeDiscovery();
       return {
@@ -401,6 +411,11 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
       tags: ['signal', 'discovery', `tier-${company.sivaScores?.tier?.toLowerCase() || 'warm'}`],
     }));
 
+    // S381: Wait for minimum loader time before completing
+    const elapsed = Date.now() - loaderStartTime;
+    if (elapsed < MIN_LOADER_TIME_MS) {
+      await new Promise(resolve => setTimeout(resolve, MIN_LOADER_TIME_MS - elapsed));
+    }
     // S381: Complete discovery (success)
     useDiscoveryContextStore.getState().completeDiscovery();
 
@@ -410,6 +425,11 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
     };
   } catch (error) {
     console.error('[CommandResolver] Discovery error:', error);
+    // S381: Wait for minimum loader time before failing
+    const elapsed = Date.now() - loaderStartTime;
+    if (elapsed < MIN_LOADER_TIME_MS) {
+      await new Promise(resolve => setTimeout(resolve, MIN_LOADER_TIME_MS - elapsed));
+    }
     // S381: Fail discovery on error
     useDiscoveryContextStore.getState().failDiscovery(error instanceof Error ? error.message : 'Unknown error');
     return {
