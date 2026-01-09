@@ -96,79 +96,60 @@ export async function POST(request: NextRequest) {
 /**
  * Transform Discovery V2 response to frontend-compatible format
  *
- * V2 Response:
- * {
- *   data: {
- *     discovery: { candidates, ranked, actions },
- *     uxTruth: { headline, explanation, isEmpty }
- *   }
- * }
- *
- * Frontend expects:
+ * OS Discovery V2 already returns data in the correct format:
  * {
  *   success: true,
  *   data: {
- *     companies: [{ id, name, signals, sivaScores, ... }]
+ *     companies: [...],
+ *     companyCount: N,
+ *     discovery: { ... },
+ *     uxTruth: { headline, explanation, ... },
+ *     trace: { ... }
  *   }
  * }
+ *
+ * This function just passes through, with minor normalization if needed.
  */
 function transformDiscoveryV2Response(result: any): any {
   if (!result.success) {
     return result;
   }
 
-  const discovery = result.data?.discovery || result.data?.data?.discovery || {};
-  const uxTruth = result.data?.uxTruth || result.data?.data?.uxTruth || {};
-  const ranked = discovery.ranked || [];
-  const actions = discovery.actions || {};
+  // OS already returns companies in the correct format
+  const companies = result.data?.companies || [];
+  const uxTruth = result.data?.uxTruth || {};
 
-  // Transform ranked candidates to companies array
-  const companies = ranked.map((candidate: any, index: number) => {
-    const action = actions[candidate.id] || actions[candidate.name] || {};
+  // If companies exist, pass through as-is (OS formats them correctly)
+  if (companies.length > 0) {
     return {
-      id: candidate.id || `discovery-${index}`,
-      name: candidate.name || candidate.company_name || 'Unknown Company',
-      location: candidate.location || candidate.city || '',
-      city: candidate.city || '',
-      industry: candidate.industry || '',
-      confidenceScore: candidate.frs || candidate.confidence || 0.5,
-      signals: (candidate.signals || []).map((sig: any) => ({
-        type: sig.type || sig.signal_type || 'unknown',
-        title: sig.title || sig.evidence || sig.type || 'Signal detected',
-        evidence: sig.evidence || '',
-        source: sig.source || 'discovery',
-        date: sig.date || new Date().toISOString(),
-      })),
-      sivaScores: {
-        overall: Math.round((candidate.frs || 0.5) * 100),
-        tier: candidate.frs >= 0.75 ? 'HOT' : candidate.frs >= 0.5 ? 'WARM' : 'COOL',
-        reasoning: candidate.ranking_reasons || action.reasons || ['Live discovery signal'],
-        recommendedProducts: [],
+      success: true,
+      data: {
+        companies,
+        total: companies.length,
+        uxTruth: {
+          headline: uxTruth.headline || `Found ${companies.length} companies`,
+          explanation: uxTruth.explanation || '',
+          isEmpty: false,
+        },
+        discovery: result.data?.discovery,
+        trace: result.data?.trace,
       },
-      action: {
-        type: action.type || 'research_now',
-        reasons: action.reasons || [],
-      },
-      // V2 specific fields
-      efs: candidate.efs,
-      sds: candidate.sds,
-      pfs: candidate.pfs,
-      frs: candidate.frs,
     };
-  });
+  }
 
+  // No companies found
   return {
     success: true,
     data: {
-      companies,
-      total: companies.length,
+      companies: [],
+      total: 0,
       uxTruth: {
-        headline: uxTruth.headline || (companies.length > 0 ? `Found ${companies.length} companies` : 'No companies found'),
-        explanation: uxTruth.explanation || '',
-        isEmpty: companies.length === 0,
+        headline: uxTruth.headline || 'No companies found',
+        explanation: uxTruth.explanation || 'Try a different search term.',
+        isEmpty: true,
       },
-      // Pass through trace for debugging
-      trace: result.data?.trace || result.data?.data?.trace,
+      discovery: result.data?.discovery,
+      trace: result.data?.trace,
     },
   };
 }
