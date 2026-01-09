@@ -50,6 +50,25 @@ interface DiscoveryRequest {
   config?: Record<string, unknown>;
 }
 
+/**
+ * Discovery V2 Request - S383-S388 Evidence-Bound Discovery
+ * Uses sales_context for persona resolution
+ */
+interface DiscoveryV2Request {
+  query: string;
+  sales_context: {
+    vertical: string;
+    sub_vertical: string;
+    region: string;
+  };
+  options?: {
+    maxResults?: number;
+    strictMode?: boolean;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  user_preferences?: any;
+}
+
 interface EnrichRequest {
   tenant_id: string;
   entity_ids: string[];
@@ -427,6 +446,63 @@ class OSClient {
         vertical: request.vertical_id,
         fallback: true,
         message: 'Discovery temporarily unavailable - please try again later',
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Discovery V2 - S383-S388 Evidence-Bound Discovery Engine
+   *
+   * 11-Layer Pipeline:
+   * 1. SalesContext → 2. QueryUnderstanding → 3. FanOut → 4. Retrieval
+   * 5. Extraction → 6. Validation → 7. Novelty → 8. SIVA Scoring
+   * 9. Ranking (EFS+SDS+PFS→FRS) → 10. Actions → 11. UX Truth
+   *
+   * VS6: Protected by circuit breaker with retry and fallback
+   */
+  async discoveryV2(request: DiscoveryV2Request): Promise<OSResponse> {
+    // VS6: Execute with circuit breaker + retry + fallback
+    return this.circuitBreakers.discovery.execute(
+      async () => {
+        return retryWithBackoff(
+          async () => {
+            const response = await this.client.post('/discovery-v2', request, {
+              headers: this.getContextHeaders(),
+            });
+            return response.data;
+          },
+          { maxRetries: 2, shouldRetry: isRetryableError }
+        );
+      },
+      // Fallback: Return empty discovery response
+      () => this.getFallbackDiscoveryV2Response(request)
+    );
+  }
+
+  /**
+   * VS6: Fallback discovery V2 response when OS is unavailable
+   */
+  private getFallbackDiscoveryV2Response(request: DiscoveryV2Request): OSResponse {
+    console.warn('[OS Client] Using fallback discovery V2 response - OS unavailable');
+    return {
+      success: true,
+      data: {
+        discovery: {
+          candidates: [],
+          ranked: [],
+          actions: {},
+        },
+        uxTruth: {
+          headline: 'Discovery temporarily unavailable',
+          explanation: 'Please try again later',
+          isEmpty: true,
+        },
+        trace: {
+          query: request.query,
+          region: request.sales_context.region,
+          fallback: true,
+        },
       },
       timestamp: new Date().toISOString(),
     };
@@ -834,6 +910,7 @@ export function createOSClient(config: OSClientConfig): OSClient {
 export type {
   OSClientConfig,
   DiscoveryRequest,
+  DiscoveryV2Request,
   EnrichRequest,
   ScoreRequest,
   RankRequest,
