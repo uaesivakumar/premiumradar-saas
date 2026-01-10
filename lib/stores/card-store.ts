@@ -395,12 +395,14 @@ export const useCardStore = create<CardStore>()(
       }),
       {
         name: 'card-store',
-        // S390: Persist active, evaluating, saved, and decision cards
+        // S390: Persist active, evaluating, saved, dismissed cards
+        // CRITICAL: Dismissed cards MUST persist so "Skipped" filter works
         partialize: (state) => ({
           cards: state.cards.filter(card =>
             card.status === 'active' ||
             card.status === 'evaluating' ||
             card.status === 'saved' ||
+            card.status === 'dismissed' ||
             (card.type === 'decision' && card.status !== 'expired')
           ),
         }),

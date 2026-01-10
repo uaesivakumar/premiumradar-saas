@@ -51,12 +51,20 @@ function QueryDisplay({ query }: { query: string | null }) {
 const filterToCardStatus: Record<string, string> = {
   saved: 'saved',
   actioned: 'evaluating',
-  ignored: 'dismissed',
+  ignored: 'dismissed',  // "Skipped" in UI
   unactioned: 'active',
 };
 
+// S390: Get ALL cards including dismissed (for filtering)
+// Normal display excludes dismissed, but filter view needs them
+function getAllCards(): ReturnType<typeof useCardStore.getState>['cards'] {
+  return useCardStore.getState().cards;
+}
+
 export function WorkspaceSurface() {
-  const allCards = useCardStore((state) => state.getActiveCards());
+  const activeCards = useCardStore((state) => state.getActiveCards());
+  // S390: Get ALL cards including dismissed for filtering
+  const rawCards = useCardStore((state) => state.cards);
   const actOnCard = useCardStore((state) => state.actOnCard);
   const dismissCard = useCardStore((state) => state.dismissCard);
   const { subVerticalName, regionsDisplay, verticalName } = useSalesContext();
@@ -67,10 +75,12 @@ export function WorkspaceSurface() {
   const activeFilter = useLeftRailStore((state) => state.activeFilter);
 
   // S390: Filter cards based on sidebar selection
+  // CRITICAL: When filtering by "ignored" (skipped), we need to look at ALL cards
+  // including dismissed ones, not just active cards
   const cards = useMemo(() => {
     if (!activeFilter) {
-      // No filter = show all visible cards
-      return allCards;
+      // No filter = show all visible cards (excludes dismissed)
+      return activeCards;
     }
 
     const { section, item } = activeFilter;
@@ -79,13 +89,20 @@ export function WorkspaceSurface() {
     if (section === 'leads' || section === 'companies') {
       const targetStatus = filterToCardStatus[item];
       if (targetStatus) {
-        return allCards.filter((card) => card.status === targetStatus);
+        // For dismissed/skipped, search raw cards since getActiveCards excludes them
+        if (targetStatus === 'dismissed') {
+          return rawCards.filter((card) => card.status === 'dismissed' && card.type === 'signal');
+        }
+        return activeCards.filter((card) => card.status === targetStatus);
       }
     }
 
     // For other sections (reports, activities), show all for now
-    return allCards;
-  }, [allCards, activeFilter]);
+    return activeCards;
+  }, [activeCards, rawCards, activeFilter]);
+
+  // S390: Track all visible cards for counts (active view)
+  const allCards = activeCards;
 
   // S381: Discovery loader state
   const isDiscoveryActive = useDiscoveryContextStore(selectIsDiscoveryActive);
@@ -226,12 +243,12 @@ export function WorkspaceSurface() {
                   <span className="text-3xl">📋</span>
                 </div>
                 <h3 className="text-lg font-medium text-white mb-2">
-                  No {activeFilter?.item?.replace('_', ' ')} leads
+                  No {activeFilter?.item === 'ignored' ? 'skipped' : activeFilter?.item?.replace('_', ' ')} leads
                 </h3>
                 <p className="text-sm text-gray-400 max-w-sm">
                   {activeFilter?.item === 'saved' && "You haven't saved any leads yet. Click 'Save' on a lead to add it here."}
                   {activeFilter?.item === 'actioned' && "No leads are being evaluated. Click 'Evaluate' on a lead to start."}
-                  {activeFilter?.item === 'ignored' && "No leads have been skipped. Click 'Skip' on a lead to ignore it."}
+                  {activeFilter?.item === 'ignored' && "No leads have been skipped. Click 'Skip' on a lead to hide it."}
                   {activeFilter?.item === 'unactioned' && "All leads have been actioned. Run a new discovery to find more."}
                 </p>
               </motion.div>

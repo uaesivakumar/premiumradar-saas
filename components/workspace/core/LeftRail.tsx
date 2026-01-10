@@ -57,7 +57,7 @@ const ITEM_CONFIG: Record<string, { label: string; icon?: LucideIcon }> = {
   // Companies / Leads items
   saved: { label: 'Saved', icon: Bookmark },
   actioned: { label: 'Actioned', icon: CheckCircle },
-  ignored: { label: 'Ignored', icon: XCircle },
+  ignored: { label: 'Skipped', icon: XCircle },  // S390: Renamed from Ignored
   unactioned: { label: 'Unactioned', icon: Clock },
   // Reports items
   performance: { label: 'Performance', icon: TrendingUp },

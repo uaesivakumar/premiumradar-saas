@@ -56,6 +56,27 @@ const statusBadges: Record<string, { label: string; color: string }> = {
   evaluating: { label: 'Evaluating', color: 'bg-amber-500/20 text-amber-400' },
 };
 
+// S390: Signal type chip colors and labels
+const signalTypeConfig: Record<string, { label: string; color: string }> = {
+  'hiring-expansion': { label: 'Hiring', color: 'bg-green-500/20 text-green-400' },
+  'headcount-jump': { label: 'Growth', color: 'bg-blue-500/20 text-blue-400' },
+  'office-opening': { label: 'New Office', color: 'bg-purple-500/20 text-purple-400' },
+  'market-entry': { label: 'Market Entry', color: 'bg-cyan-500/20 text-cyan-400' },
+  'funding-round': { label: 'Funding', color: 'bg-yellow-500/20 text-yellow-400' },
+  'project-award': { label: 'Project', color: 'bg-orange-500/20 text-orange-400' },
+  'subsidiary-creation': { label: 'New Entity', color: 'bg-pink-500/20 text-pink-400' },
+  // Fallback for unknown signal types
+  'default': { label: 'Signal', color: 'bg-gray-500/20 text-gray-400' },
+};
+
+// Get signal type config with fallback
+function getSignalChip(signalType: string): { label: string; color: string } {
+  return signalTypeConfig[signalType] || {
+    label: signalType.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    color: signalTypeConfig.default.color
+  };
+}
+
 const cardTypeLabels: Record<CardTypeEnum, string> = {
   nba: 'Next Best Action',
   decision: 'Decision',
@@ -128,12 +149,26 @@ export function Card({ card, onAction, isNBA = false }: CardProps) {
           {card.summary}
         </p>
 
-        {/* Entity Context */}
-        {card.entityName && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/80">
-              {card.entityName}
-            </span>
+        {/* Entity Context + Signal Chips */}
+        {(card.entityName || (card.tags && card.tags.length > 0 && card.type === 'signal')) && (
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            {card.entityName && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/80">
+                {card.entityName}
+              </span>
+            )}
+            {/* S390: Signal type chips - shows what triggered this result */}
+            {card.type === 'signal' && card.tags && card.tags.map((tag) => {
+              const chip = getSignalChip(tag);
+              return (
+                <span
+                  key={tag}
+                  className={`text-xs px-2 py-0.5 rounded-full ${chip.color}`}
+                >
+                  {chip.label}
+                </span>
+              );
+            })}
           </div>
         )}
 
