@@ -220,10 +220,11 @@ class NBAEngine {
 
   /**
    * Get candidate actions from the database
+   * Note: Returns empty array if leads table doesn't exist (graceful degradation)
    */
   private async getCandidates(context: NBAContext): Promise<NBACandidate[]> {
     // Query leads with pending actions
-    const leads = await query<{
+    let leads: {
       id: string;
       company_id: string;
       company_name: string;
@@ -235,27 +236,56 @@ class NBAEngine {
       score: number;
       has_urgent_signal: boolean;
       pending_action_type: string | null;
-    }>(
-      `SELECT
-         l.id,
-         l.company_id,
-         l.company_name,
-         l.contact_name,
-         l.status,
-         l.last_contacted_at,
-         l.signal_type,
-         l.signal_date,
-         COALESCE(l.score, 50) as score,
-         (l.signal_date > NOW() - INTERVAL '24 hours') as has_urgent_signal,
-         l.pending_action_type
-       FROM leads l
-       WHERE l.tenant_id = $1
-         AND l.user_id = $2
-         AND l.status NOT IN ('won', 'lost', 'disqualified')
-       ORDER BY l.score DESC, l.updated_at DESC
-       LIMIT $3`,
-      [context.tenantId, context.userId, NBA_CONFIG.maxCandidates]
-    );
+    }[] = [];
+
+    try {
+      leads = await query<{
+        id: string;
+        company_id: string;
+        company_name: string;
+        contact_name: string | null;
+        status: string;
+        last_contacted_at: Date | null;
+        signal_type: string | null;
+        signal_date: Date | null;
+        score: number;
+        has_urgent_signal: boolean;
+        pending_action_type: string | null;
+      }>(
+        `SELECT
+           l.id,
+           l.company_id,
+           l.company_name,
+           l.contact_name,
+           l.status,
+           l.last_contacted_at,
+           l.signal_type,
+           l.signal_date,
+           COALESCE(l.score, 50) as score,
+           (l.signal_date > NOW() - INTERVAL '24 hours') as has_urgent_signal,
+           l.pending_action_type
+         FROM leads l
+         WHERE l.tenant_id = $1
+           AND l.user_id = $2
+           AND l.status NOT IN ('won', 'lost', 'disqualified')
+         ORDER BY l.score DESC, l.updated_at DESC
+         LIMIT $3`,
+        [context.tenantId, context.userId, NBA_CONFIG.maxCandidates]
+      );
+    } catch (error) {
+      // Graceful degradation: if leads table doesn't exist, return empty
+      // This allows the app to function without NBA until the table is created
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('relation "leads" does not exist') ||
+          errorMessage.includes('does not exist')) {
+        logger.warn('NBA getCandidates: leads table not found, returning empty candidates', {
+          tenantId: context.tenantId,
+        });
+        return [];
+      }
+      // Re-throw other errors
+      throw error;
+    }
 
     // Convert to candidates
     const candidates: NBACandidate[] = [];
