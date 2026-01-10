@@ -68,6 +68,10 @@ interface CardStore {
   actOnCard: (id: string, actionId: string) => void;
   removeCard: (id: string) => void;
 
+  // S390: Lead State Transitions (keeps cards visible)
+  setCardEvaluating: (id: string) => void;
+  setCardSaved: (id: string) => void;
+
   // Lifecycle
   expireCards: () => void;
   rehydrate: (cards: Card[]) => void;
@@ -277,6 +281,28 @@ export const useCardStore = create<CardStore>()(
             lastUpdated: new Date(),
           }));
           console.log('[CardStore] Card acted:', id, 'action:', actionId);
+        },
+
+        // S390: Set card to EVALUATING state (stays visible)
+        setCardEvaluating: (id) => {
+          set(state => ({
+            cards: state.cards.map(card =>
+              card.id === id ? { ...card, status: 'evaluating' as CardStatus } : card
+            ),
+            lastUpdated: new Date(),
+          }));
+          console.log('[CardStore] Card evaluating:', id);
+        },
+
+        // S390: Set card to SAVED state (stays visible)
+        setCardSaved: (id) => {
+          set(state => ({
+            cards: state.cards.map(card =>
+              card.id === id ? { ...card, status: 'saved' as CardStatus } : card
+            ),
+            lastUpdated: new Date(),
+          }));
+          console.log('[CardStore] Card saved:', id);
         },
 
         removeCard: (id) => {

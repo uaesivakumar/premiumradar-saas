@@ -36,13 +36,21 @@ export type CardType =
   | 'context';  // S381: Query context - shows user's query
 
 /**
- * Card Status Lifecycle
+ * Card Status Lifecycle - S390 Lead State Model
  *
- * active → acted (user clicked action)
- *       → dismissed (user dismissed)
- *       → expired (TTL reached)
+ * VISIBLE STATES (shown in UI):
+ * - active: Unactioned → Visible in Inbox
+ * - evaluating: User clicked Evaluate → Visible in Evaluating section
+ * - saved: User clicked Save → Visible in Saved section
+ *
+ * HIDDEN STATES:
+ * - acted: Generic action (deprecated, use evaluating/saved)
+ * - dismissed: Skipped/rejected → Hidden
+ * - expired: TTL reached → Hidden
+ *
+ * INVARIANT: A lead never disappears unless user explicitly SKIPS it.
  */
-export type CardStatus = 'active' | 'acted' | 'dismissed' | 'expired';
+export type CardStatus = 'active' | 'evaluating' | 'saved' | 'acted' | 'dismissed' | 'expired';
 
 /**
  * Source of the card

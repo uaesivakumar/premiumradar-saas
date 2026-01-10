@@ -2,11 +2,15 @@
  * Signal Action Handlers - S390
  *
  * Handles user actions on signal/discovery cards:
- * - signal.evaluate: Open deep-dive, mark as evaluated
- * - signal.save: Save to pipeline, mark as saved
- * - signal.dismiss: Skip lead, mark as skipped
+ * - signal.evaluate: Mark as EVALUATING (stays visible), suppress re-discovery
+ * - signal.save: Mark as SAVED (stays visible), suppress re-discovery
+ * - signal.dismiss: Mark as SKIPPED (hidden), suppress for 7 days
  *
- * All actions persist to OS NoveltyService to control resurface behavior.
+ * S390 INVARIANT: A lead NEVER disappears unless user explicitly SKIPS it.
+ *
+ * Lead State (UI Visibility) vs Novelty (Discovery Re-introduction):
+ * - EVALUATING/SAVED: Visible in sidebar, never re-discovered
+ * - SKIPPED: Hidden from sidebar, re-discovered after 7 days if new evidence
  */
 
 import { Card } from '../card-state';
@@ -43,16 +47,20 @@ export async function executeSignalAction(
 
 /**
  * Handle "Evaluate" action
- * - Records action to OS NoveltyService
+ *
+ * S390 BEHAVIOR:
+ * - Sets lead state to EVALUATING (card stays visible in sidebar)
+ * - Suppresses re-discovery indefinitely (never show as "new" again)
  * - Opens company detail view (future)
- * - Entity will resurface in 1 day if new evidence appears
+ *
+ * INVARIANT: Card stays visible. Never hides on Evaluate.
  */
 async function handleEvaluate(card: Card, _context: ActionContext): Promise<ActionResult> {
   const { useCardStore } = await import('@/lib/stores/card-store');
   const store = useCardStore.getState();
 
   try {
-    // Record action to OS (sales_context will be resolved from workspace state if needed)
+    // Record action to OS (sets lead_state=EVALUATING, novelty suppressed indefinitely)
     const result = await recordNoveltyAction({
       entity_id: card.entityId,
       entity_name: card.entityName || card.title,
@@ -64,10 +72,10 @@ async function handleEvaluate(card: Card, _context: ActionContext): Promise<Acti
       // Continue anyway - don't block UI
     }
 
-    // Update card status (mark as evaluated)
-    store.actOnCard(card.id, 'evaluate');
+    // S390: Set card to EVALUATING state (stays visible in sidebar)
+    store.setCardEvaluating(card.id);
 
-    console.log('[SignalActions] Evaluate:', card.entityName || card.title);
+    console.log('[SignalActions] Evaluate:', card.entityName || card.title, '→ EVALUATING (visible)');
 
     return {
       success: true,
@@ -76,7 +84,7 @@ async function handleEvaluate(card: Card, _context: ActionContext): Promise<Acti
       data: {
         entityId: card.entityId,
         entityName: card.entityName,
-        resurfaceAfter: result.data?.resurface_after,
+        leadState: result.data?.lead_state || 'EVALUATING',
       },
     };
   } catch (error) {
@@ -90,16 +98,20 @@ async function handleEvaluate(card: Card, _context: ActionContext): Promise<Acti
 
 /**
  * Handle "Save" action
- * - Records action to OS NoveltyService
+ *
+ * S390 BEHAVIOR:
+ * - Sets lead state to SAVED (card stays visible in Saved section)
+ * - Suppresses re-discovery indefinitely (never show as "new" again)
  * - Adds to saved leads pipeline
- * - Entity won't reappear for 30 days
+ *
+ * INVARIANT: Card stays visible. Never hides on Save.
  */
 async function handleSave(card: Card, _context: ActionContext): Promise<ActionResult> {
   const { useCardStore } = await import('@/lib/stores/card-store');
   const store = useCardStore.getState();
 
   try {
-    // Record action to OS (sales_context will be resolved from workspace state if needed)
+    // Record action to OS (sets lead_state=SAVED, novelty suppressed indefinitely)
     const result = await recordNoveltyAction({
       entity_id: card.entityId,
       entity_name: card.entityName || card.title,
@@ -110,10 +122,10 @@ async function handleSave(card: Card, _context: ActionContext): Promise<ActionRe
       console.warn('[SignalActions] Failed to record save action:', result.error);
     }
 
-    // Mark card as saved (stays visible but shows saved state)
-    store.actOnCard(card.id, 'save');
+    // S390: Set card to SAVED state (stays visible in Saved section)
+    store.setCardSaved(card.id);
 
-    console.log('[SignalActions] Saved:', card.entityName || card.title);
+    console.log('[SignalActions] Saved:', card.entityName || card.title, '→ SAVED (visible)');
 
     return {
       success: true,
@@ -122,7 +134,7 @@ async function handleSave(card: Card, _context: ActionContext): Promise<ActionRe
       data: {
         entityId: card.entityId,
         entityName: card.entityName,
-        resurfaceAfter: result.data?.resurface_after,
+        leadState: result.data?.lead_state || 'SAVED',
         toast: {
           type: 'success',
           message: `${card.entityName || card.title} saved to pipeline`,
@@ -140,16 +152,19 @@ async function handleSave(card: Card, _context: ActionContext): Promise<ActionRe
 
 /**
  * Handle "Skip/Dismiss" action
- * - Records action to OS NoveltyService
- * - Removes card from view
- * - Entity won't reappear for 7 days
+ *
+ * S390 BEHAVIOR:
+ * - Sets lead state to SKIPPED (card is hidden from sidebar)
+ * - Suppresses re-discovery for 7 days (re-discover if new evidence)
+ *
+ * THIS IS THE ONLY ACTION THAT HIDES A CARD.
  */
 async function handleDismiss(card: Card, _context: ActionContext): Promise<ActionResult> {
   const { useCardStore } = await import('@/lib/stores/card-store');
   const store = useCardStore.getState();
 
   try {
-    // Record action to OS (sales_context will be resolved from workspace state if needed)
+    // Record action to OS (sets lead_state=SKIPPED, novelty suppressed for 7 days)
     const result = await recordNoveltyAction({
       entity_id: card.entityId,
       entity_name: card.entityName || card.title,
@@ -160,10 +175,10 @@ async function handleDismiss(card: Card, _context: ActionContext): Promise<Actio
       console.warn('[SignalActions] Failed to record skip action:', result.error);
     }
 
-    // Dismiss the card from view
+    // S390: Dismiss the card - THIS IS THE ONLY ACTION THAT HIDES
     store.dismissCard(card.id);
 
-    console.log('[SignalActions] Skipped:', card.entityName || card.title);
+    console.log('[SignalActions] Skipped:', card.entityName || card.title, '→ HIDDEN');
 
     return {
       success: true,
@@ -171,6 +186,7 @@ async function handleDismiss(card: Card, _context: ActionContext): Promise<Actio
       nextAction: 'none',
       data: {
         entityId: card.entityId,
+        leadState: 'SKIPPED',
         resurfaceAfter: result.data?.resurface_after,
       },
     };

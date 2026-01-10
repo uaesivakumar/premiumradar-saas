@@ -38,14 +38,50 @@ export function sortByPriority(cards: Card[]): Card[] {
 }
 
 /**
+ * S390: Visible statuses - cards that should be shown in UI
+ * INVARIANT: A lead never disappears unless user explicitly SKIPS it.
+ */
+const VISIBLE_STATUSES = ['active', 'evaluating', 'saved'];
+
+/**
  * Get cards sorted and filtered for display
- * - Only active cards
+ * - Shows active, evaluating, and saved cards
  * - Sorted by priority
  * - NBA always first
+ *
+ * S390 FIX: Evaluate and Save keep cards visible
  */
 export function getDisplayCards(cards: Card[]): Card[] {
-  const activeCards = cards.filter(card => card.status === 'active');
-  return sortByPriority(activeCards);
+  const visibleCards = cards.filter(card => VISIBLE_STATUSES.includes(card.status));
+  return sortByPriority(visibleCards);
+}
+
+/**
+ * S390: Get cards by lead state for sidebar sections
+ */
+export function getCardsByState(cards: Card[], status: 'active' | 'evaluating' | 'saved'): Card[] {
+  return sortByPriority(cards.filter(card => card.status === status));
+}
+
+/**
+ * S390: Get all unactioned cards (inbox)
+ */
+export function getInboxCards(cards: Card[]): Card[] {
+  return getCardsByState(cards, 'active');
+}
+
+/**
+ * S390: Get all cards being evaluated
+ */
+export function getEvaluatingCards(cards: Card[]): Card[] {
+  return getCardsByState(cards, 'evaluating');
+}
+
+/**
+ * S390: Get all saved cards
+ */
+export function getSavedCards(cards: Card[]): Card[] {
+  return getCardsByState(cards, 'saved');
 }
 
 /**
