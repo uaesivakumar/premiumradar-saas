@@ -75,33 +75,30 @@ export function WorkspaceSurface() {
   const activeFilter = useLeftRailStore((state) => state.activeFilter);
 
   // S390: Filter cards based on sidebar selection
+  // DEFAULT VIEW: Only show UNACTIONED (active) leads - saved/evaluating hidden until filtered
   // CRITICAL: When filtering by "ignored" (skipped), we need to look at ALL cards
-  // including dismissed ones, not just active cards
   const cards = useMemo(() => {
-    if (!activeFilter) {
-      // No filter = show all visible cards (excludes dismissed)
-      return activeCards;
-    }
-
-    const { section, item } = activeFilter;
+    const { section, item } = activeFilter || {};
 
     // Only filter for leads/companies sections
     if (section === 'leads' || section === 'companies') {
-      const targetStatus = filterToCardStatus[item];
+      const targetStatus = filterToCardStatus[item as string];
       if (targetStatus) {
         // For dismissed/skipped, search raw cards since getActiveCards excludes them
         if (targetStatus === 'dismissed') {
           return rawCards.filter((card) => card.status === 'dismissed' && card.type === 'signal');
         }
+        // For saved/evaluating, filter from activeCards
         return activeCards.filter((card) => card.status === targetStatus);
       }
     }
 
-    // For other sections (reports, activities), show all for now
-    return activeCards;
+    // DEFAULT (no filter or other sections): Only show ACTIVE (unactioned) leads
+    // This ensures saved/evaluating leads don't clutter the main workspace
+    return activeCards.filter((card) => card.status === 'active');
   }, [activeCards, rawCards, activeFilter]);
 
-  // S390: Track all visible cards for counts (active view)
+  // S390: Track all cards (for sidebar counts - includes saved/evaluating)
   const allCards = activeCards;
 
   // S381: Discovery loader state
