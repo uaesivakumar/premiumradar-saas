@@ -395,10 +395,12 @@ export const useCardStore = create<CardStore>()(
       }),
       {
         name: 'card-store',
-        // Only persist active and decision cards (for recall)
+        // S390: Persist active, evaluating, saved, and decision cards
         partialize: (state) => ({
           cards: state.cards.filter(card =>
             card.status === 'active' ||
+            card.status === 'evaluating' ||
+            card.status === 'saved' ||
             (card.type === 'decision' && card.status !== 'expired')
           ),
         }),

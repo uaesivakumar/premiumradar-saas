@@ -22,6 +22,7 @@ import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useWorkspaceNBA } from '@/lib/workspace/hooks';
 import { dispatchAction, ActionContext } from '@/lib/workspace/action-handlers';
+import { hydrateLeadsFromDB } from '@/lib/workspace/lead-hydration';
 import { ContextBar } from './ContextBar';
 import { CardContainer } from './CardContainer';
 import { SystemState } from './SystemState';
@@ -68,6 +69,14 @@ export function WorkspaceSurface() {
   useEffect(() => {
     startTTLEngine();
     return () => stopTTLEngine();
+  }, []);
+
+  // S390: Hydrate leads from database on mount
+  // This ensures leads persist across logout/login
+  useEffect(() => {
+    hydrateLeadsFromDB().catch((error) => {
+      console.error('[WorkspaceSurface] Failed to hydrate leads:', error);
+    });
   }, []);
 
   // S374: Handle card actions

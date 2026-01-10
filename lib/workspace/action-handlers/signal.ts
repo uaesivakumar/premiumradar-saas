@@ -89,9 +89,17 @@ async function handleEvaluate(card: Card, _context: ActionContext): Promise<Acti
     };
   } catch (error) {
     console.error('[SignalActions] Evaluate error:', error);
+    // S390: Still set evaluating locally even if API fails (same pattern as dismiss)
+    store.setCardEvaluating(card.id);
     return {
-      success: false,
-      error: 'Failed to evaluate lead',
+      success: true,
+      message: 'Evaluating (offline)',
+      nextAction: 'open_detail',
+      data: {
+        entityId: card.entityId,
+        entityName: card.entityName,
+        leadState: 'EVALUATING',
+      },
     };
   }
 }
@@ -143,9 +151,12 @@ async function handleSave(card: Card, _context: ActionContext): Promise<ActionRe
     };
   } catch (error) {
     console.error('[SignalActions] Save error:', error);
+    // S390: Still save the card locally even if API fails (same pattern as dismiss)
+    store.setCardSaved(card.id);
     return {
-      success: false,
-      error: 'Failed to save lead',
+      success: true,
+      message: 'Lead saved (offline)',
+      nextAction: 'none',
     };
   }
 }
