@@ -27,8 +27,9 @@ export interface ActionResult {
   success: boolean;
   message?: string;
   error?: string;
-  nextAction?: 'refresh' | 'navigate' | 'none';
+  nextAction?: 'refresh' | 'navigate' | 'none' | 'open_detail' | 'show_toast';
   navigateTo?: string;
+  data?: Record<string, unknown>;
 }
 
 // =============================================================================

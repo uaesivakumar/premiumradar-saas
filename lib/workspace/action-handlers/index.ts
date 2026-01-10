@@ -9,6 +9,7 @@
 import { Card } from '../card-state';
 import { nbaActionHandlers, executeNBAAction, ActionContext, ActionResult } from './nba';
 import { recallActionHandlers, executeRecallAction } from './recall';
+import { signalActionHandlers, executeSignalAction } from './signal';
 
 // Re-export types
 export type { ActionContext, ActionResult } from './nba';
@@ -40,8 +41,8 @@ export async function dispatchAction(
       return executeNBAAction(handlerId, card, context);
 
     case 'signal':
-      // TODO: S376+ - Signal action handlers
-      return handleGenericAction(handlerId, card, context);
+      // S390: Signal action handlers (Evaluate/Save/Skip)
+      return executeSignalAction(handlerId, card, context);
 
     case 'decision':
       // TODO: S376+ - Decision action handlers
@@ -121,3 +122,4 @@ async function handleSystemAction(
 
 export { nbaActionHandlers, executeNBAAction };
 export { recallActionHandlers, executeRecallAction };
+export { signalActionHandlers, executeSignalAction };
