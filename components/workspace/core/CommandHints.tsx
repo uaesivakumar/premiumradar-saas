@@ -27,9 +27,9 @@ export function CommandHints({ visible = true }: CommandHintsProps) {
     return getSmartHints({
       hasCards: cards.length > 0,
       hasNBA: nba !== null,
-      savedLeadsCount: counts.savedLeads,
+      savedLeadsCount: counts.leads.saved,
     });
-  }, [cards.length, nba, counts.savedLeads]);
+  }, [cards.length, nba, counts.leads.saved]);
 
   if (!visible || hints.length === 0) return null;
 

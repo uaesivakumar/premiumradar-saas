@@ -1,64 +1,108 @@
 /**
- * Left Rail Store - S372: Dynamic Left Rail
+ * Left Rail Store - S390: Static Sidebar Structure
  *
- * WORKSPACE UX (LOCKED):
- * - Sections appear/disappear based on state
- * - No empty sections ever visible
- * - No disabled items
- * - Clicking filters, doesn't navigate
+ * SIDEBAR INVARIANT (LOCKED):
+ * - Sidebar structure is STATIC
+ * - Menu items NEVER disappear
+ * - Counts are DYNAMIC
+ * - If count = 0 → show (0), never hide
  *
- * Sections:
- * - TODAY: Always visible
- * - SAVED LEADS: Show if count > 0
- * - FOLLOW-UPS: Show if count > 0
- * - REPORTS: Show if count > 0
- * - PREFERENCES: Always at bottom
+ * Sections (ALWAYS VISIBLE):
+ * - COMPANIES: Saved, Actioned, Ignored, Unactioned
+ * - LEADS: Saved, Actioned, Ignored, Unactioned
+ * - REPORTS: Performance, Conversion, Pipeline
+ * - ACTIVITIES: Today, Yesterday, This Week, Last Week, This Month, Custom
  */
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
 // =============================================================================
+// STATIC SCHEMA (NEVER CHANGES)
+// =============================================================================
+
+/**
+ * S390: Static sidebar schema - items NEVER disappear
+ */
+export const SIDEBAR_SCHEMA = {
+  companies: {
+    label: 'Companies',
+    items: ['saved', 'actioned', 'ignored', 'unactioned'] as const,
+  },
+  leads: {
+    label: 'Leads',
+    items: ['saved', 'actioned', 'ignored', 'unactioned'] as const,
+  },
+  reports: {
+    label: 'Reports',
+    items: ['performance', 'conversion', 'pipeline'] as const,
+  },
+  activities: {
+    label: 'Activities',
+    items: ['today', 'yesterday', 'this_week', 'last_week', 'this_month', 'custom'] as const,
+  },
+} as const;
+
+export type SidebarSection = keyof typeof SIDEBAR_SCHEMA;
+export type CompanyFilter = typeof SIDEBAR_SCHEMA.companies.items[number];
+export type LeadFilter = typeof SIDEBAR_SCHEMA.leads.items[number];
+export type ReportFilter = typeof SIDEBAR_SCHEMA.reports.items[number];
+export type ActivityFilter = typeof SIDEBAR_SCHEMA.activities.items[number];
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
-export type LeftRailSection =
-  | 'today'
-  | 'saved-leads'
-  | 'follow-ups'
-  | 'reports'
-  | 'preferences';
-
-export type CardFilter =
-  | { type: 'all' }
-  | { type: 'today' }
-  | { type: 'saved-leads' }
-  | { type: 'follow-ups' }
-  | { type: 'reports' }
-  | { type: 'entity'; entityId: string };
+export type ActiveFilter =
+  | { section: 'companies'; item: CompanyFilter }
+  | { section: 'leads'; item: LeadFilter }
+  | { section: 'reports'; item: ReportFilter }
+  | { section: 'activities'; item: ActivityFilter }
+  | null;
 
 interface SectionCounts {
-  savedLeads: number;
-  followUps: number;
-  reports: number;
+  companies: {
+    saved: number;
+    actioned: number;
+    ignored: number;
+    unactioned: number;
+  };
+  leads: {
+    saved: number;
+    actioned: number;
+    ignored: number;
+    unactioned: number;
+  };
+  reports: {
+    performance: number;
+    conversion: number;
+    pipeline: number;
+  };
+  activities: {
+    today: number;
+    yesterday: number;
+    this_week: number;
+    last_week: number;
+    this_month: number;
+    custom: number;
+  };
 }
 
 interface LeftRailStore {
   // State
-  activeSection: LeftRailSection;
-  filter: CardFilter;
+  activeFilter: ActiveFilter;
   counts: SectionCounts;
+  isLoading: boolean;
 
   // Actions
-  setActiveSection: (section: LeftRailSection) => void;
-  setFilter: (filter: CardFilter) => void;
-  updateCounts: (counts: Partial<SectionCounts>) => void;
-  incrementCount: (key: keyof SectionCounts) => void;
-  decrementCount: (key: keyof SectionCounts) => void;
+  setActiveFilter: (filter: ActiveFilter) => void;
+  updateCounts: (section: SidebarSection, counts: Partial<SectionCounts[SidebarSection]>) => void;
+  setAllCounts: (counts: Partial<SectionCounts>) => void;
+  setLoading: (loading: boolean) => void;
 
-  // Computed
-  getSectionVisibility: () => Record<LeftRailSection, boolean>;
-  getSectionCount: (section: LeftRailSection) => number | null;
+  // Getters
+  getCount: (section: SidebarSection, item: string) => number;
+  isActive: (section: SidebarSection, item: string) => boolean;
 }
 
 // =============================================================================
@@ -69,70 +113,76 @@ export const useLeftRailStore = create<LeftRailStore>()(
   devtools(
     (set, get) => ({
       // Initial state
-      activeSection: 'today',
-      filter: { type: 'all' },
+      activeFilter: null,
+      isLoading: false,
       counts: {
-        savedLeads: 0,
-        followUps: 0,
-        reports: 0,
+        companies: {
+          saved: 0,
+          actioned: 0,
+          ignored: 0,
+          unactioned: 0,
+        },
+        leads: {
+          saved: 0,
+          actioned: 0,
+          ignored: 0,
+          unactioned: 0,
+        },
+        reports: {
+          performance: 0,
+          conversion: 0,
+          pipeline: 0,
+        },
+        activities: {
+          today: 0,
+          yesterday: 0,
+          this_week: 0,
+          last_week: 0,
+          this_month: 0,
+          custom: 0,
+        },
       },
 
       // Actions
-      setActiveSection: (section) => {
-        set({ activeSection: section });
-        // Auto-update filter based on section
-        const filterMap: Record<LeftRailSection, CardFilter> = {
-          today: { type: 'today' },
-          'saved-leads': { type: 'saved-leads' },
-          'follow-ups': { type: 'follow-ups' },
-          reports: { type: 'reports' },
-          preferences: { type: 'all' }, // Preferences doesn't filter cards
-        };
-        set({ filter: filterMap[section] });
+      setActiveFilter: (filter) => {
+        set({ activeFilter: filter });
+        console.log('[LeftRailStore] Filter set:', filter);
       },
 
-      setFilter: (filter) => set({ filter }),
-
-      updateCounts: (counts) =>
+      updateCounts: (section, counts) => {
         set((state) => ({
-          counts: { ...state.counts, ...counts },
-        })),
-
-      incrementCount: (key) =>
-        set((state) => ({
-          counts: { ...state.counts, [key]: state.counts[key] + 1 },
-        })),
-
-      decrementCount: (key) =>
-        set((state) => ({
-          counts: { ...state.counts, [key]: Math.max(0, state.counts[key] - 1) },
-        })),
-
-      // Computed: Which sections are visible
-      getSectionVisibility: () => {
-        const { counts } = get();
-        return {
-          today: true, // Always visible
-          'saved-leads': counts.savedLeads > 0,
-          'follow-ups': counts.followUps > 0,
-          reports: counts.reports > 0,
-          preferences: true, // Always at bottom
-        };
+          counts: {
+            ...state.counts,
+            [section]: {
+              ...state.counts[section],
+              ...counts,
+            },
+          },
+        }));
       },
 
-      // Computed: Get count badge for section
-      getSectionCount: (section) => {
+      setAllCounts: (counts) => {
+        set((state) => ({
+          counts: {
+            ...state.counts,
+            ...counts,
+          },
+        }));
+      },
+
+      setLoading: (loading) => set({ isLoading: loading }),
+
+      // Getters
+      getCount: (section, item) => {
         const { counts } = get();
-        switch (section) {
-          case 'saved-leads':
-            return counts.savedLeads > 0 ? counts.savedLeads : null;
-          case 'follow-ups':
-            return counts.followUps > 0 ? counts.followUps : null;
-          case 'reports':
-            return counts.reports > 0 ? counts.reports : null;
-          default:
-            return null;
-        }
+        const sectionCounts = counts[section] as Record<string, number>;
+        return sectionCounts[item] ?? 0;
+      },
+
+      isActive: (section, item) => {
+        const { activeFilter } = get();
+        if (!activeFilter) return false;
+        return activeFilter.section === section && activeFilter.item === item;
       },
     }),
     { name: 'LeftRailStore' }
@@ -143,6 +193,6 @@ export const useLeftRailStore = create<LeftRailStore>()(
 // SELECTORS
 // =============================================================================
 
-export const selectActiveSection = (state: LeftRailStore) => state.activeSection;
-export const selectFilter = (state: LeftRailStore) => state.filter;
+export const selectActiveFilter = (state: LeftRailStore) => state.activeFilter;
 export const selectCounts = (state: LeftRailStore) => state.counts;
+export const selectIsLoading = (state: LeftRailStore) => state.isLoading;

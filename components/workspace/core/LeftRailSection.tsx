@@ -1,44 +1,62 @@
 'use client';
 
 /**
- * LeftRailSection - S372: Dynamic Left Rail
+ * LeftRailSection - S390: Static Sidebar Structure
  *
- * A collapsible section in the left rail.
- * Only renders if it has visible items.
+ * SIDEBAR INVARIANT (LOCKED):
+ * - Sections ALWAYS render
+ * - NO visibility prop - sections never hide
+ * - Title always visible
  */
 
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { ChevronDown } from 'lucide-react';
 
 interface LeftRailSectionProps {
-  title?: string;
+  title: string;
   children: React.ReactNode;
-  visible?: boolean;
+  defaultExpanded?: boolean;
 }
 
 export function LeftRailSection({
   title,
   children,
-  visible = true,
+  defaultExpanded = true,
 }: LeftRailSectionProps) {
-  if (!visible) return null;
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, height: 0 }}
-        animate={{ opacity: 1, height: 'auto' }}
-        exit={{ opacity: 0, height: 0 }}
-        className="space-y-1"
+    <div className="space-y-1">
+      {/* Section Header - Always visible, clickable to expand/collapse */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between px-3 py-1 text-xs text-white/40 uppercase tracking-wider hover:text-white/60 transition-colors"
       >
-        {title && (
-          <p className="px-3 py-1 text-xs text-gray-500 uppercase tracking-wider">
-            {title}
-          </p>
-        )}
-        {children}
+        <span>{title}</span>
+        <motion.div
+          animate={{ rotate: isExpanded ? 0 : -90 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className="w-3 h-3" />
+        </motion.div>
+      </button>
+
+      {/* Section Content */}
+      <motion.div
+        initial={false}
+        animate={{
+          height: isExpanded ? 'auto' : 0,
+          opacity: isExpanded ? 1 : 0,
+        }}
+        transition={{ duration: 0.2 }}
+        className="overflow-hidden"
+      >
+        <div className="space-y-0.5 pl-1">
+          {children}
+        </div>
       </motion.div>
-    </AnimatePresence>
+    </div>
   );
 }
 
