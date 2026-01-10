@@ -45,6 +45,17 @@ const cardTypeColors: Record<CardTypeEnum, string> = {
   context: 'border-cyan-500/50 bg-cyan-500/10',  // S381: Query context card - cyan
 };
 
+// S390: Status-based styling overrides
+const statusColors: Record<string, string> = {
+  saved: 'border-emerald-500/50 bg-emerald-500/10',
+  evaluating: 'border-amber-500/50 bg-amber-500/10',
+};
+
+const statusBadges: Record<string, { label: string; color: string }> = {
+  saved: { label: 'Saved', color: 'bg-emerald-500/20 text-emerald-400' },
+  evaluating: { label: 'Evaluating', color: 'bg-amber-500/20 text-amber-400' },
+};
+
 const cardTypeLabels: Record<CardTypeEnum, string> = {
   nba: 'Next Best Action',
   decision: 'Decision',
@@ -58,7 +69,9 @@ const cardTypeLabels: Record<CardTypeEnum, string> = {
 export function Card({ card, onAction, isNBA = false }: CardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const Icon = cardTypeIcons[card.type];
-  const colorClass = cardTypeColors[card.type];
+  // S390: Use status color override for saved/evaluating cards
+  const colorClass = statusColors[card.status] || cardTypeColors[card.type];
+  const statusBadge = statusBadges[card.status];
   const expiryDisplay = getExpiryDisplayString(card);
 
   const handleAction = (actionId: string) => {
@@ -80,13 +93,19 @@ export function Card({ card, onAction, isNBA = false }: CardProps) {
         className="px-4 py-3 cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        {/* Type Badge + Expiry */}
+        {/* Type Badge + Status Badge + Expiry */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Icon className="w-4 h-4 text-white/60" />
             <span className="text-xs text-white/60 uppercase tracking-wide">
               {cardTypeLabels[card.type]}
             </span>
+            {/* S390: Status badge for saved/evaluating */}
+            {statusBadge && (
+              <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadge.color}`}>
+                {statusBadge.label}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {expiryDisplay && (
@@ -118,8 +137,8 @@ export function Card({ card, onAction, isNBA = false }: CardProps) {
           </div>
         )}
 
-        {/* Actions - Always visible */}
-        <CardActions actions={card.actions} onAction={handleAction} />
+        {/* Actions - Always visible, filtered by status */}
+        <CardActions actions={card.actions} onAction={handleAction} cardStatus={card.status} />
       </div>
 
       {/* Expanded Content */}

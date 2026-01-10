@@ -20,14 +20,27 @@ interface CardActionsProps {
   actions: CardAction[];
   onAction: (actionId: string) => void;
   compact?: boolean;
+  cardStatus?: string;  // S390: Card status for filtering actions
 }
 
-export function CardActions({ actions, onAction, compact = false }: CardActionsProps) {
+// S390: Actions to hide based on current status
+const hiddenActionsByStatus: Record<string, string[]> = {
+  saved: ['save'],       // Already saved - hide Save button
+  evaluating: ['evaluate'], // Already evaluating - hide Evaluate button
+};
+
+export function CardActions({ actions, onAction, compact = false, cardStatus }: CardActionsProps) {
   if (!actions.length) return null;
+
+  // S390: Filter out actions that don't make sense for current status
+  const hiddenActions = cardStatus ? hiddenActionsByStatus[cardStatus] || [] : [];
+  const visibleActions = actions.filter(action => !hiddenActions.includes(action.id));
+
+  if (!visibleActions.length) return null;
 
   return (
     <div className={`flex items-center gap-2 ${compact ? '' : 'mt-3'}`}>
-      {actions.map((action) => (
+      {visibleActions.map((action) => (
         <ActionButton
           key={action.id}
           action={action}
