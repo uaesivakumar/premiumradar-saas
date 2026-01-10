@@ -51,7 +51,7 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 
 // Routes that require authentication
-const PROTECTED_ROUTES = ['/dashboard', '/onboarding'];
+const PROTECTED_ROUTES = ['/dashboard', '/workspace', '/onboarding'];
 
 // Routes that should redirect authenticated users
 const AUTH_ROUTES = ['/login', '/signup', '/register'];
@@ -343,6 +343,23 @@ export async function middleware(request: NextRequest) {
     }
 
     // Check if onboarding is complete (if user has started onboarding)
+    if (onboardingState && !isOnboardingComplete && onboardingState.startedAt) {
+      const currentStep = onboardingState.currentStep || 'welcome';
+      const stepPath = getOnboardingPath(currentStep);
+      return NextResponse.redirect(new URL(stepPath, request.url));
+    }
+
+    return NextResponse.next();
+  }
+
+  // Handle protected workspace routes (S390)
+  if (pathname.startsWith('/workspace')) {
+    // CRITICAL: Require authenticated session
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+
+    // Check if onboarding is complete
     if (onboardingState && !isOnboardingComplete && onboardingState.startedAt) {
       const currentStep = onboardingState.currentStep || 'welcome';
       const stepPath = getOnboardingPath(currentStep);
