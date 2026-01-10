@@ -15,9 +15,10 @@
  * See docs/WORKSPACE_UX_DECISION.md (LOCKED)
  */
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCardStore, startTTLEngine, stopTTLEngine } from '@/lib/stores/card-store';
+import { useLeftRailStore } from '@/lib/stores/left-rail-store';
 import { useSalesContext } from '@/lib/intelligence/hooks/useSalesContext';
 import { useIndustryStore, getIndustryConfig } from '@/lib/stores/industry-store';
 import { useWorkspaceNBA } from '@/lib/workspace/hooks';
@@ -46,13 +47,45 @@ function QueryDisplay({ query }: { query: string | null }) {
   );
 }
 
+// S390: Map sidebar filter item to card status
+const filterToCardStatus: Record<string, string> = {
+  saved: 'saved',
+  actioned: 'evaluating',
+  ignored: 'dismissed',
+  unactioned: 'active',
+};
+
 export function WorkspaceSurface() {
-  const cards = useCardStore((state) => state.getActiveCards());
+  const allCards = useCardStore((state) => state.getActiveCards());
   const actOnCard = useCardStore((state) => state.actOnCard);
   const dismissCard = useCardStore((state) => state.dismissCard);
   const { subVerticalName, regionsDisplay, verticalName } = useSalesContext();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
+
+  // S390: Get sidebar filter
+  const activeFilter = useLeftRailStore((state) => state.activeFilter);
+
+  // S390: Filter cards based on sidebar selection
+  const cards = useMemo(() => {
+    if (!activeFilter) {
+      // No filter = show all visible cards
+      return allCards;
+    }
+
+    const { section, item } = activeFilter;
+
+    // Only filter for leads/companies sections
+    if (section === 'leads' || section === 'companies') {
+      const targetStatus = filterToCardStatus[item];
+      if (targetStatus) {
+        return allCards.filter((card) => card.status === targetStatus);
+      }
+    }
+
+    // For other sections (reports, activities), show all for now
+    return allCards;
+  }, [allCards, activeFilter]);
 
   // S381: Discovery loader state
   const isDiscoveryActive = useDiscoveryContextStore(selectIsDiscoveryActive);
@@ -118,8 +151,11 @@ export function WorkspaceSurface() {
   }, [cards, nba, getContext]);
 
   const hasCards = cards.length > 0;
+  const hasAllCards = allCards.length > 0;
+  // S390: Check if filtering resulted in empty
+  const isFilterEmpty = activeFilter && !hasCards && hasAllCards;
   // S382: Show "Live" when cards exist (not just when NBA exists)
-  const systemState = isDiscoveryActive ? 'discovering' : (hasCards ? 'live' : 'no-signals');
+  const systemState = isDiscoveryActive ? 'discovering' : (hasAllCards ? 'live' : 'no-signals');
 
   return (
     <div className="absolute inset-0 flex flex-col bg-slate-950">
@@ -178,6 +214,27 @@ export function WorkspaceSurface() {
                 subVertical={subVerticalName}
                 primaryColor={industryConfig.primaryColor}
               />
+            ) : isFilterEmpty ? (
+              /* S390: Empty state when filter has no results */
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="flex flex-col items-center justify-center py-16 text-center"
+              >
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                  <span className="text-3xl">📋</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">
+                  No {activeFilter?.item?.replace('_', ' ')} leads
+                </h3>
+                <p className="text-sm text-gray-400 max-w-sm">
+                  {activeFilter?.item === 'saved' && "You haven't saved any leads yet. Click 'Save' on a lead to add it here."}
+                  {activeFilter?.item === 'actioned' && "No leads are being evaluated. Click 'Evaluate' on a lead to start."}
+                  {activeFilter?.item === 'ignored' && "No leads have been skipped. Click 'Skip' on a lead to ignore it."}
+                  {activeFilter?.item === 'unactioned' && "All leads have been actioned. Run a new discovery to find more."}
+                </p>
+              </motion.div>
             ) : hasCards ? (
               <CardContainer cards={cards} nba={nba} onAction={handleCardAction} />
             ) : (
