@@ -157,9 +157,10 @@ function getActionsForType(type: OutputObjectType): Card['actions'] {
     case 'discovery':
     case 'ranking':
       return [
-        { id: 'view', label: 'View', type: 'primary', handler: 'card.view' },
-        { id: 'save', label: 'Save', type: 'secondary', handler: 'card.save' },
-        { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'card.dismiss' },
+        // S393: CTA labels encode intent + consequence
+        { id: 'view', label: 'View details', type: 'primary', handler: 'card.view' },
+        { id: 'save', label: 'Keep for follow-up', type: 'secondary', handler: 'card.save' },
+        { id: 'dismiss', label: 'Ignore for now', type: 'dismiss', handler: 'card.dismiss' },
       ];
 
     case 'outreach':

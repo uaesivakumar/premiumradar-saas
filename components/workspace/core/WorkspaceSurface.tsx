@@ -1,18 +1,16 @@
 'use client';
 
 /**
- * WorkspaceSurface - S371: Pageless Core Surface
- * S374: NBA → Card Wiring integration
+ * WorkspaceSurface - S396: Conversational Workspace
  *
- * WORKSPACE UX (LOCKED):
- * - Single-canvas workspace surface
- * - Renders cards in priority order
- * - Max 2-line summaries, expand on demand
- * - No chat bubbles, no conversation transcript
- * - Cards are the only visible artifacts
- * - Only ONE NBA card at any time (enforced by CardStore)
+ * ARCHITECTURE (LOCKED):
+ * - The workspace is a turn-based conversation
+ * - System speaks only when useful
+ * - CTAs are responses, not navigation
+ * - Silence is a feature
  *
- * See docs/WORKSPACE_UX_DECISION.md (LOCKED)
+ * NOT A DASHBOARD. NOT A CRM.
+ * A judgment interface for high-stakes operators.
  */
 
 import React, { useEffect, useCallback, useMemo } from 'react';
@@ -26,24 +24,32 @@ import { dispatchAction, ActionContext } from '@/lib/workspace/action-handlers';
 import { hydrateLeadsFromDB } from '@/lib/workspace/lead-hydration';
 import { ContextBar } from './ContextBar';
 import { CardContainer } from './CardContainer';
-import { SystemState } from './SystemState';
 import { CommandPalette } from './CommandPalette';
 import { DiscoveryLoader } from './DiscoveryLoader';
+import {
+  SystemUtterance,
+  buildStatusAcknowledgment,
+  buildEmptyButActive,
+} from './SystemUtterance';
 import { useDiscoveryContextStore, selectIsDiscoveryActive } from '@/lib/workspace/discovery-context';
 
 /**
- * S382: Inline query display (like ChatGPT)
- * Shows user's query above results, not as a card
+ * S396: User query display (conversational)
+ * Shows what the user asked, right-aligned like a chat
  */
-function QueryDisplay({ query }: { query: string | null }) {
+function UserQuery({ query }: { query: string | null }) {
   if (!query) return null;
 
   return (
-    <div className="flex justify-end mb-4">
-      <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-md bg-blue-600 text-white text-sm">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex justify-end mb-6"
+    >
+      <div className="max-w-[70%] px-4 py-2.5 rounded-2xl rounded-br-sm bg-white/10 text-gray-200 text-sm">
         {query}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -100,6 +106,13 @@ export function WorkspaceSurface() {
 
   // S390: Track all cards (for sidebar counts - includes saved/evaluating)
   const allCards = activeCards;
+
+  // S395: Check if actionable leads exist (saved/evaluating) for hierarchy rule
+  // ACTION > SIGNAL > DATA: If actionable leads exist, workspace is NOT empty
+  const hasActionableLeads = useMemo(() => {
+    const signalCards = activeCards.filter(c => c.type === 'signal');
+    return signalCards.some(c => c.status === 'saved' || c.status === 'evaluating');
+  }, [activeCards]);
 
   // S381: Discovery loader state
   const isDiscoveryActive = useDiscoveryContextStore(selectIsDiscoveryActive);
@@ -168,8 +181,32 @@ export function WorkspaceSurface() {
   const hasAllCards = allCards.length > 0;
   // S390: Check if filtering resulted in empty
   const isFilterEmpty = activeFilter && !hasCards && hasAllCards;
-  // S382: Show "Live" when cards exist (not just when NBA exists)
+  // S396: System state for context bar only
   const systemState = isDiscoveryActive ? 'discovering' : (hasAllCards ? 'live' : 'no-signals');
+
+  // S396: Count saved leads for utterance
+  const savedLeadCount = useMemo(() => {
+    return activeCards.filter(c => c.type === 'signal' && c.status === 'saved').length;
+  }, [activeCards]);
+
+  // S396: Handle utterance actions
+  const handleUtteranceAction = useCallback((actionId: string) => {
+    switch (actionId) {
+      case 'prioritize':
+        // Show saved leads
+        useLeftRailStore.getState().setActiveFilter({ section: 'leads', item: 'saved' });
+        break;
+      case 'later':
+        // Do nothing - user wants to see later
+        break;
+      case 'monitor':
+        // Clear any filter and keep monitoring
+        useLeftRailStore.getState().setActiveFilter(null as any);
+        break;
+      default:
+        console.log('[WorkspaceSurface] Unknown utterance action:', actionId);
+    }
+  }, []);
 
   return (
     <div className="absolute inset-0 flex flex-col bg-slate-950">
@@ -207,7 +244,7 @@ export function WorkspaceSurface() {
         />
       </div>
 
-      {/* Context Bar */}
+      {/* Context Bar - minimal, no banner */}
       <ContextBar
         workspaceName={verticalName}
         subVertical={subVerticalName}
@@ -215,44 +252,46 @@ export function WorkspaceSurface() {
         systemState={systemState}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-8 lg:px-16 py-6">
-        <div className="max-w-4xl mx-auto">
-          {/* S382: Show user's query inline (like ChatGPT) */}
-          {lastQuery && <QueryDisplay query={lastQuery} />}
+      {/* S396: Conversational Canvas */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-8 lg:px-16 py-8">
+        <div className="max-w-2xl mx-auto">
+          {/* User's query (if any) */}
+          {lastQuery && <UserQuery query={lastQuery} />}
 
           <AnimatePresence mode="popLayout">
             {isDiscoveryActive ? (
+              /* Discovery in progress - this is fine, communicates active work */
               <DiscoveryLoader
                 region={regionsDisplay}
                 subVertical={subVerticalName}
                 primaryColor={industryConfig.primaryColor}
               />
-            ) : isFilterEmpty ? (
-              /* S390: Empty state when filter has no results */
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="flex flex-col items-center justify-center py-16 text-center"
-              >
-                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                  <span className="text-3xl">📋</span>
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">
-                  No {activeFilter?.item === 'ignored' ? 'skipped' : activeFilter?.item?.replace('_', ' ')} leads
-                </h3>
-                <p className="text-sm text-gray-400 max-w-sm">
-                  {activeFilter?.item === 'saved' && "You haven't saved any leads yet. Click 'Save' on a lead to add it here."}
-                  {activeFilter?.item === 'actioned' && "No leads are being evaluated. Click 'Evaluate' on a lead to start."}
-                  {activeFilter?.item === 'ignored' && "No leads have been skipped. Click 'Skip' on a lead to hide it."}
-                  {activeFilter?.item === 'unactioned' && "All leads have been actioned. Run a new discovery to find more."}
-                </p>
-              </motion.div>
+            ) : activeFilter ? (
+              /* User is filtering - show filtered cards or empty message */
+              hasCards ? (
+                <CardContainer cards={cards} nba={null} onAction={handleCardAction} />
+              ) : (
+                <SystemUtterance
+                  type="status_acknowledgment"
+                  message={`No ${activeFilter.item === 'ignored' ? 'skipped' : (activeFilter.item || '').replace('_', ' ')} leads yet.`}
+                  onAction={handleUtteranceAction}
+                />
+              )
             ) : hasCards ? (
+              /* Active leads to work through - show cards */
               <CardContainer cards={cards} nba={nba} onAction={handleCardAction} />
+            ) : hasActionableLeads ? (
+              /* S396: STATUS_ACKNOWLEDGMENT - saved leads exist, no new signals */
+              <SystemUtterance
+                {...buildStatusAcknowledgment(savedLeadCount)}
+                onAction={handleUtteranceAction}
+              />
             ) : (
-              <SystemState type="no-signals" primaryColor={industryConfig.primaryColor} />
+              /* S396: EMPTY_BUT_ACTIVE - nothing yet, monitoring */
+              <SystemUtterance
+                {...buildEmptyButActive(subVerticalName, regionsDisplay)}
+                onAction={handleUtteranceAction}
+              />
             )}
           </AnimatePresence>
         </div>

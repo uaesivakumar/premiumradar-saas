@@ -89,11 +89,18 @@ const cardTypeLabels: Record<CardTypeEnum, string> = {
 
 export function Card({ card, onAction, isNBA = false }: CardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  // S391: Separate "Why this?" toggle - collapsed by default, user-invoked
+  const [showReasoning, setShowReasoning] = useState(false);
   const Icon = cardTypeIcons[card.type];
   // S390: Use status color override for saved/evaluating cards
   const colorClass = statusColors[card.status] || cardTypeColors[card.type];
   const statusBadge = statusBadges[card.status];
   const expiryDisplay = getExpiryDisplayString(card);
+
+  // S391: Only show "Why this?" for NBA cards with reasoning
+  const hasReasoning = card.type === 'nba' && Array.isArray(card.reasoning) && card.reasoning.length > 0;
+  // S391: Max 3 bullets - template-based, no math
+  const reasoningBullets = hasReasoning ? (card.reasoning as string[]).slice(0, 3) : [];
 
   const handleAction = (actionId: string) => {
     onAction(card.id, actionId);
@@ -174,6 +181,56 @@ export function Card({ card, onAction, isNBA = false }: CardProps) {
 
         {/* Actions - Always visible, filtered by status */}
         <CardActions actions={card.actions} onAction={handleAction} cardStatus={card.status} />
+
+        {/* S391: "Why this?" link - collapsed by default, user-invoked */}
+        {hasReasoning && (
+          <div className="mt-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowReasoning(!showReasoning);
+              }}
+              className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
+            >
+              {showReasoning ? 'Hide reasoning' : 'Why this?'}
+            </button>
+
+            <AnimatePresence>
+              {showReasoning && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="overflow-hidden"
+                >
+                  <ul className="mt-2 space-y-1">
+                    {reasoningBullets.map((point, idx) => (
+                      <li key={idx} className="text-xs text-gray-400 flex items-start gap-2">
+                        <span className="text-gray-600 mt-0.5">•</span>
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* S392: Competitive Context strip - read-only, not clickable */}
+        {card.type === 'nba' && card.alternatives && card.alternatives.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-white/5">
+            <p className="text-xs text-gray-600 mb-1">Other options today:</p>
+            <div className="space-y-0.5">
+              {card.alternatives.map((alt, idx) => (
+                <p key={idx} className="text-xs text-gray-500">
+                  • {alt.name} <span className="text-gray-600">({alt.action})</span>
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Expanded Content */}

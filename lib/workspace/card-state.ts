@@ -129,6 +129,13 @@ export interface Card {
   // Metadata
   reasoning?: string[];       // SIVA reasoning points
   tags?: string[];            // For filtering
+
+  // S392: Competitive Context - other options for situational awareness
+  // Read-only, not clickable, just context
+  alternatives?: Array<{
+    name: string;      // Company/entity name
+    action: string;    // Suggested action: "monitor", "research", "contact later"
+  }>;
 }
 
 // =============================================================================
@@ -254,9 +261,10 @@ export function createSignalCard(params: {
     sourceType: 'signal',
     tags: params.signalType ? [params.signalType] : undefined,
     actions: [
-      { id: 'save', label: 'Save', type: 'primary', handler: 'signal.save' },
+      // S393: CTA labels encode intent + consequence
+      { id: 'save', label: 'Keep for follow-up', type: 'primary', handler: 'signal.save' },
       { id: 'enrich', label: 'Enrich', type: 'secondary', handler: 'signal.enrich' },
-      { id: 'ignore', label: 'Ignore', type: 'dismiss', handler: 'signal.ignore' },
+      { id: 'ignore', label: 'Ignore for now', type: 'dismiss', handler: 'signal.ignore' },
     ],
   });
 }

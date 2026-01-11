@@ -64,6 +64,83 @@ export interface ResolveResult {
 }
 
 // =============================================================================
+// S391: REASONING TEMPLATE HELPERS
+// =============================================================================
+
+/**
+ * Convert signal tag to human-readable label
+ * Template-based, deterministic, no AI
+ */
+const SIGNAL_LABELS: Record<string, string> = {
+  'hiring-expansion': 'Hiring signal',
+  'headcount-jump': 'Growth signal',
+  'office-opening': 'New office signal',
+  'market-entry': 'Market entry signal',
+  'funding-round': 'Funding signal',
+  'project-award': 'Project award signal',
+  'subsidiary-creation': 'New entity signal',
+};
+
+function getSignalLabel(tags?: string[]): string | null {
+  if (!tags || tags.length === 0) return null;
+  for (const tag of tags) {
+    if (SIGNAL_LABELS[tag]) return SIGNAL_LABELS[tag];
+  }
+  return null;
+}
+
+/**
+ * Convert timestamp to human-readable freshness
+ * Template-based: "today", "1 day ago", "2 days ago", etc.
+ */
+function getFreshnessText(createdAt?: Date | string): string {
+  if (!createdAt) return 'recently';
+
+  const created = typeof createdAt === 'string' ? new Date(createdAt) : createdAt;
+  const now = new Date();
+  const diffMs = now.getTime() - created.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return '1 day ago';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 14) return '1 week ago';
+  return `${Math.floor(diffDays / 7)} weeks ago`;
+}
+
+/**
+ * S392: Build alternatives array for competitive context
+ * Shows other options (max 2) for situational awareness
+ * Template-based action labels based on lead status
+ */
+function buildAlternatives(
+  leads: Array<{ entityName?: string; title: string; status: string; tags?: string[] }>,
+  excludeFirst: boolean = true
+): Array<{ name: string; action: string }> {
+  const candidates = excludeFirst ? leads.slice(1) : leads;
+  return candidates.slice(0, 2).map(lead => {
+    // Determine action based on status and signal type
+    const name = lead.entityName || lead.title;
+    let action = 'review';
+
+    if (lead.status === 'saved') {
+      action = 'contact later';
+    } else if (lead.status === 'evaluating') {
+      action = 'finish evaluation';
+    } else if (lead.status === 'active') {
+      // Check signal type for more specific action
+      const hasHiringSignal = lead.tags?.some(t => t.includes('hiring') || t.includes('headcount'));
+      const hasGrowthSignal = lead.tags?.some(t => t.includes('funding') || t.includes('expansion'));
+      if (hasHiringSignal) action = 'research';
+      else if (hasGrowthSignal) action = 'monitor';
+      else action = 'review';
+    }
+
+    return { name, action };
+  });
+}
+
+// =============================================================================
 // INTENT PATTERNS
 // =============================================================================
 
@@ -670,9 +747,10 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
       entityType: 'company' as const,
       reasoning: company.sivaScores?.reasoning || ['Live discovery signal'],
       actions: [
+        // S393: CTA labels encode intent + consequence
         { id: 'evaluate', label: 'Evaluate', type: 'primary' as const, handler: 'signal.evaluate' },
-        { id: 'save', label: 'Save', type: 'secondary' as const, handler: 'signal.save' },
-        { id: 'dismiss', label: 'Skip', type: 'dismiss' as const, handler: 'signal.dismiss' },
+        { id: 'save', label: 'Keep for follow-up', type: 'secondary' as const, handler: 'signal.save' },
+        { id: 'dismiss', label: 'Ignore for now', type: 'dismiss' as const, handler: 'signal.dismiss' },
       ],
       tags: ['signal', 'discovery', `tier-${company.sivaScores?.tier?.toLowerCase() || 'warm'}`],
     }));
@@ -793,95 +871,168 @@ async function handlePreference(resolution: CommandResolution): Promise<ResolveR
 async function handleNBARequest(resolution: CommandResolution): Promise<ResolveResult> {
   const context = buildSIVAContext();
 
-  try {
-    // Call NBA API endpoint
-    const params = new URLSearchParams();
-    if (context.subVertical) params.set('workspaceId', context.subVertical);
-    params.set('activity', 'active');
+  // S390: Get actual workspace state from CardStore for intelligent recommendations
+  const cardStore = useCardStore.getState();
+  const allCards = cardStore.cards.filter(c => c.type === 'signal');
 
-    const response = await fetch(`/api/workspace/nba?${params.toString()}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-    });
+  const savedLeads = allCards.filter(c => c.status === 'saved');
+  const evaluatingLeads = allCards.filter(c => c.status === 'evaluating');
+  const activeLeads = allCards.filter(c => c.status === 'active');
 
-    const result = await response.json();
+  console.log('[CommandResolver] NBA context:', {
+    saved: savedLeads.length,
+    evaluating: evaluatingLeads.length,
+    active: activeLeads.length,
+  });
 
-    if (!result.success || !result.data) {
-      // No NBA available - show helpful message
-      return {
-        success: true,
-        cards: [
-          {
-            type: 'system',
-            priority: 100,
-            title: 'No Actions Available',
-            summary: result.meta?.selectionReason || 'No actionable leads at the moment. Try discovering new companies first.',
-            expiresAt: getExpiryTime('system'),
-            sourceType: 'system',
-            actions: [
-              { id: 'discover', label: 'Discover Leads', type: 'primary', handler: 'system.discover' },
-              { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
-            ],
-            tags: ['nba-empty'],
-          },
-        ],
-      };
-    }
+  // INTELLIGENCE LOGIC: Prioritize based on actual workspace state
 
-    // NBA found - card is automatically added by the adapter via addCard
-    // Return empty cards array since NBA adapter handles it
-    const nba = result.data;
+  // Priority 1: If there are evaluating leads, recommend completing evaluation
+  if (evaluatingLeads.length > 0) {
+    const topEvaluating = evaluatingLeads[0];
+    // S391: Template-based reasoning with signal context
+    const signalLabel = getSignalLabel(topEvaluating.tags);
+    const freshnessText = getFreshnessText(topEvaluating.createdAt);
+    // S392: Build alternatives for competitive context
+    const alternatives = buildAlternatives(evaluatingLeads);
+
     return {
       success: true,
       cards: [
         {
           type: 'nba',
-          priority: 1000, // Highest priority
-          title: nba.actionText,
-          summary: nba.reason,
-          expandedContent: {
-            supportingInfo: nba.supportingInfo,
-            urgency: nba.urgency,
-            score: nba.score,
-            companyName: nba.companyName,
-            contactName: nba.contactName,
-          },
-          expiresAt: nba.expiresAt || getExpiryTime('nba'),
+          priority: 1000,
+          title: `Complete evaluation of ${topEvaluating.entityName || topEvaluating.title}`,
+          summary: `You have ${evaluatingLeads.length} lead${evaluatingLeads.length > 1 ? 's' : ''} in evaluation. Complete your assessment to move forward.`,
+          expiresAt: getExpiryTime('nba'),
           sourceType: 'nba',
-          sourceId: nba.id,
-          entityId: nba.leadId,
-          entityName: nba.companyName,
+          entityId: topEvaluating.entityId,
+          entityName: topEvaluating.entityName,
           entityType: 'company',
-          actions: [
-            { id: 'do-now', label: 'Do Now', type: 'primary', handler: 'nba.execute' },
-            { id: 'defer', label: 'Defer', type: 'secondary', handler: 'nba.defer' },
+          reasoning: [
+            signalLabel ? `${signalLabel} detected (${freshnessText})` : `Lead identified (${freshnessText})`,
+            `${evaluatingLeads.length} lead${evaluatingLeads.length > 1 ? 's' : ''} awaiting your decision`,
+            'Complete evaluation to save or skip',
           ],
-          tags: [`nba-${nba.type?.toLowerCase().replace('_', '-') || 'action'}`, `urgency-${nba.urgency || 'medium'}`],
-        },
-      ],
-    };
-  } catch (error) {
-    console.error('[CommandResolver] NBA request error:', error);
-    return {
-      success: true,
-      cards: [
-        {
-          type: 'system',
-          priority: 100,
-          title: 'Unable to Find Actions',
-          summary: 'Could not retrieve recommendations. Please try again.',
-          expiresAt: getExpiryTime('system'),
-          sourceType: 'system',
           actions: [
-            { id: 'retry', label: 'Retry', type: 'primary', handler: 'system.retry' },
-            { id: 'dismiss', label: 'Dismiss', type: 'dismiss', handler: 'system.dismiss' },
+            // S393: CTA labels encode intent + consequence
+            { id: 'view-lead', label: 'Complete evaluation now', type: 'primary', handler: 'nba.viewLead' },
+            { id: 'dismiss', label: 'Review after 48h', type: 'dismiss', handler: 'system.dismiss' },
           ],
-          tags: ['nba-error'],
+          tags: ['nba-evaluate', 'urgency-high'],
+          // S392: Competitive context - other evaluating leads
+          alternatives: alternatives.length > 0 ? alternatives : undefined,
         },
       ],
     };
   }
+
+  // Priority 2: If there are saved leads, recommend taking action on highest-priority
+  if (savedLeads.length > 0) {
+    const topSaved = savedLeads[0];
+    // S391: Build template-based reasoning with ranking and signal context
+    const signalLabel = getSignalLabel(topSaved.tags);
+    const freshnessText = getFreshnessText(topSaved.createdAt);
+    // S392: Build alternatives for competitive context
+    const alternatives = buildAlternatives(savedLeads);
+
+    return {
+      success: true,
+      cards: [
+        {
+          type: 'nba',
+          priority: 1000,
+          title: `Reach out to ${topSaved.entityName || topSaved.title}`,
+          summary: `You have ${savedLeads.length} qualified lead${savedLeads.length > 1 ? 's' : ''} ready for outreach. Start with your highest-priority prospect.`,
+          expiresAt: getExpiryTime('nba'),
+          sourceType: 'nba',
+          entityId: topSaved.entityId,
+          entityName: topSaved.entityName,
+          entityType: 'company',
+          reasoning: [
+            signalLabel ? `${signalLabel} detected (${freshnessText})` : `Strong opportunity identified (${freshnessText})`,
+            `Ranked #1 of ${savedLeads.length} saved lead${savedLeads.length > 1 ? 's' : ''}`,
+            'Fresh leads should be contacted within 48 hours',
+          ],
+          actions: [
+            // S393: CTA labels encode intent + consequence
+            { id: 'contact', label: 'Contact now (highest priority)', type: 'primary', handler: 'nba.contact' },
+            { id: 'view-pipeline', label: `See all ${savedLeads.length} opportunities`, type: 'secondary', handler: 'nba.viewPipeline' },
+            { id: 'dismiss', label: 'Review after 48h', type: 'dismiss', handler: 'system.dismiss' },
+          ],
+          tags: ['nba-outreach', 'urgency-high'],
+          // S392: Competitive context - other saved leads
+          alternatives: alternatives.length > 0 ? alternatives : undefined,
+        },
+      ],
+    };
+  }
+
+  // Priority 3: If there are active (unactioned) leads, recommend evaluation
+  if (activeLeads.length > 0) {
+    const topActive = activeLeads[0];
+    // S391: Template-based reasoning with signal context
+    const signalLabel = getSignalLabel(topActive.tags);
+    const freshnessText = getFreshnessText(topActive.createdAt);
+    // S392: Build alternatives for competitive context
+    const alternatives = buildAlternatives(activeLeads);
+
+    return {
+      success: true,
+      cards: [
+        {
+          type: 'nba',
+          priority: 1000,
+          title: `Review ${topActive.entityName || topActive.title}`,
+          summary: `You have ${activeLeads.length} new lead${activeLeads.length > 1 ? 's' : ''} awaiting review. Evaluate them to build your pipeline.`,
+          expiresAt: getExpiryTime('nba'),
+          sourceType: 'nba',
+          entityId: topActive.entityId,
+          entityName: topActive.entityName,
+          entityType: 'company',
+          reasoning: [
+            signalLabel ? `${signalLabel} detected (${freshnessText})` : `New lead identified (${freshnessText})`,
+            `${activeLeads.length} lead${activeLeads.length > 1 ? 's' : ''} awaiting review`,
+            'Evaluate to save or skip',
+          ],
+          actions: [
+            // S393: CTA labels encode intent + consequence
+            { id: 'evaluate', label: `Evaluate now (${activeLeads.length} new)`, type: 'primary', handler: 'nba.startEvaluating' },
+            { id: 'dismiss', label: 'Review after 48h', type: 'dismiss', handler: 'system.dismiss' },
+          ],
+          tags: ['nba-review', 'urgency-medium'],
+          // S392: Competitive context - other active leads
+          alternatives: alternatives.length > 0 ? alternatives : undefined,
+        },
+      ],
+    };
+  }
+
+  // Priority 4: No leads at all - suggest discovery
+  return {
+    success: true,
+    cards: [
+      {
+        type: 'nba',
+        priority: 1000,
+        title: 'Discover new opportunities',
+        summary: `Your workspace is empty. Run a discovery to find companies matching your ${context.subVertical || 'sales'} criteria in ${context.region || 'your region'}.`,
+        expiresAt: getExpiryTime('nba'),
+        sourceType: 'nba',
+        reasoning: [
+          'No leads in your current workspace',
+          `Discovery will find companies with signals matching ${context.subVertical || 'your vertical'}`,
+          'Try: "Find companies in ADGM" or "Show me expanding companies"',
+        ],
+        actions: [
+          // S393: CTA labels encode intent + consequence
+          { id: 'discover', label: 'Find new leads now', type: 'primary', handler: 'system.discover' },
+          { id: 'dismiss', label: 'Skip for now', type: 'dismiss', handler: 'system.dismiss' },
+        ],
+        tags: ['nba-discover', 'urgency-low'],
+      },
+    ],
+  };
 }
 
 function handleHelp(): ResolveResult {
