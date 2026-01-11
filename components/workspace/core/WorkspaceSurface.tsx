@@ -189,31 +189,23 @@ export function WorkspaceSurface() {
     return activeCards.filter(c => c.type === 'signal' && c.status === 'saved').length;
   }, [activeCards]);
 
-  // S396: Handle utterance actions
+  // S396: Handle utterance actions (minimal set)
   const handleUtteranceAction = useCallback((actionId: string) => {
     switch (actionId) {
       case 'prioritize':
-      case 'saved':
-        // Show saved leads
+        // Show saved leads - the primary guided action
         useLeftRailStore.getState().setActiveFilter({ section: 'leads', item: 'saved' });
         break;
-      case 'later':
-      case 'monitor':
-        // Do nothing - user chose to defer/monitor
-        break;
       case 'discover':
-      case 'new':
       case 'ask':
-      case 'trending':
-      case 'explore':
         // Focus the command palette - user can type to start
         document.querySelector<HTMLInputElement>('[data-command-input]')?.focus();
         break;
       case 'act':
-        // Show the NBA card (already visible)
+        // Show the NBA card (scroll into view if needed)
         break;
       case 'alternatives':
-        // Clear filter to show all active leads
+        // Clear filter to show all opportunities
         useLeftRailStore.getState().setActiveFilter(null);
         break;
       default:

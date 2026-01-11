@@ -72,6 +72,10 @@ export function SystemUtterance({
     return null;
   }
 
+  // Separate primary from secondary actions
+  const primaryAction = actions?.find((a) => a.primary);
+  const secondaryActions = actions?.filter((a) => !a.primary) || [];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -79,36 +83,44 @@ export function SystemUtterance({
       exit={{ opacity: 0, y: -16 }}
       className="flex flex-col items-center justify-center text-center"
     >
-      {/* Bold headline - like Gemini/Claude */}
+      {/* Bold headline */}
       <h1 className="text-3xl md:text-4xl font-light text-white leading-tight max-w-xl">
         {message}
       </h1>
 
-      {/* Subtext - muted but readable */}
+      {/* System assertion - the recommendation */}
       {followUp && (
-        <p className="text-base text-gray-400 mt-4 leading-relaxed max-w-lg">
+        <p className="text-base text-gray-300 mt-4 leading-relaxed max-w-lg">
           {followUp}
         </p>
       )}
 
-      {/* Action cards - grid like GPT/Gemini */}
-      {actions && actions.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 mt-10 w-full max-w-lg">
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              onClick={() => onAction?.(action.id)}
-              className={`
-                px-4 py-4 text-sm text-left rounded-xl transition-all
-                border border-white/10 hover:border-white/20
-                hover:bg-white/5 group
-                ${action.primary ? 'bg-white/5' : 'bg-transparent'}
-              `}
-            >
-              <span className="text-gray-200 group-hover:text-white transition-colors">
+      {/* Primary CTA - ONE only, prominent */}
+      {primaryAction && (
+        <button
+          onClick={() => onAction?.(primaryAction.id)}
+          className="mt-8 px-6 py-3 bg-white text-slate-950 font-medium rounded-lg
+                     hover:bg-gray-100 transition-colors text-sm"
+        >
+          {primaryAction.label}
+        </button>
+      )}
+
+      {/* Secondary actions - text links, low emphasis */}
+      {secondaryActions.length > 0 && (
+        <div className="mt-6 flex items-center gap-1 text-sm text-gray-500">
+          {secondaryActions.map((action, index) => (
+            <span key={action.id} className="flex items-center">
+              <button
+                onClick={() => onAction?.(action.id)}
+                className="hover:text-gray-300 transition-colors"
+              >
                 {action.label}
-              </span>
-            </button>
+              </button>
+              {index < secondaryActions.length - 1 && (
+                <span className="mx-2">·</span>
+              )}
+            </span>
           ))}
         </div>
       )}
@@ -131,80 +143,85 @@ function getTimeGreeting(): string {
 }
 
 /**
- * Build utterance for STATUS_ACKNOWLEDGMENT
- * When: Saved leads exist - WARM GREETING + GUIDE TO ACTION
+ * Build utterance for STATUS_ACKNOWLEDGMENT (STATE A - Re-entry)
+ * When: Saved leads exist - RECOMMENDATION FIRST
  *
  * RULES:
- * - Greet warmly, like a colleague
- * - Imply capability and momentum
- * - Invite action without pressure
+ * - System commits to a recommendation
+ * - ONE primary CTA, secondary as text links
+ * - No "just browsing" - destroys authority
  */
-export function buildStatusAcknowledgment(_savedCount: number): Omit<SystemUtteranceProps, 'onAction'> {
+export function buildStatusAcknowledgment(savedCount: number): Omit<SystemUtteranceProps, 'onAction'> {
   const greeting = getTimeGreeting();
+  const urgencyNote = savedCount > 3
+    ? ', and one is time-sensitive'
+    : '';
   return {
     type: 'status_acknowledgment',
     message: `${greeting}. Ready to pick up where you left off?`,
-    followUp: 'I can prioritize your pipeline and walk you through the most urgent opportunities.',
+    followUp: `I recommend starting with your saved leads — ${savedCount} ${savedCount === 1 ? 'opportunity is' : 'opportunities are'} waiting${urgencyNote}.`,
     actions: [
-      { id: 'prioritize', label: 'Review saved leads', primary: true },
-      { id: 'discover', label: 'Find new opportunities' },
+      { id: 'prioritize', label: 'Start with saved leads', primary: true },
       { id: 'ask', label: 'Ask about a company' },
-      { id: 'later', label: 'Just browsing' },
+      { id: 'discover', label: 'Find new opportunities' },
     ],
   };
 }
 
 /**
- * Build utterance for EMPTY_BUT_ACTIVE
- * When: No signals, no saved leads - WARM WELCOME + INVITE EXPLORATION
+ * Build utterance for EMPTY_BUT_ACTIVE (STATE E - True Empty)
+ * When: No signals, no saved leads - READY TO FIND
+ *
+ * RULES:
+ * - No decoration, just readiness
+ * - ONE primary action
  */
-export function buildEmptyButActive(subVertical: string, territory: string): Omit<SystemUtteranceProps, 'onAction'> {
-  const greeting = getTimeGreeting();
+export function buildEmptyButActive(_subVertical: string, _territory: string): Omit<SystemUtteranceProps, 'onAction'> {
   return {
     type: 'empty_but_active',
-    message: `${greeting}. What would you like to focus on?`,
-    followUp: `I'm monitoring ${subVertical} opportunities across ${territory}.`,
+    message: "I'm ready to find opportunities for you.",
     actions: [
       { id: 'discover', label: 'Find new opportunities', primary: true },
       { id: 'ask', label: 'Ask about a company' },
-      { id: 'trending', label: 'See market trends' },
-      { id: 'explore', label: 'Explore by industry' },
     ],
   };
 }
 
 /**
- * Build utterance for ACTION_PROMPT
+ * Build utterance for ACTION_PROMPT (STATE B - Active Guidance)
  * When: NBA exists, clear high-priority action
+ *
+ * RULES:
+ * - System commits to showing the best opportunity
+ * - User only decides whether to proceed
  */
 export function buildActionPrompt(): Omit<SystemUtteranceProps, 'onAction'> {
   return {
     type: 'action_prompt',
-    message: 'One opportunity stands out right now.',
-    followUp: 'Want to act on it, or see alternatives?',
+    message: "Let's start with the highest-priority opportunity.",
     actions: [
       { id: 'act', label: 'Show me', primary: true },
-      { id: 'alternatives', label: 'See alternatives' },
-      { id: 'discover', label: 'Find more leads' },
-      { id: 'later', label: 'Later' },
+      { id: 'alternatives', label: 'See all opportunities' },
     ],
   };
 }
 
 /**
- * Build utterance for DECISION_SUPPORT
- * When: Multiple viable options, no clear winner
+ * Build utterance for DECISION_SUPPORT (STATE D - No New Signals, Work Exists)
+ * When: No new discovery signals, but saved/unactioned leads exist
+ *
+ * RULES:
+ * - Never say "no new signals" or "monitoring"
+ * - Assert that existing work deserves attention
  */
-export function buildDecisionSupport(optionCount: number): Omit<SystemUtteranceProps, 'onAction'> {
+export function buildDecisionSupport(savedCount: number): Omit<SystemUtteranceProps, 'onAction'> {
   return {
     type: 'decision_support',
-    message: `There are ${optionCount} directions you could take.`,
-    followUp: 'What do you want to focus on?',
+    message: 'Your attention is better spent on existing opportunities right now.',
+    followUp: `There ${savedCount === 1 ? 'is 1 saved company' : `are ${savedCount} saved companies`} that ${savedCount === 1 ? "hasn't" : "haven't"} been acted on yet.`,
     actions: [
-      { id: 'saved', label: 'Saved opportunities', primary: true },
-      { id: 'new', label: 'New discovery' },
+      { id: 'prioritize', label: 'Prioritize them now', primary: true },
       { id: 'ask', label: 'Ask about a company' },
-      { id: 'monitor', label: 'Monitor only' },
     ],
   };
 }
