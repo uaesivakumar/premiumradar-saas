@@ -13,7 +13,7 @@
  * A judgment interface for high-stakes operators.
  */
 
-import React, { useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCardStore, startTTLEngine, stopTTLEngine } from '@/lib/stores/card-store';
 import { useLeftRailStore } from '@/lib/stores/left-rail-store';
@@ -26,10 +26,14 @@ import { ContextBar } from './ContextBar';
 import { CardContainer } from './CardContainer';
 import { CommandPalette } from './CommandPalette';
 import { DiscoveryLoader } from './DiscoveryLoader';
+import { FocusedLeadReview } from './FocusedLeadReview';
 import {
   SystemUtterance,
   buildStatusAcknowledgment,
   buildEmptyButActive,
+  buildMomentumState,
+  getTodayActionCount,
+  incrementTodayActionCount,
 } from './SystemUtterance';
 import { useDiscoveryContextStore, selectIsDiscoveryActive } from '@/lib/workspace/discovery-context';
 
@@ -76,6 +80,18 @@ export function WorkspaceSurface() {
   const { subVerticalName, regionsDisplay, verticalName } = useSalesContext();
   const { detectedIndustry } = useIndustryStore();
   const industryConfig = getIndustryConfig(detectedIndustry);
+
+  // S396: Focused Lead Review Mode - no navigation, canvas morphs
+  const [focusedReviewMode, setFocusedReviewMode] = useState(false);
+  const [focusedLeadIndex, setFocusedLeadIndex] = useState(0);
+
+  // S396: Track actions taken today for momentum state
+  const [actionsToday, setActionsToday] = useState(0);
+
+  // Initialize actions count on mount
+  useEffect(() => {
+    setActionsToday(getTodayActionCount());
+  }, []);
 
   // S390: Get sidebar filter
   const activeFilter = useLeftRailStore((state) => state.activeFilter);
@@ -184,22 +200,38 @@ export function WorkspaceSurface() {
   // S396: System state for context bar only
   const systemState = isDiscoveryActive ? 'discovering' : (hasAllCards ? 'live' : 'no-signals');
 
-  // S396: Count saved leads for utterance
-  const savedLeadCount = useMemo(() => {
-    return activeCards.filter(c => c.type === 'signal' && c.status === 'saved').length;
+  // S396: Get saved leads for focused review (sorted by priority)
+  const savedLeads = useMemo(() => {
+    return activeCards
+      .filter(c => c.type === 'signal' && c.status === 'saved')
+      .sort((a, b) => b.priority - a.priority);
   }, [activeCards]);
+
+  const savedLeadCount = savedLeads.length;
+
+  // S396: Current lead in focused review
+  const currentFocusedLead = focusedReviewMode && savedLeads.length > 0
+    ? savedLeads[Math.min(focusedLeadIndex, savedLeads.length - 1)]
+    : null;
 
   // S396: Handle utterance actions (minimal set)
   const handleUtteranceAction = useCallback((actionId: string) => {
     switch (actionId) {
       case 'prioritize':
-        // Show saved leads - the primary guided action
-        useLeftRailStore.getState().setActiveFilter({ section: 'leads', item: 'saved' });
+        // Enter focused review mode - NO navigation, canvas morphs
+        if (savedLeads.length > 0) {
+          setFocusedLeadIndex(0);
+          setFocusedReviewMode(true);
+        }
         break;
       case 'discover':
       case 'ask':
         // Focus the command palette - user can type to start
         document.querySelector<HTMLInputElement>('[data-command-input]')?.focus();
+        break;
+      case 'history':
+        // Show action history (future: dedicated view)
+        useLeftRailStore.getState().setActiveFilter({ section: 'leads', item: 'actioned' });
         break;
       case 'act':
         // Show the NBA card (scroll into view if needed)
@@ -211,6 +243,63 @@ export function WorkspaceSurface() {
       default:
         console.log('[WorkspaceSurface] Unknown utterance action:', actionId);
     }
+  }, [savedLeads.length]);
+
+  // S396: Handle focused review actions
+  const handleFocusedReviewAction = useCallback(async (leadId: string, actionId: string) => {
+    const lead = savedLeads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    // Get action context
+    const nbaContext = getContext();
+    const actionContext: ActionContext = {
+      tenantId: nbaContext.tenantId,
+      userId: nbaContext.userId,
+      workspaceId: nbaContext.workspaceId,
+    };
+
+    // Map UI action to handler
+    let handler = '';
+    switch (actionId) {
+      case 'evaluate':
+        handler = 'signal:evaluate';
+        break;
+      case 'save':
+        handler = 'signal:save';
+        break;
+      case 'skip':
+        handler = 'signal:skip';
+        break;
+      default:
+        console.warn('[FocusedReview] Unknown action:', actionId);
+        return;
+    }
+
+    // Dispatch the action
+    const result = await dispatchAction(handler, lead, actionContext);
+
+    if (result.success) {
+      // Increment today's action count
+      incrementTodayActionCount();
+      setActionsToday(prev => prev + 1);
+
+      // Auto-advance to next lead
+      if (focusedLeadIndex < savedLeads.length - 1) {
+        setFocusedLeadIndex(prev => prev + 1);
+      } else {
+        // All leads reviewed, exit focused mode
+        setFocusedReviewMode(false);
+        setFocusedLeadIndex(0);
+      }
+    } else {
+      console.error('[FocusedReview] Action failed:', result.error);
+    }
+  }, [savedLeads, focusedLeadIndex, getContext]);
+
+  // S396: Exit focused review mode
+  const handleExitFocusedReview = useCallback(() => {
+    setFocusedReviewMode(false);
+    setFocusedLeadIndex(0);
   }, []);
 
   return (
@@ -271,6 +360,14 @@ export function WorkspaceSurface() {
                 subVertical={subVerticalName}
                 primaryColor={industryConfig.primaryColor}
               />
+            ) : focusedReviewMode && currentFocusedLead ? (
+              /* S396: Focused Lead Review Mode - canvas morphs, no navigation */
+              <FocusedLeadReview
+                lead={currentFocusedLead}
+                position={{ current: focusedLeadIndex + 1, total: savedLeads.length }}
+                onAction={handleFocusedReviewAction}
+                onExit={handleExitFocusedReview}
+              />
             ) : activeFilter ? (
               /* User is filtering - show filtered cards or empty message */
               hasCards ? (
@@ -286,11 +383,20 @@ export function WorkspaceSurface() {
               /* Active leads to work through - show cards */
               <CardContainer cards={cards} nba={nba} onAction={handleCardAction} />
             ) : hasActionableLeads ? (
-              /* S396: STATUS_ACKNOWLEDGMENT - saved leads exist, no new signals */
-              <SystemUtterance
-                {...buildStatusAcknowledgment(savedLeadCount)}
-                onAction={handleUtteranceAction}
-              />
+              /* S396: Check for momentum state first */
+              actionsToday > 0 ? (
+                /* MOMENTUM STATE - user has taken actions today */
+                <SystemUtterance
+                  {...buildMomentumState(actionsToday, savedLeadCount)}
+                  onAction={handleUtteranceAction}
+                />
+              ) : (
+                /* STATUS_ACKNOWLEDGMENT - saved leads exist, no actions yet today */
+                <SystemUtterance
+                  {...buildStatusAcknowledgment(savedLeadCount)}
+                  onAction={handleUtteranceAction}
+                />
+              )
             ) : (
               /* S396: EMPTY_BUT_ACTIVE - nothing yet, monitoring */
               <SystemUtterance

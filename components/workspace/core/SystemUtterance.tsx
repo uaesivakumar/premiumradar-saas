@@ -260,4 +260,63 @@ export function buildDecisionSupport(savedCount: number): Omit<SystemUtterancePr
   };
 }
 
+/**
+ * Build utterance for MOMENTUM STATE (Return after action)
+ * When: User acted on ≥1 lead today and saved leads still exist
+ *
+ * RULES:
+ * - Acknowledge competence
+ * - Reinforce momentum
+ * - Keep authority with the system
+ */
+export function buildMomentumState(actionsToday: number, savedCount: number): Omit<SystemUtteranceProps, 'onAction'> {
+  const urgencyNote = savedCount > 3 ? ' — one is still time-sensitive' : '';
+
+  return {
+    type: 'status_acknowledgment',
+    message: 'Good progress. Want to keep momentum?',
+    followUp: `You've actioned ${actionsToday} ${actionsToday === 1 ? 'opportunity' : 'opportunities'}. ${savedCount} saved ${savedCount === 1 ? 'lead remains' : 'leads remain'}${urgencyNote}.`,
+    actions: [
+      { id: 'prioritize', label: 'Continue with next priority', primary: true, hint: 'Next: Reviewing highest-priority saved lead' },
+      { id: 'history', label: 'Review action history' },
+      { id: 'ask', label: 'Ask about a company' },
+    ],
+  };
+}
+
+/**
+ * Get today's action count from localStorage
+ */
+export function getTodayActionCount(): number {
+  if (typeof window === 'undefined') return 0;
+
+  const today = new Date().toDateString();
+  const stored = localStorage.getItem('pr_actions_today');
+
+  if (!stored) return 0;
+
+  try {
+    const data = JSON.parse(stored);
+    if (data.date !== today) return 0;
+    return data.count || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Increment today's action count
+ */
+export function incrementTodayActionCount(): void {
+  if (typeof window === 'undefined') return;
+
+  const today = new Date().toDateString();
+  const current = getTodayActionCount();
+
+  localStorage.setItem('pr_actions_today', JSON.stringify({
+    date: today,
+    count: current + 1,
+  }));
+}
+
 export default SystemUtterance;
