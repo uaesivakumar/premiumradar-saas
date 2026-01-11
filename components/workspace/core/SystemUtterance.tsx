@@ -40,6 +40,7 @@ export interface UtteranceAction {
   id: string;
   label: string;
   primary?: boolean;
+  hint?: string; // Implied next-step microcopy (shown under primary CTA)
 }
 
 export interface SystemUtteranceProps {
@@ -97,13 +98,21 @@ export function SystemUtterance({
 
       {/* Primary CTA - ONE only, prominent */}
       {primaryAction && (
-        <button
-          onClick={() => onAction?.(primaryAction.id)}
-          className="mt-8 px-6 py-3 bg-white text-slate-950 font-medium rounded-lg
-                     hover:bg-gray-100 transition-colors text-sm"
-        >
-          {primaryAction.label}
-        </button>
+        <div className="mt-8 flex flex-col items-center">
+          <button
+            onClick={() => onAction?.(primaryAction.id)}
+            className="px-6 py-3 bg-white text-slate-950 font-medium rounded-lg
+                       hover:bg-gray-100 transition-colors text-sm"
+          >
+            {primaryAction.label}
+          </button>
+          {/* Implied next-step - signals inevitability */}
+          {primaryAction.hint && (
+            <p className="mt-3 text-xs text-gray-600">
+              {primaryAction.hint}
+            </p>
+          )}
+        </div>
       )}
 
       {/* Secondary actions - text links, low emphasis */}
@@ -133,13 +142,31 @@ export function SystemUtterance({
 // =============================================================================
 
 /**
- * Get time-based greeting
+ * Get time-based greeting (only for first session of day)
+ * Subsequent sessions get direct assertion
  */
-function getTimeGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+function getConditionalGreeting(): string | null {
+  // Check if this is first session of the day
+  const today = new Date().toDateString();
+  const lastVisit = typeof window !== 'undefined'
+    ? localStorage.getItem('pr_last_workspace_visit')
+    : null;
+
+  // Mark this visit
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('pr_last_workspace_visit', today);
+  }
+
+  // First visit of the day → warm greeting
+  if (!lastVisit || lastVisit !== today) {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  // Subsequent visit → no greeting, direct to action
+  return null;
 }
 
 /**
@@ -150,18 +177,25 @@ function getTimeGreeting(): string {
  * - System commits to a recommendation
  * - ONE primary CTA, secondary as text links
  * - No "just browsing" - destroys authority
+ * - Conditional greeting (first session vs subsequent)
  */
 export function buildStatusAcknowledgment(savedCount: number): Omit<SystemUtteranceProps, 'onAction'> {
-  const greeting = getTimeGreeting();
+  const greeting = getConditionalGreeting();
   const urgencyNote = savedCount > 3
     ? ', and one is time-sensitive'
     : '';
+
+  // First session: warm greeting. Subsequent: direct.
+  const headline = greeting
+    ? `${greeting}. Ready to pick up where you left off?`
+    : 'Ready to continue?';
+
   return {
     type: 'status_acknowledgment',
-    message: `${greeting}. Ready to pick up where you left off?`,
+    message: headline,
     followUp: `I recommend starting with your saved leads — ${savedCount} ${savedCount === 1 ? 'opportunity is' : 'opportunities are'} waiting${urgencyNote}.`,
     actions: [
-      { id: 'prioritize', label: 'Start with saved leads', primary: true },
+      { id: 'prioritize', label: 'Start with saved leads', primary: true, hint: 'Next: Reviewing highest-priority saved lead' },
       { id: 'ask', label: 'Ask about a company' },
       { id: 'discover', label: 'Find new opportunities' },
     ],
