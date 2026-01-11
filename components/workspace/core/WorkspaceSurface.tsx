@@ -193,15 +193,28 @@ export function WorkspaceSurface() {
   const handleUtteranceAction = useCallback((actionId: string) => {
     switch (actionId) {
       case 'prioritize':
+      case 'saved':
         // Show saved leads
         useLeftRailStore.getState().setActiveFilter({ section: 'leads', item: 'saved' });
         break;
       case 'later':
-        // Do nothing - user wants to see later
-        break;
       case 'monitor':
-        // Clear any filter and keep monitoring
-        useLeftRailStore.getState().setActiveFilter(null as any);
+        // Do nothing - user chose to defer/monitor
+        break;
+      case 'discover':
+      case 'new':
+      case 'ask':
+      case 'trending':
+      case 'explore':
+        // Focus the command palette - user can type to start
+        document.querySelector<HTMLInputElement>('[data-command-input]')?.focus();
+        break;
+      case 'act':
+        // Show the NBA card (already visible)
+        break;
+      case 'alternatives':
+        // Clear filter to show all active leads
+        useLeftRailStore.getState().setActiveFilter(null);
         break;
       default:
         console.log('[WorkspaceSurface] Unknown utterance action:', actionId);
@@ -252,9 +265,9 @@ export function WorkspaceSurface() {
         systemState={systemState}
       />
 
-      {/* S396: Conversational Canvas */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-8 lg:px-16 py-8">
-        <div className="max-w-2xl mx-auto">
+      {/* S396: Conversational Canvas - centered, prominent */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 md:px-8 lg:px-16 flex flex-col">
+        <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col justify-center">
           {/* User's query (if any) */}
           {lastQuery && <UserQuery query={lastQuery} />}
 
