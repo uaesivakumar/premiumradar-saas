@@ -102,6 +102,128 @@ ORDER BY DATE(created_at) DESC, provider;
 // =============================================================================
 
 // =============================================================================
+// S397: ENRICHMENT POLICY AUTHORING SQL (Phase 1)
+// =============================================================================
+
+const POLICY_AUTHORING_SQL = `
+-- S397: Enrichment Policy Authoring
+-- Add enrichment_policy_text field to os_sub_verticals
+-- Part of Phase 1: Policy Compiler (Foundational)
+
+ALTER TABLE os_sub_verticals
+ADD COLUMN IF NOT EXISTS enrichment_policy_text TEXT,
+ADD COLUMN IF NOT EXISTS enrichment_policy_version INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS enrichment_policy_updated_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS enrichment_policy_updated_by VARCHAR(255);
+
+-- Create index for quick lookup of sub-verticals with policies
+CREATE INDEX IF NOT EXISTS idx_sub_verticals_has_policy
+ON os_sub_verticals ((enrichment_policy_text IS NOT NULL));
+`;
+
+// =============================================================================
+// S400: ENRICHMENT POLICY VERSIONING SQL (Phase 1)
+// =============================================================================
+
+const POLICY_VERSIONING_SQL = `
+-- S400: Enrichment Policy Versioning & Audit
+-- Create enrichment_policy_versions table for immutable version tracking
+-- Part of Phase 1: Policy Compiler (Foundational)
+
+CREATE TABLE IF NOT EXISTS enrichment_policy_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sub_vertical_id UUID NOT NULL REFERENCES os_sub_verticals(id) ON DELETE CASCADE,
+
+  -- Version tracking
+  version INTEGER NOT NULL,
+
+  -- Policy content
+  policy_text TEXT NOT NULL,
+
+  -- Interpreted IPR (from S398 LLM interpretation)
+  interpreted_ipr JSONB,
+
+  -- Interpretation metadata
+  interpretation_confidence DECIMAL(5,4),
+  interpretation_warnings JSONB,
+  interpreted_at TIMESTAMPTZ,
+  interpreted_by VARCHAR(255),
+
+  -- Compiled policy (for Phase 2 runtime)
+  compiled_policy JSONB,
+  compiled_at TIMESTAMPTZ,
+
+  -- Approval workflow
+  status VARCHAR(20) NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'pending_approval', 'approved', 'rejected', 'deprecated')),
+
+  -- Approval audit
+  approved_by VARCHAR(255),
+  approved_at TIMESTAMPTZ,
+  approval_notes TEXT,
+
+  -- Rejection audit
+  rejected_by VARCHAR(255),
+  rejected_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+
+  -- Deprecation audit
+  deprecated_by VARCHAR(255),
+  deprecated_at TIMESTAMPTZ,
+  deprecation_reason TEXT,
+
+  -- Creation audit
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by VARCHAR(255) NOT NULL,
+
+  -- Unique version per sub-vertical
+  CONSTRAINT unique_policy_version UNIQUE (sub_vertical_id, version)
+);
+
+-- Index for quick lookup of active/pending versions
+CREATE INDEX IF NOT EXISTS idx_epv_sub_vertical_status
+ON enrichment_policy_versions (sub_vertical_id, status);
+
+-- Index for finding latest approved version
+CREATE INDEX IF NOT EXISTS idx_epv_approved
+ON enrichment_policy_versions (sub_vertical_id, status, version DESC)
+WHERE status = 'approved';
+
+-- Index for audit queries
+CREATE INDEX IF NOT EXISTS idx_epv_created_at
+ON enrichment_policy_versions (created_at DESC);
+
+-- Function to get active policy version for a sub-vertical
+CREATE OR REPLACE FUNCTION get_active_policy_version(p_sub_vertical_id UUID)
+RETURNS TABLE (
+  version_id UUID,
+  version INTEGER,
+  policy_text TEXT,
+  interpreted_ipr JSONB,
+  compiled_policy JSONB,
+  approved_at TIMESTAMPTZ,
+  approved_by VARCHAR(255)
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    epv.id as version_id,
+    epv.version,
+    epv.policy_text,
+    epv.interpreted_ipr,
+    epv.compiled_policy,
+    epv.approved_at,
+    epv.approved_by
+  FROM enrichment_policy_versions epv
+  WHERE epv.sub_vertical_id = p_sub_vertical_id
+    AND epv.status = 'approved'
+  ORDER BY epv.version DESC
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+`;
+
+// =============================================================================
 // S396: ENRICHMENT PERSISTENCE SQL
 // =============================================================================
 
@@ -669,6 +791,16 @@ export async function POST(request: NextRequest) {
       await query(ENRICHMENT_PERSISTENCE_SQL);
       results.push('✓ Migration completed: enrichment_sessions, enriched_contacts, enrichment_evidence tables created');
 
+      // S397: Run policy authoring migration (Phase 1)
+      console.log('[Setup] Running S397 policy authoring migration...');
+      await query(POLICY_AUTHORING_SQL);
+      results.push('✓ Migration completed: enrichment_policy columns added to os_sub_verticals');
+
+      // S400: Run policy versioning migration (Phase 1)
+      console.log('[Setup] Running S400 policy versioning migration...');
+      await query(POLICY_VERSIONING_SQL);
+      results.push('✓ Migration completed: enrichment_policy_versions table created');
+
       // Run system_config tables migration
       console.log('[Setup] Running system_config migration...');
       await query(SYSTEM_CONFIG_TABLE_SQL);
@@ -772,6 +904,15 @@ export async function GET() {
     `);
     const enrichmentSessionsExists = enrichmentCheck[0]?.exists || false;
 
+    // S400: Check if enrichment_policy_versions table exists (Phase 1)
+    const policyVersionsCheck = await query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'enrichment_policy_versions'
+      )
+    `);
+    const policyVersionsExists = policyVersionsCheck[0]?.exists || false;
+
     // Count system configs if table exists
     let systemConfigCount = 0;
     if (systemConfigExists) {
@@ -790,6 +931,7 @@ export async function GET() {
           siva_metrics: sivaTableExists,
           system_config: systemConfigExists,
           enrichment_sessions: enrichmentSessionsExists,
+          enrichment_policy_versions: policyVersionsExists,
         },
         configCount,
         sivaMetricsCount,
