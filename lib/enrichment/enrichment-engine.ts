@@ -206,12 +206,27 @@ export async function enrichCompanyContacts(
       normalizedData: normalizedContacts,
     });
 
-    // Step 4: Score contacts via QTLE
+    // Step 4: Score contacts via QTLE with company context
     console.log('[EnrichmentEngine] Scoring contacts via QTLE...');
 
     updateSessionStage(session.id, 'SCORING_STARTED');
 
-    const scoringContext = getScoringContext(request.subVertical);
+    // Extract company headcount from Apollo response (if available)
+    // Apollo contacts include organization data with employee count
+    const companyData = apolloContacts[0]?.organization;
+    const companyContext = companyData ? {
+      headcount: companyData.estimated_num_employees || companyData.employee_count,
+      hiringVelocity: companyData.hiring_velocity,
+      industry: companyData.industry,
+    } : undefined;
+
+    console.log('[EnrichmentEngine] Company context for scoring:', {
+      entityName: request.entityName,
+      headcount: companyContext?.headcount,
+      hiringVelocity: companyContext?.hiringVelocity,
+    });
+
+    const scoringContext = getScoringContext(request.subVertical, companyContext);
     const scoredContacts = scoreContacts(normalizedContacts, session.id, scoringContext);
 
     // Limit to max contacts if specified
