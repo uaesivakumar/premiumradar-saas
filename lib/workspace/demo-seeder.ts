@@ -192,10 +192,10 @@ function createDemoSignalCards(): Omit<Card, 'id' | 'createdAt' | 'status'>[] {
     entityType: 'company' as const,
     reasoning: [lead.reason],
     actions: [
-      // S393: CTA labels encode intent + consequence
-      { id: 'evaluate', label: 'Evaluate', type: 'primary' as const, handler: 'signal.evaluate' },
-      { id: 'save', label: 'Keep for follow-up', type: 'secondary' as const, handler: 'signal.save' },
-      { id: 'dismiss', label: 'Ignore for now', type: 'dismiss' as const, handler: 'signal.dismiss' },
+      // S396: CTA labels - Enrich triggers contact discovery
+      { id: 'enrich', label: 'Enrich', type: 'primary' as const, handler: 'signal.enrich' },
+      { id: 'save', label: 'Save', type: 'secondary' as const, handler: 'signal.save' },
+      { id: 'dismiss', label: 'Skip', type: 'dismiss' as const, handler: 'signal.dismiss' },
     ] as CardAction[],
     tags: ['signal', `score-${lead.score}`],
   }));
@@ -216,9 +216,9 @@ function createDemoSignalCards(): Omit<Card, 'id' | 'createdAt' | 'status'>[] {
     entityType: 'company' as const,
     reasoning: [lead.reason],
     actions: [
-      // S393: CTA labels encode intent + consequence
-      { id: 'evaluate', label: 'Evaluate', type: 'primary' as const, handler: 'signal.evaluate' },
-      { id: 'dismiss', label: 'Ignore for now', type: 'dismiss' as const, handler: 'signal.dismiss' },
+      // S396: CTA labels - Enrich triggers contact discovery
+      { id: 'enrich', label: 'Enrich', type: 'primary' as const, handler: 'signal.enrich' },
+      { id: 'dismiss', label: 'Skip', type: 'dismiss' as const, handler: 'signal.dismiss' },
     ] as CardAction[],
     tags: ['signal', 'borderline', `score-${lead.score}`],
   }));

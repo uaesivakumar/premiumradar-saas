@@ -60,10 +60,10 @@ function leadToCard(lead: DBLead): Card {
     title: lead.entity_name || 'Unknown Company',
     summary: `Discovered lead - ${lead.lead_state.toLowerCase()}`,
     actions: [
-      // S393: CTA labels encode intent + consequence
-      { id: 'evaluate', label: 'Evaluate', type: 'primary', handler: 'signal.evaluate' },
-      { id: 'save', label: 'Keep for follow-up', type: 'secondary', handler: 'signal.save' },
-      { id: 'dismiss', label: 'Ignore for now', type: 'dismiss', handler: 'signal.dismiss' },
+      // S396: CTA labels - Enrich triggers contact discovery
+      { id: 'enrich', label: 'Enrich', type: 'primary', handler: 'signal.enrich' },
+      { id: 'save', label: 'Save', type: 'secondary', handler: 'signal.save' },
+      { id: 'dismiss', label: 'Skip', type: 'dismiss', handler: 'signal.dismiss' },
     ],
     sourceType: 'signal',
     entityId: lead.entity_id,

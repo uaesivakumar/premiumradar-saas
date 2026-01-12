@@ -25,11 +25,11 @@ interface CardActionsProps {
 
 // S390: Actions to hide based on current status
 // Saved leads: hide Save (already saved) AND Skip/Ignore/Dismiss (can't skip a saved lead)
-// Evaluating leads: hide Evaluate (already evaluating)
+// Evaluating leads: hide Enrich (already enriching)
 const hiddenActionsByStatus: Record<string, string[]> = {
   saved: ['save', 'skip', 'ignore', 'dismiss'],  // Hide Save and all Skip variants
-  evaluating: ['evaluate'],
-  dismissed: ['skip', 'ignore', 'dismiss', 'save', 'evaluate'],  // Hide all actions for skipped leads
+  evaluating: ['evaluate', 'enrich'],  // Hide both old and new action IDs
+  dismissed: ['skip', 'ignore', 'dismiss', 'save', 'evaluate', 'enrich'],  // Hide all actions for skipped leads
 };
 
 export function CardActions({ actions, onAction, compact = false, cardStatus }: CardActionsProps) {

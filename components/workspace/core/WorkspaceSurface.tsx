@@ -96,14 +96,23 @@ export function WorkspaceSurface() {
   // S390: Get sidebar filter
   const activeFilter = useLeftRailStore((state) => state.activeFilter);
 
+  // S396: Check if viewing LEADS section (individual contacts, not companies)
+  const isLeadsSection = activeFilter?.section === 'leads';
+
   // S390: Filter cards based on sidebar selection
   // DEFAULT VIEW: Only show UNACTIONED (active) leads - saved/evaluating hidden until filtered
   // CRITICAL: When filtering by "ignored" (skipped), we need to look at ALL cards
   const cards = useMemo(() => {
     const { section, item } = activeFilter || {};
 
-    // Only filter for leads/companies sections
-    if (section === 'leads' || section === 'companies') {
+    // S396: LEADS section = Individual contacts from enrichment (not companies)
+    // This is currently not populated - return empty array
+    if (section === 'leads') {
+      return []; // No cards - leads are shown via EnrichedContactsView
+    }
+
+    // COMPANIES section - filter signal cards
+    if (section === 'companies') {
       const targetStatus = filterToCardStatus[item as string];
       if (targetStatus) {
         // For dismissed/skipped, search raw cards since getActiveCards excludes them
@@ -372,10 +381,17 @@ export function WorkspaceSurface() {
               /* User is filtering - show filtered cards or empty message */
               hasCards ? (
                 <CardContainer cards={cards} nba={null} onAction={handleCardAction} />
+              ) : isLeadsSection ? (
+                /* S396: LEADS section - individual contacts from enrichment (Coming Soon) */
+                <SystemUtterance
+                  type="status_acknowledgment"
+                  message="Individual contacts appear here after you enrich a company. Go to Companies → click Enrich to find contacts."
+                  onAction={handleUtteranceAction}
+                />
               ) : (
                 <SystemUtterance
                   type="status_acknowledgment"
-                  message={`No ${activeFilter.item === 'ignored' ? 'skipped' : (activeFilter.item || '').replace('_', ' ')} leads yet.`}
+                  message={`No ${activeFilter.item === 'ignored' ? 'skipped' : (activeFilter.item || '').replace('_', ' ')} companies yet.`}
                   onAction={handleUtteranceAction}
                 />
               )

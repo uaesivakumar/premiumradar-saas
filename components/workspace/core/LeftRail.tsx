@@ -99,20 +99,23 @@ export function LeftRail() {
     const ignoredCount = signalCards.filter((c) => c.status === 'dismissed').length;
     const unactionedCount = signalCards.filter((c) => c.status === 'active').length;
 
-    // Update leads counts
-    updateCounts('leads', {
+    // S396: COMPANIES = Signal cards about companies (from discovery)
+    updateCounts('companies', {
       saved: savedCount,
       actioned: actionedCount,
       ignored: ignoredCount,
       unactioned: unactionedCount,
     });
 
-    // For now, companies mirrors leads (same entities)
-    updateCounts('companies', {
-      saved: savedCount,
-      actioned: actionedCount,
-      ignored: ignoredCount,
-      unactioned: unactionedCount,
+    // S396: LEADS = Individual contacts from enriched companies
+    // This is separate from signal cards - leads are people, not companies
+    // For now, we track enriched contacts count (0 until enrichment builds this)
+    // TODO: Wire up enrichment session store to populate lead counts
+    updateCounts('leads', {
+      saved: 0,      // Contacts saved for outreach
+      actioned: 0,   // Contacts with outreach initiated
+      ignored: 0,    // Contacts skipped
+      unactioned: 0, // Contacts not yet actioned
     });
 
     // Count activities by time

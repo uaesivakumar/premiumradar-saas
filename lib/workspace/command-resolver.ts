@@ -747,10 +747,10 @@ async function handleFindLeads(resolution: CommandResolution): Promise<ResolveRe
       entityType: 'company' as const,
       reasoning: company.sivaScores?.reasoning || ['Live discovery signal'],
       actions: [
-        // S393: CTA labels encode intent + consequence
-        { id: 'evaluate', label: 'Evaluate', type: 'primary' as const, handler: 'signal.evaluate' },
-        { id: 'save', label: 'Keep for follow-up', type: 'secondary' as const, handler: 'signal.save' },
-        { id: 'dismiss', label: 'Ignore for now', type: 'dismiss' as const, handler: 'signal.dismiss' },
+        // S396: CTA labels - Enrich triggers contact discovery
+        { id: 'enrich', label: 'Enrich', type: 'primary' as const, handler: 'signal.enrich' },
+        { id: 'save', label: 'Save', type: 'secondary' as const, handler: 'signal.save' },
+        { id: 'dismiss', label: 'Skip', type: 'dismiss' as const, handler: 'signal.dismiss' },
       ],
       tags: ['signal', 'discovery', `tier-${company.sivaScores?.tier?.toLowerCase() || 'warm'}`],
     }));
@@ -993,11 +993,11 @@ async function handleNBARequest(resolution: CommandResolution): Promise<ResolveR
           reasoning: [
             signalLabel ? `${signalLabel} detected (${freshnessText})` : `New lead identified (${freshnessText})`,
             `${activeLeads.length} lead${activeLeads.length > 1 ? 's' : ''} awaiting review`,
-            'Evaluate to save or skip',
+            'Enrich to find contacts, save for later, or skip',
           ],
           actions: [
-            // S393: CTA labels encode intent + consequence
-            { id: 'evaluate', label: `Evaluate now (${activeLeads.length} new)`, type: 'primary', handler: 'nba.startEvaluating' },
+            // S396: CTA labels - Review leads, then Enrich/Save/Skip
+            { id: 'review', label: `Review now (${activeLeads.length} new)`, type: 'primary', handler: 'nba.startEvaluating' },
             { id: 'dismiss', label: 'Review after 48h', type: 'dismiss', handler: 'system.dismiss' },
           ],
           tags: ['nba-review', 'urgency-medium'],
