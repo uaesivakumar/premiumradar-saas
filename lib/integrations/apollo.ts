@@ -250,6 +250,9 @@ export async function searchUAEEmployers(options?: {
 /**
  * Search for contacts (HR/Finance decision makers for EB)
  * Uses /people/search endpoint (available on Basic plan)
+ *
+ * CRITICAL: Must pass either organizationId OR organizationName to filter by company.
+ * Without these, Apollo returns contacts from ANY company!
  */
 export async function searchContacts(params: {
   organizationId?: string;
@@ -259,16 +262,35 @@ export async function searchContacts(params: {
   page?: number;
   perPage?: number;
 }): Promise<ApolloContact[]> {
-  const response = await apolloRequest<{
-    people?: ApolloContact[];
-    pagination?: { total_entries: number };
-  }>('/people/search', 'POST', {
-    organization_ids: params.organizationId ? [params.organizationId] : undefined,
+  // Build the request body with proper company filtering
+  const requestBody: Record<string, unknown> = {
     person_titles: params.titles || ['HR Director', 'Chief People Officer', 'VP Human Resources', 'Head of HR', 'HR Manager', 'Finance Director', 'CFO'],
     person_seniorities: params.seniorities || ['director', 'vp', 'c_suite', 'owner', 'partner'],
     page: params.page || 1,
     per_page: params.perPage || 10,
+  };
+
+  // CRITICAL FIX: Use organization_ids if we have an ID, otherwise use q_organization_name
+  // Without this, Apollo returns contacts from random companies!
+  if (params.organizationId) {
+    requestBody.organization_ids = [params.organizationId];
+  } else if (params.organizationName) {
+    // Use q_organization_name for fuzzy company name matching
+    requestBody.q_organization_name = params.organizationName;
+  }
+
+  console.log('[Apollo] searchContacts request:', {
+    organizationId: params.organizationId,
+    organizationName: params.organizationName,
+    titles: requestBody.person_titles,
   });
+
+  const response = await apolloRequest<{
+    people?: ApolloContact[];
+    pagination?: { total_entries: number };
+  }>('/people/search', 'POST', requestBody, 'people_search');
+
+  console.log('[Apollo] searchContacts found:', response.people?.length || 0, 'contacts');
 
   return response.people || [];
 }
