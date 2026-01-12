@@ -53,7 +53,7 @@ export async function executeSignalAction(
  * Handle "Enrich" action
  *
  * ENRICHMENT PIPELINE:
- * 1. Set card to EVALUATING state (visible in sidebar)
+ * 1. Transition lead state (EVALUATING or keep SAVED)
  * 2. Trigger enrichment engine:
  *    - Apollo: Company data, contacts, hiring signals
  *    - SERP: Latest news, expansion signals
@@ -61,17 +61,38 @@ export async function executeSignalAction(
  * 3. Update card with enriched data
  * 4. Navigate to enriched detail view
  *
- * INVARIANT: Card stays visible. Never hides on Enrich.
+ * INVARIANTS (LOCKED):
+ * - Card ALWAYS stays visible. Never hides on Enrich.
+ * - SAVED + Enrich = card stays in Saved section (not demoted to Evaluating)
+ * - ACTIVE → EVALUATING on Enrich
+ *
+ * STATE TRANSITION RULES:
+ * - active → evaluating (user starts enriching an unactioned lead)
+ * - saved → saved (user enriches a previously saved lead - stays saved!)
+ * - evaluating → evaluating (no change, enrichment already started)
  */
 async function handleEnrich(card: Card, _context: ActionContext): Promise<ActionResult> {
   const { useCardStore } = await import('@/lib/stores/card-store');
   const store = useCardStore.getState();
   const entityName = card.entityName || card.title;
 
+  // Get current card state to determine transition
+  const currentCard = store.cards.find(c => c.id === card.id);
+  const currentStatus = currentCard?.status || card.status;
+
   try {
-    // 1. Set card to EVALUATING state immediately (visible in sidebar)
-    store.setCardEvaluating(card.id);
-    console.log('[SignalActions] Enrich started:', entityName, '→ EVALUATING');
+    // STATE TRANSITION (FIX 3: Saved + Enrich = stays Saved)
+    // Only transition to EVALUATING if card is ACTIVE (unactioned)
+    // If already SAVED, keep it SAVED - user explicitly saved it
+    if (currentStatus === 'active') {
+      store.setCardEvaluating(card.id);
+      console.log('[SignalActions] Enrich started:', entityName, 'active → EVALUATING');
+    } else if (currentStatus === 'saved') {
+      // SAVED leads stay SAVED when enriched - they're in the pipeline
+      console.log('[SignalActions] Enrich started:', entityName, 'saved → SAVED (unchanged)');
+    } else {
+      console.log('[SignalActions] Enrich started:', entityName, `${currentStatus} → ${currentStatus} (unchanged)`);
+    }
 
     // 2. Record action to OS (sets lead_state=EVALUATING, novelty suppressed indefinitely)
     const noveltyResult = await recordNoveltyAction({
@@ -96,14 +117,16 @@ async function handleEnrich(card: Card, _context: ActionContext): Promise<Action
       data: {
         entityId: card.entityId,
         entityName: entityName,
-        leadState: 'EVALUATING',
+        leadState: currentStatus === 'saved' ? 'SAVED' : 'EVALUATING',
         enrichmentStatus: 'in_progress',
       },
     };
   } catch (error) {
     console.error('[SignalActions] Enrich error:', error);
-    // Still set evaluating locally even if API fails
-    store.setCardEvaluating(card.id);
+    // Only transition to evaluating if currently active (same rule as success path)
+    if (currentStatus === 'active') {
+      store.setCardEvaluating(card.id);
+    }
     return {
       success: true,
       message: 'Enriching (offline)',
@@ -111,7 +134,7 @@ async function handleEnrich(card: Card, _context: ActionContext): Promise<Action
       data: {
         entityId: card.entityId,
         entityName: entityName,
-        leadState: 'EVALUATING',
+        leadState: currentStatus === 'saved' ? 'SAVED' : 'EVALUATING',
       },
     };
   }

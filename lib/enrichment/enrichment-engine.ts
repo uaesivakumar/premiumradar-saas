@@ -100,22 +100,54 @@ function normalizeApolloContacts(contacts: ApolloContact[]): NormalizedContact[]
  * Enrich a company to find individual leads/contacts
  *
  * This is the main entry point for the Enrich button.
+ *
+ * IDEMPOTENCY (MANDATORY):
+ * - If session exists and is COMPLETE → return cached result (no Apollo call)
+ * - If session exists and is IN_PROGRESS → return in-progress status (no Apollo call)
+ * - Only create new session if no existing session or previous session FAILED
+ *
+ * This prevents:
+ * - Double Apollo calls on rapid clicks
+ * - Credit burns on retry
+ * - Duplicate sessions for same entity
  */
 export async function enrichCompanyContacts(
   request: EnrichmentRequest
 ): Promise<EnrichmentResult> {
   console.log('[EnrichmentEngine] Starting enrichment for:', request.entityName);
 
-  // Check for existing session (resume if in progress)
+  // IDEMPOTENCY CHECK: Look for existing session for this entity
   const existingSession = getSessionByEntity(request.entityId);
-  if (existingSession && existingSession.stage === 'SCORING_COMPLETE') {
-    console.log('[EnrichmentEngine] Returning cached session:', existingSession.id);
-    return {
-      success: true,
-      sessionId: existingSession.id,
-      session: existingSession,
-      contacts: getSessionContacts(existingSession.id),
-    };
+
+  if (existingSession) {
+    // CASE 1: Enrichment already complete → return cached result
+    if (existingSession.stage === 'SCORING_COMPLETE') {
+      console.log('[EnrichmentEngine] IDEMPOTENT: Returning cached session:', existingSession.id);
+      return {
+        success: true,
+        sessionId: existingSession.id,
+        session: existingSession,
+        contacts: getSessionContacts(existingSession.id),
+      };
+    }
+
+    // CASE 2: Enrichment in progress → return in-progress status (NO new Apollo call)
+    if (
+      existingSession.stage === 'CONTACT_DISCOVERY_STARTED' ||
+      existingSession.stage === 'CONTACT_DISCOVERY_COMPLETE' ||
+      existingSession.stage === 'SCORING_STARTED'
+    ) {
+      console.log('[EnrichmentEngine] IDEMPOTENT: Enrichment in progress:', existingSession.id, existingSession.stage);
+      return {
+        success: true,
+        sessionId: existingSession.id,
+        session: existingSession,
+        contacts: [], // Not yet available
+      };
+    }
+
+    // CASE 3: Previous session FAILED → will create new session below
+    console.log('[EnrichmentEngine] Previous session failed, creating new:', existingSession.id);
   }
 
   // Step 1: Create enrichment session
