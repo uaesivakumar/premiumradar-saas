@@ -119,45 +119,58 @@ async function handleEnrich(card: Card, _context: ActionContext): Promise<Action
 
 /**
  * Background enrichment pipeline
- * Runs asynchronously after initial response
+ * Calls /api/enrichment/start to find individual leads
  */
-async function triggerEnrichment(card: Card, _context: ActionContext): Promise<void> {
+async function triggerEnrichment(card: Card, context: ActionContext): Promise<void> {
   const entityName = card.entityName || card.title;
 
-  console.log('[SignalActions] Starting enrichment for:', entityName);
+  console.log('[SignalActions] Starting enrichment pipeline for:', entityName);
 
   try {
-    // Call enrichment API
-    const response = await fetch('/api/enrichment/search', {
-      method: 'GET',
+    // Call enrichment start API
+    const response = await fetch('/api/enrichment/start', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      body: JSON.stringify({
+        entityId: card.entityId || card.id,
+        entityName: entityName,
+        subVertical: 'employee-banking', // TODO: Get from context
+        region: 'UAE',
+        maxContacts: 10,
+      }),
     });
 
-    // Build query params
-    const params = new URLSearchParams({
-      entity: entityName,
-      vertical: 'banking',
-      subVertical: 'employee-banking',
-      region: 'UAE',
-    });
-
-    const enrichResponse = await fetch(`/api/enrichment/search?${params}`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-
-    if (!enrichResponse.ok) {
-      throw new Error(`Enrichment API error: ${enrichResponse.status}`);
+    if (!response.ok) {
+      throw new Error(`Enrichment API error: ${response.status}`);
     }
 
-    const enrichData = await enrichResponse.json();
+    const result = await response.json();
 
-    console.log('[SignalActions] Enrichment complete for:', entityName, enrichData);
+    if (!result.success) {
+      throw new Error(result.error || 'Enrichment failed');
+    }
 
-    // TODO: Update card with enriched data
-    // const { useCardStore } = await import('@/lib/stores/card-store');
-    // store.updateCardWithEnrichment(card.id, enrichData);
+    console.log('[SignalActions] Enrichment complete:', {
+      entityName,
+      sessionId: result.sessionId,
+      contactsFound: result.metrics?.contactsFound,
+      topContacts: result.contacts?.slice(0, 3).map((c: any) => c.fullName),
+    });
+
+    // Store enrichment result in card store for UI access
+    const { useCardStore } = await import('@/lib/stores/card-store');
+    const store = useCardStore.getState();
+
+    // Update card with enrichment session ID
+    // The UI can then fetch contacts via the session ID
+    store.updateCard(card.id, {
+      expandedContent: {
+        enrichmentSessionId: result.sessionId,
+        enrichmentStage: result.stage,
+        contactsFound: result.metrics?.contactsFound || 0,
+      },
+    });
 
   } catch (error) {
     console.error('[SignalActions] Enrichment pipeline error:', error);
