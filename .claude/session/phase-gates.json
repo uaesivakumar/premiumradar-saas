@@ -1,0 +1,148 @@
+{
+  "version": "1.0",
+  "created_at": "2026-01-12T10:00:00Z",
+  "plan_locked": true,
+  "plan_name": "PREMIUMRADAR MASTER IMPLEMENTATION PLAN",
+
+  "phase_gate_rule": {
+    "description": "No sprint may start unless the previous phase has explicit founder sign-off",
+    "sign_off_requires": [
+      "One working demo",
+      "One explainability trace",
+      "One real example showing 'why this happened'"
+    ],
+    "enforcement": "MANDATORY - No sign-off = no next phase"
+  },
+
+  "phases": {
+    "phase_0": {
+      "name": "Context & Safety Lock",
+      "sprints": [],
+      "status": "COMPLETED",
+      "sign_off": {
+        "required": false,
+        "granted": true,
+        "granted_at": "2026-01-12T10:00:00Z",
+        "notes": "Architectural pivot acknowledged. EB hard-coding identified as broken."
+      }
+    },
+
+    "phase_1": {
+      "name": "Policy Compiler (Foundational)",
+      "priority": "P0",
+      "sprints": ["S397", "S398", "S399", "S400"],
+      "status": "IN_PROGRESS",
+      "gate_to_phase_2": {
+        "description": "Founder must successfully write enrichment policy, review interpretation, approve version",
+        "required_demos": [
+          "Write enrichment policy in plain English",
+          "Review interpretation (IPR)",
+          "Approve version"
+        ],
+        "sign_off": {
+          "required": true,
+          "granted": false,
+          "granted_at": null,
+          "demo_artifacts": []
+        }
+      }
+    },
+
+    "phase_2": {
+      "name": "Policy-Driven Runtime Enrichment",
+      "priority": "P0",
+      "sprints": ["S401", "S402", "S403", "S404"],
+      "status": "BLOCKED_BY_PHASE_1",
+      "gate_to_phase_3": {
+        "description": "Founder must be able to answer 'Why did this role get prioritized?' using logs",
+        "required_demos": [
+          "Explainability trace for enriched lead",
+          "Policy branch trace",
+          "Real example of role prioritization with reason"
+        ],
+        "sign_off": {
+          "required": true,
+          "granted": false,
+          "granted_at": null,
+          "demo_artifacts": []
+        }
+      }
+    },
+
+    "phase_3": {
+      "name": "Discovery Expansion",
+      "priority": "P1",
+      "sprints": ["S405", "S406", "S407", "S408"],
+      "status": "BLOCKED_BY_PHASE_2",
+      "gate_to_phase_4": {
+        "description": "Two discovery modes coexist without mixing",
+        "required_demos": [
+          "Radar Discovery returns ranked results",
+          "Command Discovery returns COLLECTED results",
+          "Results are clearly labeled and not mixed"
+        ],
+        "sign_off": {
+          "required": true,
+          "granted": false,
+          "granted_at": null,
+          "demo_artifacts": []
+        }
+      }
+    },
+
+    "phase_4": {
+      "name": "Manual Lead Intake",
+      "priority": "P1",
+      "sprints": ["S409", "S410"],
+      "status": "BLOCKED_BY_PHASE_3",
+      "gate_to_phase_5": {
+        "description": "Founder can run entire pipeline on self-sourced leads",
+        "required_demos": [
+          "Add manual lead",
+          "Evaluate manual lead",
+          "Enrich manual lead",
+          "Same NBA/BTE tracking works"
+        ],
+        "sign_off": {
+          "required": true,
+          "granted": false,
+          "granted_at": null,
+          "demo_artifacts": []
+        }
+      }
+    },
+
+    "phase_5": {
+      "name": "Outreach Engine",
+      "priority": "P1",
+      "sprints": ["S411", "S412", "S413"],
+      "status": "BLOCKED_BY_PHASE_4",
+      "completion_gate": {
+        "description": "v1 READY - Founder runs one real sales workflow end-to-end",
+        "required_demos": [
+          "Real Emirates NBD sales workflow",
+          "Uses manual + command + radar discovery together",
+          "Trusts enrichment behavior",
+          "Can explain every decision",
+          "Never wonders 'why did the system do this?'"
+        ],
+        "sign_off": {
+          "required": true,
+          "granted": false,
+          "granted_at": null,
+          "demo_artifacts": []
+        }
+      }
+    }
+  },
+
+  "out_of_scope_until_v2": [
+    "Bulk uploads",
+    "CSV ingestion",
+    "Campaign analytics dashboards",
+    "CRM replacement features",
+    "Auto-execution workflows"
+  ],
+
+  "final_lock_statement": "This plan is frozen. Any new idea must wait until v1 is in production use by the founder."
+}

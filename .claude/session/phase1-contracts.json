@@ -1,0 +1,421 @@
+{
+  "phase": 1,
+  "name": "Policy Compiler (Foundational)",
+  "sprints": ["S397", "S398", "S399", "S400"],
+  "created_at": "2026-01-12T10:30:00Z",
+
+  "contracts": [
+    {
+      "feature_id": "S397-F1",
+      "sprint": "S397",
+      "feature_name": "Add enrichment_policy_text field to Control Plane schema",
+      "type": "Infrastructure",
+      "repo": "SaaS Frontend",
+
+      "database_changes": {
+        "table": "os_sub_verticals",
+        "new_columns": [
+          {
+            "name": "enrichment_policy_text",
+            "type": "TEXT",
+            "nullable": true,
+            "description": "Plain English enrichment policy written by founder"
+          },
+          {
+            "name": "enrichment_policy_version",
+            "type": "INTEGER",
+            "default": 0,
+            "description": "Version counter for policy edits"
+          },
+          {
+            "name": "enrichment_policy_updated_at",
+            "type": "TIMESTAMPTZ",
+            "nullable": true,
+            "description": "Last policy update timestamp"
+          }
+        ],
+        "migration_file": "prisma/migrations/S397_enrichment_policy_text.sql"
+      },
+
+      "api_endpoints": [],
+
+      "wiring_checks": [
+        {
+          "type": "migration_exists",
+          "path": "prisma/migrations/S397_enrichment_policy_text.sql"
+        },
+        {
+          "type": "column_exists",
+          "table": "os_sub_verticals",
+          "column": "enrichment_policy_text"
+        }
+      ],
+
+      "staging_verification": [
+        {
+          "type": "sql_query",
+          "query": "SELECT column_name FROM information_schema.columns WHERE table_name = 'os_sub_verticals' AND column_name = 'enrichment_policy_text'",
+          "expected": "Returns 1 row"
+        }
+      ]
+    },
+
+    {
+      "feature_id": "S397-F2",
+      "sprint": "S397",
+      "feature_name": "Policy text editor UI in Control Plane",
+      "type": "Feature",
+      "repo": "SaaS Frontend",
+
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/superadmin/controlplane/EnrichmentPolicyEditor.tsx",
+        "renders_at": "/superadmin/controlplane/sub-verticals/[id]/policy"
+      },
+
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/enrichment-policy",
+          "expected_response": {
+            "status": 200,
+            "shape": {
+              "success": true,
+              "data": {
+                "enrichment_policy_text": "string|null",
+                "enrichment_policy_version": "number",
+                "enrichment_policy_updated_at": "string|null"
+              }
+            }
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/enrichment-policy",
+          "request_body": {
+            "enrichment_policy_text": "string"
+          },
+          "expected_response": {
+            "status": 200,
+            "shape": {
+              "success": true,
+              "data": {
+                "enrichment_policy_text": "string",
+                "enrichment_policy_version": "number"
+              }
+            }
+          }
+        }
+      ],
+
+      "wiring_checks": [
+        {
+          "type": "file_exists",
+          "path": "components/superadmin/controlplane/EnrichmentPolicyEditor.tsx"
+        },
+        {
+          "type": "file_exists",
+          "path": "app/api/superadmin/controlplane/sub-verticals/[id]/enrichment-policy/route.ts"
+        },
+        {
+          "type": "import_exists",
+          "from": "app/superadmin/controlplane/sub-verticals/[id]/page.tsx",
+          "imports": "EnrichmentPolicyEditor"
+        }
+      ]
+    },
+
+    {
+      "feature_id": "S398-F1",
+      "sprint": "S398",
+      "feature_name": "Policy parsing LLM service",
+      "type": "Infrastructure",
+      "repo": "OS",
+      "notes": "This will be built in upr-os repo. Contract defined for integration.",
+
+      "api_endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/os/policy/interpret",
+          "service": "upr-os",
+          "request_body": {
+            "policy_text": "string",
+            "sub_vertical_id": "string",
+            "context": {
+              "vertical": "string",
+              "sub_vertical": "string",
+              "entity_type": "string"
+            }
+          },
+          "expected_response": {
+            "status": 200,
+            "shape": {
+              "success": true,
+              "data": {
+                "ipr": {
+                  "conditions": "array",
+                  "thresholds": "array",
+                  "target_roles": "array",
+                  "fallback_behavior": "object",
+                  "uncertainty_handling": "object"
+                },
+                "confidence": "number",
+                "warnings": "array"
+              }
+            }
+          }
+        }
+      ],
+
+      "ipr_schema": {
+        "description": "Intermediate Policy Representation - human-readable, structured, editable",
+        "schema": {
+          "conditions": [
+            {
+              "field": "string (e.g., company_size, geography, maturity)",
+              "operator": "string (eq, gt, lt, gte, lte, in, not_in, contains)",
+              "value": "any",
+              "description": "string (human-readable explanation)"
+            }
+          ],
+          "thresholds": [
+            {
+              "name": "string (e.g., large_company, small_company)",
+              "field": "string",
+              "value": "number",
+              "unit": "string (employees, revenue_usd, etc.)"
+            }
+          ],
+          "target_roles": [
+            {
+              "company_size_range": { "min": "number|null", "max": "number|null" },
+              "titles": "string[]",
+              "priority": "number",
+              "reason": "string"
+            }
+          ],
+          "fallback_behavior": {
+            "when_no_match": "string (skip, use_default, deprioritize)",
+            "default_roles": "string[]|null"
+          },
+          "uncertainty_handling": {
+            "when_size_unknown": "string",
+            "when_geography_unclear": "string"
+          }
+        }
+      }
+    },
+
+    {
+      "feature_id": "S399-F1",
+      "sprint": "S399",
+      "feature_name": "Policy review page in Control Plane",
+      "type": "Feature",
+      "repo": "SaaS Frontend",
+
+      "ui_entrypoint": {
+        "type": "page",
+        "path": "app/superadmin/controlplane/sub-verticals/[id]/policy-review/page.tsx",
+        "renders_at": "/superadmin/controlplane/sub-verticals/[id]/policy-review"
+      },
+
+      "components": [
+        {
+          "name": "PolicyReviewPage",
+          "path": "app/superadmin/controlplane/sub-verticals/[id]/policy-review/page.tsx",
+          "description": "Side-by-side view of English + IPR"
+        },
+        {
+          "name": "IPREditor",
+          "path": "components/superadmin/controlplane/IPREditor.tsx",
+          "description": "Inline editing of interpreted IPR"
+        },
+        {
+          "name": "PolicyDiff",
+          "path": "components/superadmin/controlplane/PolicyDiff.tsx",
+          "description": "Shows changes between versions"
+        }
+      ],
+
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/policy-review",
+          "expected_response": {
+            "status": 200,
+            "shape": {
+              "success": true,
+              "data": {
+                "original_text": "string",
+                "interpreted_ipr": "IPR object",
+                "interpretation_confidence": "number",
+                "interpretation_warnings": "array",
+                "pending_approval": "boolean"
+              }
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/policy-review/approve",
+          "request_body": {
+            "ipr": "IPR object (possibly edited)",
+            "approval_notes": "string|null"
+          },
+          "expected_response": {
+            "status": 200,
+            "shape": {
+              "success": true,
+              "data": {
+                "policy_version": "number",
+                "approved_at": "string",
+                "approved_by": "string"
+              }
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/policy-review/reject",
+          "request_body": {
+            "rejection_reason": "string"
+          },
+          "expected_response": {
+            "status": 200,
+            "shape": { "success": true }
+          }
+        }
+      ],
+
+      "wiring_checks": [
+        {
+          "type": "file_exists",
+          "path": "app/superadmin/controlplane/sub-verticals/[id]/policy-review/page.tsx"
+        },
+        {
+          "type": "file_exists",
+          "path": "components/superadmin/controlplane/IPREditor.tsx"
+        },
+        {
+          "type": "api_route_exists",
+          "path": "app/api/superadmin/controlplane/sub-verticals/[id]/policy-review/route.ts"
+        },
+        {
+          "type": "api_route_exists",
+          "path": "app/api/superadmin/controlplane/sub-verticals/[id]/policy-review/approve/route.ts"
+        }
+      ]
+    },
+
+    {
+      "feature_id": "S400-F1",
+      "sprint": "S400",
+      "feature_name": "Policy version table schema",
+      "type": "Infrastructure",
+      "repo": "SaaS Frontend",
+
+      "database_changes": {
+        "new_table": "enrichment_policy_versions",
+        "columns": [
+          { "name": "id", "type": "UUID", "primary_key": true },
+          { "name": "sub_vertical_id", "type": "UUID", "references": "os_sub_verticals(id)" },
+          { "name": "version", "type": "INTEGER", "not_null": true },
+          { "name": "policy_text", "type": "TEXT", "not_null": true },
+          { "name": "interpreted_ipr", "type": "JSONB", "not_null": true },
+          { "name": "compiled_policy", "type": "JSONB", "nullable": true, "description": "Compiled for Phase 2" },
+          { "name": "status", "type": "VARCHAR(20)", "check": "IN ('draft', 'pending_approval', 'approved', 'rejected', 'deprecated')" },
+          { "name": "approved_by", "type": "VARCHAR(255)", "nullable": true },
+          { "name": "approved_at", "type": "TIMESTAMPTZ", "nullable": true },
+          { "name": "rejection_reason", "type": "TEXT", "nullable": true },
+          { "name": "created_at", "type": "TIMESTAMPTZ", "default": "NOW()" },
+          { "name": "created_by", "type": "VARCHAR(255)" }
+        ],
+        "indexes": [
+          { "name": "idx_epv_sub_vertical_version", "columns": ["sub_vertical_id", "version"], "unique": true },
+          { "name": "idx_epv_status", "columns": ["status"] }
+        ],
+        "migration_file": "prisma/migrations/S400_enrichment_policy_versions.sql"
+      },
+
+      "wiring_checks": [
+        {
+          "type": "migration_exists",
+          "path": "prisma/migrations/S400_enrichment_policy_versions.sql"
+        },
+        {
+          "type": "table_exists",
+          "table": "enrichment_policy_versions"
+        }
+      ]
+    },
+
+    {
+      "feature_id": "S400-F2",
+      "sprint": "S400",
+      "feature_name": "Policy version history UI",
+      "type": "Feature",
+      "repo": "SaaS Frontend",
+
+      "ui_entrypoint": {
+        "type": "component",
+        "path": "components/superadmin/controlplane/PolicyVersionHistory.tsx",
+        "renders_at": "/superadmin/controlplane/sub-verticals/[id]/policy-review"
+      },
+
+      "api_endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/superadmin/controlplane/sub-verticals/[id]/policy-versions",
+          "expected_response": {
+            "status": 200,
+            "shape": {
+              "success": true,
+              "data": {
+                "versions": [
+                  {
+                    "version": "number",
+                    "status": "string",
+                    "created_at": "string",
+                    "created_by": "string",
+                    "approved_at": "string|null",
+                    "approved_by": "string|null"
+                  }
+                ],
+                "active_version": "number|null"
+              }
+            }
+          }
+        }
+      ],
+
+      "wiring_checks": [
+        {
+          "type": "file_exists",
+          "path": "components/superadmin/controlplane/PolicyVersionHistory.tsx"
+        },
+        {
+          "type": "api_route_exists",
+          "path": "app/api/superadmin/controlplane/sub-verticals/[id]/policy-versions/route.ts"
+        }
+      ]
+    }
+  ],
+
+  "phase_1_exit_criteria": {
+    "description": "Founder can write English policy, review interpretation, approve version",
+    "demo_requirements": [
+      "Navigate to Control Plane sub-vertical page",
+      "Write enrichment policy in plain English textarea",
+      "Save policy and trigger interpretation",
+      "Review interpreted IPR side-by-side with English",
+      "Edit IPR if needed",
+      "Approve policy (creates immutable version)",
+      "See version in history"
+    ],
+    "explainability_trace": [
+      "Show policy_version in enrichment_policy_versions table",
+      "Show interpreted_ipr JSON structure",
+      "Show approval audit trail"
+    ]
+  }
+}
