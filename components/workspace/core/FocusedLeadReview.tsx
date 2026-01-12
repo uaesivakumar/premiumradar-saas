@@ -110,11 +110,11 @@ export function FocusedLeadReview({
         {/* Primary actions */}
         <div className="flex items-center gap-3 pt-4 border-t border-white/5">
           <button
-            onClick={() => handleAction('evaluate')}
+            onClick={() => handleAction('enrich')}
             className="px-4 py-2 bg-white text-slate-950 font-medium rounded-lg
                        hover:bg-gray-100 transition-colors text-sm"
           >
-            Evaluate
+            Enrich
           </button>
           <button
             onClick={() => handleAction('save')}

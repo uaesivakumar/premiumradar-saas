@@ -258,17 +258,17 @@ export function WorkspaceSurface() {
       workspaceId: nbaContext.workspaceId,
     };
 
-    // Map UI action to handler
+    // Map UI action to handler (dot notation for namespace)
     let handler = '';
     switch (actionId) {
-      case 'evaluate':
-        handler = 'signal:evaluate';
+      case 'enrich':
+        handler = 'signal.enrich';
         break;
       case 'save':
-        handler = 'signal:save';
+        handler = 'signal.save';
         break;
       case 'skip':
-        handler = 'signal:skip';
+        handler = 'signal.dismiss';
         break;
       default:
         console.warn('[FocusedReview] Unknown action:', actionId);

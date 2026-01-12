@@ -2,7 +2,7 @@
  * Signal Action Handlers - S390
  *
  * Handles user actions on signal/discovery cards:
- * - signal.evaluate: Mark as EVALUATING (stays visible), suppress re-discovery
+ * - signal.enrich: Trigger enrichment engine (Apollo, SERP, LLM), mark as EVALUATING
  * - signal.save: Mark as SAVED (stays visible), suppress re-discovery
  * - signal.dismiss: Mark as SKIPPED (hidden), suppress for 7 days
  *
@@ -27,8 +27,12 @@ export async function executeSignalAction(
   console.log('[SignalActions] Executing:', handlerId, 'for card:', card.id);
 
   switch (handlerId) {
+    case 'signal.enrich':
+      return handleEnrich(card, context);
+
     case 'signal.evaluate':
-      return handleEvaluate(card, context);
+      // Legacy handler - redirect to enrich
+      return handleEnrich(card, context);
 
     case 'signal.save':
       return handleSave(card, context);
@@ -46,61 +50,118 @@ export async function executeSignalAction(
 }
 
 /**
- * Handle "Evaluate" action
+ * Handle "Enrich" action
  *
- * S390 BEHAVIOR:
- * - Sets lead state to EVALUATING (card stays visible in sidebar)
- * - Suppresses re-discovery indefinitely (never show as "new" again)
- * - Opens company detail view (future)
+ * ENRICHMENT PIPELINE:
+ * 1. Set card to EVALUATING state (visible in sidebar)
+ * 2. Trigger enrichment engine:
+ *    - Apollo: Company data, contacts, hiring signals
+ *    - SERP: Latest news, expansion signals
+ *    - LLM: Extract structured data, score opportunity
+ * 3. Update card with enriched data
+ * 4. Navigate to enriched detail view
  *
- * INVARIANT: Card stays visible. Never hides on Evaluate.
+ * INVARIANT: Card stays visible. Never hides on Enrich.
  */
-async function handleEvaluate(card: Card, _context: ActionContext): Promise<ActionResult> {
+async function handleEnrich(card: Card, _context: ActionContext): Promise<ActionResult> {
   const { useCardStore } = await import('@/lib/stores/card-store');
   const store = useCardStore.getState();
+  const entityName = card.entityName || card.title;
 
   try {
-    // Record action to OS (sets lead_state=EVALUATING, novelty suppressed indefinitely)
-    const result = await recordNoveltyAction({
+    // 1. Set card to EVALUATING state immediately (visible in sidebar)
+    store.setCardEvaluating(card.id);
+    console.log('[SignalActions] Enrich started:', entityName, '→ EVALUATING');
+
+    // 2. Record action to OS (sets lead_state=EVALUATING, novelty suppressed indefinitely)
+    const noveltyResult = await recordNoveltyAction({
       entity_id: card.entityId,
-      entity_name: card.entityName || card.title,
+      entity_name: entityName,
       action: 'evaluated',
     });
 
-    if (!result.success) {
-      console.warn('[SignalActions] Failed to record evaluate action:', result.error);
-      // Continue anyway - don't block UI
+    if (!noveltyResult.success) {
+      console.warn('[SignalActions] Failed to record enrich action:', noveltyResult.error);
     }
 
-    // S390: Set card to EVALUATING state (stays visible in sidebar)
-    store.setCardEvaluating(card.id);
-
-    console.log('[SignalActions] Evaluate:', card.entityName || card.title, '→ EVALUATING (visible)');
+    // 3. Trigger enrichment engine (async - don't block UI)
+    triggerEnrichment(card, _context).catch((error) => {
+      console.error('[SignalActions] Background enrichment failed:', error);
+    });
 
     return {
       success: true,
-      message: `Evaluating ${card.entityName || card.title}`,
-      nextAction: 'open_detail', // Signal to UI to open detail view
-      data: {
-        entityId: card.entityId,
-        entityName: card.entityName,
-        leadState: result.data?.lead_state || 'EVALUATING',
-      },
-    };
-  } catch (error) {
-    console.error('[SignalActions] Evaluate error:', error);
-    // S390: Still set evaluating locally even if API fails (same pattern as dismiss)
-    store.setCardEvaluating(card.id);
-    return {
-      success: true,
-      message: 'Evaluating (offline)',
+      message: `Enriching ${entityName}...`,
       nextAction: 'open_detail',
       data: {
         entityId: card.entityId,
-        entityName: card.entityName,
+        entityName: entityName,
+        leadState: 'EVALUATING',
+        enrichmentStatus: 'in_progress',
+      },
+    };
+  } catch (error) {
+    console.error('[SignalActions] Enrich error:', error);
+    // Still set evaluating locally even if API fails
+    store.setCardEvaluating(card.id);
+    return {
+      success: true,
+      message: 'Enriching (offline)',
+      nextAction: 'open_detail',
+      data: {
+        entityId: card.entityId,
+        entityName: entityName,
         leadState: 'EVALUATING',
       },
     };
+  }
+}
+
+/**
+ * Background enrichment pipeline
+ * Runs asynchronously after initial response
+ */
+async function triggerEnrichment(card: Card, _context: ActionContext): Promise<void> {
+  const entityName = card.entityName || card.title;
+
+  console.log('[SignalActions] Starting enrichment for:', entityName);
+
+  try {
+    // Call enrichment API
+    const response = await fetch('/api/enrichment/search', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+
+    // Build query params
+    const params = new URLSearchParams({
+      entity: entityName,
+      vertical: 'banking',
+      subVertical: 'employee-banking',
+      region: 'UAE',
+    });
+
+    const enrichResponse = await fetch(`/api/enrichment/search?${params}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!enrichResponse.ok) {
+      throw new Error(`Enrichment API error: ${enrichResponse.status}`);
+    }
+
+    const enrichData = await enrichResponse.json();
+
+    console.log('[SignalActions] Enrichment complete for:', entityName, enrichData);
+
+    // TODO: Update card with enriched data
+    // const { useCardStore } = await import('@/lib/stores/card-store');
+    // store.updateCardWithEnrichment(card.id, enrichData);
+
+  } catch (error) {
+    console.error('[SignalActions] Enrichment pipeline error:', error);
+    // Don't throw - this runs in background
   }
 }
 
@@ -249,7 +310,8 @@ async function recordNoveltyAction(params: {
  * Signal action handlers registry
  */
 export const signalActionHandlers = {
-  'signal.evaluate': handleEvaluate,
+  'signal.enrich': handleEnrich,
+  'signal.evaluate': handleEnrich, // Legacy alias
   'signal.save': handleSave,
   'signal.dismiss': handleDismiss,
 };
