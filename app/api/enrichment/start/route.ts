@@ -110,22 +110,33 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/enrichment/start?sessionId=xxx
+ * GET /api/enrichment/start?entityId=xxx
  *
- * Get enrichment result by session ID
+ * Get enrichment result by session ID or entity ID
+ * S396: Now loads from database if not in memory cache
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
+    const entityId = searchParams.get('entityId');
 
-    if (!sessionId) {
+    if (!sessionId && !entityId) {
       return NextResponse.json(
-        { success: false, error: 'sessionId is required' },
+        { success: false, error: 'sessionId or entityId is required' },
         { status: 400 }
       );
     }
 
-    const result = getEnrichmentResult(sessionId);
+    // S396: getEnrichmentResult is now async and loads from DB
+    let result;
+    if (sessionId) {
+      result = await getEnrichmentResult(sessionId);
+    } else if (entityId) {
+      // Also support looking up by entity ID
+      const { getEnrichmentResultByEntity } = await import('@/lib/enrichment/enrichment-engine');
+      result = await getEnrichmentResultByEntity(entityId);
+    }
 
     if (!result) {
       return NextResponse.json(

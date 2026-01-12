@@ -101,6 +101,99 @@ ORDER BY DATE(created_at) DESC, provider;
 // GCP COSTS AND FINANCIALS TABLES SQL
 // =============================================================================
 
+// =============================================================================
+// S396: ENRICHMENT PERSISTENCE SQL
+// =============================================================================
+
+const ENRICHMENT_PERSISTENCE_SQL = `
+-- S396: Enrichment Persistence
+-- Persist enriched contacts to database so they survive server restarts
+
+CREATE TABLE IF NOT EXISTS enrichment_sessions (
+  id TEXT PRIMARY KEY,
+  entity_id TEXT NOT NULL,
+  entity_name TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  workspace_id TEXT,
+  stage TEXT NOT NULL DEFAULT 'CONTACT_DISCOVERY_STARTED',
+  started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  completed_at TIMESTAMP WITH TIME ZONE,
+  error TEXT,
+  contacts_found INTEGER DEFAULT 0,
+  contacts_scored INTEGER DEFAULT 0,
+  provider_calls INTEGER DEFAULT 0,
+  total_cost_cents INTEGER DEFAULT 0,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_enrichment_sessions_entity ON enrichment_sessions(entity_id);
+CREATE INDEX IF NOT EXISTS idx_enrichment_sessions_user ON enrichment_sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS enriched_contacts (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES enrichment_sessions(id) ON DELETE CASCADE,
+  entity_id TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  title TEXT NOT NULL,
+  email TEXT,
+  linkedin_url TEXT,
+  phone TEXT,
+  role TEXT NOT NULL,
+  seniority TEXT NOT NULL,
+  department TEXT NOT NULL,
+  qtle_score INTEGER NOT NULL,
+  score_breakdown JSONB NOT NULL,
+  priority TEXT NOT NULL,
+  priority_rank INTEGER NOT NULL,
+  why_recommended TEXT NOT NULL,
+  confidence TEXT NOT NULL,
+  source_provider TEXT NOT NULL,
+  source_id TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_enriched_contacts_session ON enriched_contacts(session_id);
+CREATE INDEX IF NOT EXISTS idx_enriched_contacts_entity ON enriched_contacts(entity_id);
+CREATE INDEX IF NOT EXISTS idx_enriched_contacts_priority ON enriched_contacts(entity_id, priority, priority_rank);
+
+CREATE TABLE IF NOT EXISTS enrichment_evidence (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES enrichment_sessions(id) ON DELETE CASCADE,
+  source TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  raw_payload JSONB,
+  normalized_data JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_enrichment_evidence_session ON enrichment_evidence(session_id);
+
+-- Update trigger
+CREATE OR REPLACE FUNCTION update_enrichment_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS enrichment_sessions_updated_at ON enrichment_sessions;
+CREATE TRIGGER enrichment_sessions_updated_at
+  BEFORE UPDATE ON enrichment_sessions
+  FOR EACH ROW EXECUTE FUNCTION update_enrichment_updated_at();
+
+DROP TRIGGER IF EXISTS enriched_contacts_updated_at ON enriched_contacts;
+CREATE TRIGGER enriched_contacts_updated_at
+  BEFORE UPDATE ON enriched_contacts
+  FOR EACH ROW EXECUTE FUNCTION update_enrichment_updated_at();
+`;
+
 const FINANCIALS_SQL = `
 -- GCP Costs Table
 CREATE TABLE IF NOT EXISTS gcp_costs (
@@ -571,6 +664,11 @@ export async function POST(request: NextRequest) {
       await query(FINANCIALS_SQL);
       results.push('✓ Migration completed: gcp_costs, revenue, other_expenses tables created');
 
+      // S396: Run enrichment persistence migration
+      console.log('[Setup] Running S396 enrichment persistence migration...');
+      await query(ENRICHMENT_PERSISTENCE_SQL);
+      results.push('✓ Migration completed: enrichment_sessions, enriched_contacts, enrichment_evidence tables created');
+
       // Run system_config tables migration
       console.log('[Setup] Running system_config migration...');
       await query(SYSTEM_CONFIG_TABLE_SQL);
@@ -665,6 +763,15 @@ export async function GET() {
     `);
     const systemConfigExists = systemConfigCheck[0]?.exists || false;
 
+    // S396: Check if enrichment_sessions table exists
+    const enrichmentCheck = await query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'enrichment_sessions'
+      )
+    `);
+    const enrichmentSessionsExists = enrichmentCheck[0]?.exists || false;
+
     // Count system configs if table exists
     let systemConfigCount = 0;
     if (systemConfigExists) {
@@ -682,6 +789,7 @@ export async function GET() {
           vertical_configs: tableExists,
           siva_metrics: sivaTableExists,
           system_config: systemConfigExists,
+          enrichment_sessions: enrichmentSessionsExists,
         },
         configCount,
         sivaMetricsCount,

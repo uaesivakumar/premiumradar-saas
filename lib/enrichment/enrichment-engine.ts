@@ -15,6 +15,11 @@
  * - Raw provider data NEVER goes to UI
  * - Every enrichment is auditable via session
  * - Contacts scored by QTLE, not provider scores
+ *
+ * PERSISTENCE (S396 Update):
+ * - Sessions and contacts persisted to PostgreSQL
+ * - Idempotent: returns cached contacts from DB if already enriched
+ * - Pay Apollo once, use contacts forever
  */
 
 import {
@@ -25,6 +30,7 @@ import {
   getSession,
   getSessionContacts,
   getSessionByEntity,
+  getContactsByEntity,
   type EnrichmentSession,
   type ScoredContact,
 } from './enrichment-session';
@@ -102,32 +108,39 @@ function normalizeApolloContacts(contacts: ApolloContact[]): NormalizedContact[]
  * This is the main entry point for the Enrich button.
  *
  * IDEMPOTENCY (MANDATORY):
- * - If session exists and is COMPLETE → return cached result (no Apollo call)
+ * - If session exists and is COMPLETE → return cached result from DB (no Apollo call)
  * - If session exists and is IN_PROGRESS → return in-progress status (no Apollo call)
  * - Only create new session if no existing session or previous session FAILED
+ *
+ * PERSISTENCE:
+ * - Sessions and contacts are persisted to PostgreSQL
+ * - After server restart, contacts are loaded from DB (not re-fetched from Apollo)
+ * - Pay Apollo once, use contacts forever
  *
  * This prevents:
  * - Double Apollo calls on rapid clicks
  * - Credit burns on retry
  * - Duplicate sessions for same entity
+ * - Re-fetching after server restart (costs money!)
  */
 export async function enrichCompanyContacts(
   request: EnrichmentRequest
 ): Promise<EnrichmentResult> {
   console.log('[EnrichmentEngine] Starting enrichment for:', request.entityName);
 
-  // IDEMPOTENCY CHECK: Look for existing session for this entity
-  const existingSession = getSessionByEntity(request.entityId);
+  // IDEMPOTENCY CHECK: Look for existing session for this entity (checks DB!)
+  const existingSession = await getSessionByEntity(request.entityId);
 
   if (existingSession) {
-    // CASE 1: Enrichment already complete → return cached result
+    // CASE 1: Enrichment already complete → return cached result from DB
     if (existingSession.stage === 'SCORING_COMPLETE') {
-      console.log('[EnrichmentEngine] IDEMPOTENT: Returning cached session:', existingSession.id);
+      console.log('[EnrichmentEngine] IDEMPOTENT: Returning cached session from DB:', existingSession.id);
+      const cachedContacts = await getSessionContacts(existingSession.id);
       return {
         success: true,
         sessionId: existingSession.id,
         session: existingSession,
-        contacts: getSessionContacts(existingSession.id),
+        contacts: cachedContacts,
       };
     }
 
@@ -150,8 +163,8 @@ export async function enrichCompanyContacts(
     console.log('[EnrichmentEngine] Previous session failed, creating new:', existingSession.id);
   }
 
-  // Step 1: Create enrichment session
-  const session = createSession({
+  // Step 1: Create enrichment session (persisted to DB)
+  const session = await createSession({
     entityId: request.entityId,
     entityName: request.entityName,
     userId: request.userId,
@@ -165,8 +178,8 @@ export async function enrichCompanyContacts(
 
     const apolloContacts = await searchHRContacts(request.entityName);
 
-    // Store raw response as evidence (NEVER sent to UI)
-    storeEvidence({
+    // Store raw response as evidence (NEVER sent to UI, persisted to DB)
+    await storeEvidence({
       sessionId: session.id,
       source: 'apollo',
       entityType: 'contact',
@@ -174,20 +187,21 @@ export async function enrichCompanyContacts(
       normalizedData: null, // Will be populated after normalization
     });
 
-    updateSessionStage(session.id, 'CONTACT_DISCOVERY_COMPLETE', {
+    await updateSessionStage(session.id, 'CONTACT_DISCOVERY_COMPLETE', {
       contactsFound: apolloContacts.length,
     });
 
     if (apolloContacts.length === 0) {
       console.log('[EnrichmentEngine] No contacts found for:', request.entityName);
-      updateSessionStage(session.id, 'SCORING_COMPLETE', {
+      await updateSessionStage(session.id, 'SCORING_COMPLETE', {
         contactsScored: 0,
       });
 
+      const updatedSession = await getSession(session.id);
       return {
         success: true,
         sessionId: session.id,
-        session: getSession(session.id)!,
+        session: updatedSession || session,
         contacts: [],
       };
     }
@@ -198,7 +212,7 @@ export async function enrichCompanyContacts(
     const normalizedContacts = normalizeApolloContacts(apolloContacts);
 
     // Update evidence with normalized data
-    storeEvidence({
+    await storeEvidence({
       sessionId: session.id,
       source: 'apollo',
       entityType: 'contact',
@@ -209,7 +223,7 @@ export async function enrichCompanyContacts(
     // Step 4: Score contacts via QTLE with company context
     console.log('[EnrichmentEngine] Scoring contacts via QTLE...');
 
-    updateSessionStage(session.id, 'SCORING_STARTED');
+    await updateSessionStage(session.id, 'SCORING_STARTED');
 
     // Extract company headcount from Apollo response (if available)
     // Apollo contacts include organization data with employee count
@@ -233,12 +247,14 @@ export async function enrichCompanyContacts(
     const maxContacts = request.maxContacts || 10;
     const topContacts = scoredContacts.slice(0, maxContacts);
 
-    // Store scored contacts
-    storeScoredContacts(session.id, topContacts);
+    // Store scored contacts (persisted to DB)
+    await storeScoredContacts(session.id, topContacts);
 
-    updateSessionStage(session.id, 'SCORING_COMPLETE', {
+    await updateSessionStage(session.id, 'SCORING_COMPLETE', {
       contactsScored: topContacts.length,
     });
+
+    const finalSession = await getSession(session.id);
 
     console.log('[EnrichmentEngine] Enrichment complete:', {
       sessionId: session.id,
@@ -250,21 +266,22 @@ export async function enrichCompanyContacts(
     return {
       success: true,
       sessionId: session.id,
-      session: getSession(session.id)!,
+      session: finalSession || session,
       contacts: topContacts,
     };
 
   } catch (error) {
     console.error('[EnrichmentEngine] Enrichment failed:', error);
 
-    updateSessionStage(session.id, 'FAILED', {
+    await updateSessionStage(session.id, 'FAILED', {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
 
+    const failedSession = await getSession(session.id);
     return {
       success: false,
       sessionId: session.id,
-      session: getSession(session.id)!,
+      session: failedSession || session,
       contacts: [],
       error: error instanceof Error ? error.message : 'Enrichment failed',
     };
@@ -273,16 +290,38 @@ export async function enrichCompanyContacts(
 
 /**
  * Get enrichment result by session ID
+ * Loads from database if not in memory cache
  */
-export function getEnrichmentResult(sessionId: string): EnrichmentResult | null {
-  const session = getSession(sessionId);
+export async function getEnrichmentResult(sessionId: string): Promise<EnrichmentResult | null> {
+  const session = await getSession(sessionId);
   if (!session) return null;
+
+  const contacts = await getSessionContacts(sessionId);
 
   return {
     success: session.stage === 'SCORING_COMPLETE',
     sessionId: session.id,
     session,
-    contacts: getSessionContacts(sessionId),
+    contacts,
+    error: session.error,
+  };
+}
+
+/**
+ * Get enrichment result by entity ID
+ * Convenience method to get contacts for a company without knowing the session ID
+ */
+export async function getEnrichmentResultByEntity(entityId: string): Promise<EnrichmentResult | null> {
+  const session = await getSessionByEntity(entityId);
+  if (!session) return null;
+
+  const contacts = await getSessionContacts(session.id);
+
+  return {
+    success: session.stage === 'SCORING_COMPLETE',
+    sessionId: session.id,
+    session,
+    contacts,
     error: session.error,
   };
 }

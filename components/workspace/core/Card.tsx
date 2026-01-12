@@ -53,7 +53,7 @@ const statusColors: Record<string, string> = {
 
 const statusBadges: Record<string, { label: string; color: string }> = {
   saved: { label: 'Saved', color: 'bg-emerald-500/20 text-emerald-400' },
-  evaluating: { label: 'Evaluating', color: 'bg-amber-500/20 text-amber-400' },
+  evaluating: { label: 'Enriched', color: 'bg-amber-500/20 text-amber-400' }, // S396: Changed from "Evaluating" to "Enriched"
 };
 
 // S390: Signal type chip colors and labels
@@ -136,7 +136,8 @@ export function Card({ card, onAction, isNBA = false }: CardProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {expiryDisplay && (
+            {/* S396: Only show expiry for active (unactioned) cards - actioned cards don't expire */}
+            {expiryDisplay && card.status === 'active' && (
               <span className="text-xs text-gray-500">{expiryDisplay}</span>
             )}
             <motion.div
@@ -179,8 +180,13 @@ export function Card({ card, onAction, isNBA = false }: CardProps) {
           </div>
         )}
 
-        {/* Actions - Always visible, filtered by status */}
-        <CardActions actions={card.actions} onAction={handleAction} cardStatus={card.status} />
+        {/* Actions - Dynamic based on card type and status */}
+        <CardActions
+          actions={card.actions}
+          onAction={handleAction}
+          cardStatus={card.status}
+          cardType={card.type}
+        />
 
         {/* S391: "Why this?" link - collapsed by default, user-invoked */}
         {hasReasoning && (

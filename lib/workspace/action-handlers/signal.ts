@@ -40,6 +40,9 @@ export async function executeSignalAction(
     case 'signal.dismiss':
       return handleDismiss(card, context);
 
+    case 'signal.viewContacts':
+      return handleViewContacts(card, context);
+
     default:
       console.warn('[SignalActions] Unknown handler:', handlerId);
       return {
@@ -311,6 +314,38 @@ async function handleDismiss(card: Card, _context: ActionContext): Promise<Actio
 }
 
 /**
+ * Handle "View Contacts" action
+ *
+ * S396 BEHAVIOR:
+ * - Opens the EnrichedContactsView for this company
+ * - Shows contacts found during enrichment
+ * - User can then action individual contacts
+ *
+ * PRECONDITION: Card must be in EVALUATING state (already enriched)
+ */
+async function handleViewContacts(card: Card, _context: ActionContext): Promise<ActionResult> {
+  const entityName = card.entityName || card.title;
+  const expandedContent = card.expandedContent as { enrichmentSessionId?: string } | undefined;
+  const enrichmentSessionId = expandedContent?.enrichmentSessionId;
+
+  console.log('[SignalActions] View contacts:', entityName, 'sessionId:', enrichmentSessionId);
+
+  // Open the enriched contacts view via navigation
+  return {
+    success: true,
+    message: `Viewing contacts for ${entityName}`,
+    nextAction: 'navigate',
+    navigateTo: `/workspace/contacts/${card.entityId || card.id}`,
+    data: {
+      entityId: card.entityId || card.id,
+      entityName: entityName,
+      enrichmentSessionId: enrichmentSessionId,
+      cardId: card.id,
+    },
+  };
+}
+
+/**
  * Record action to OS NoveltyService
  */
 async function recordNoveltyAction(params: {
@@ -350,4 +385,5 @@ export const signalActionHandlers = {
   'signal.evaluate': handleEnrich, // Legacy alias
   'signal.save': handleSave,
   'signal.dismiss': handleDismiss,
+  'signal.viewContacts': handleViewContacts, // S396: View enriched contacts
 };

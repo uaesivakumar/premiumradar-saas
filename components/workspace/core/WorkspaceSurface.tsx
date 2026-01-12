@@ -27,6 +27,8 @@ import { CardContainer } from './CardContainer';
 import { CommandPalette } from './CommandPalette';
 import { DiscoveryLoader } from './DiscoveryLoader';
 import { FocusedLeadReview } from './FocusedLeadReview';
+import { EnrichedContactsView } from './EnrichedContactsView';
+import { getEffectiveActions } from './CardActions';
 import {
   SystemUtterance,
   buildStatusAcknowledgment,
@@ -36,6 +38,13 @@ import {
   incrementTodayActionCount,
 } from './SystemUtterance';
 import { useDiscoveryContextStore, selectIsDiscoveryActive } from '@/lib/workspace/discovery-context';
+
+// S396: Type for viewing enriched contacts
+interface ContactsViewState {
+  sessionId: string;
+  companyName: string;
+  entityId: string;
+}
 
 /**
  * S396: User query display (conversational)
@@ -87,6 +96,9 @@ export function WorkspaceSurface() {
 
   // S396: Track actions taken today for momentum state
   const [actionsToday, setActionsToday] = useState(0);
+
+  // S396: Contacts view mode - shows enriched contacts for a company
+  const [contactsViewState, setContactsViewState] = useState<ContactsViewState | null>(null);
 
   // Initialize actions count on mount
   useEffect(() => {
@@ -166,15 +178,19 @@ export function WorkspaceSurface() {
 
   // S374: Handle card actions
   const handleCardAction = useCallback(async (cardId: string, actionId: string) => {
-    const card = cards.find(c => c.id === cardId) || nba;
+    // Also check rawCards for dismissed cards that might be in filtered view
+    const card = cards.find(c => c.id === cardId) || rawCards.find(c => c.id === cardId) || nba;
     if (!card) {
       console.warn('[WorkspaceSurface] Card not found:', cardId);
       return;
     }
 
-    const action = card.actions?.find(a => a.id === actionId);
+    // S396: Get effective actions based on card type and status
+    // This handles status-aware actions like "see-contacts" for enriched cards
+    const effectiveActions = getEffectiveActions(card.actions || [], card.type, card.status);
+    const action = effectiveActions.find(a => a.id === actionId);
     if (!action) {
-      console.warn('[WorkspaceSurface] Action not found:', actionId);
+      console.warn('[WorkspaceSurface] Action not found:', actionId, 'in effective actions for', card.type, card.status);
       return;
     }
 
@@ -197,10 +213,20 @@ export function WorkspaceSurface() {
 
     // Handle navigation if needed
     if (result.nextAction === 'navigate' && result.navigateTo) {
-      // For now, just log - navigation will be implemented later
       console.log('[WorkspaceSurface] Navigate to:', result.navigateTo);
+
+      // S396: Handle "See Contacts" navigation - show EnrichedContactsView inline
+      if (result.navigateTo.startsWith('/workspace/contacts/') && result.data) {
+        const expandedContent = card.expandedContent as { enrichmentSessionId?: string } | undefined;
+        const data = result.data as { enrichmentSessionId?: string; entityName?: string; entityId?: string };
+        setContactsViewState({
+          sessionId: data.enrichmentSessionId || expandedContent?.enrichmentSessionId || card.id,
+          companyName: data.entityName || card.entityName || card.title,
+          entityId: data.entityId || card.entityId || card.id,
+        });
+      }
     }
-  }, [cards, nba, getContext]);
+  }, [cards, rawCards, nba, getContext]);
 
   const hasCards = cards.length > 0;
   const hasAllCards = allCards.length > 0;
@@ -376,6 +402,28 @@ export function WorkspaceSurface() {
                 position={{ current: focusedLeadIndex + 1, total: savedLeads.length }}
                 onAction={handleFocusedReviewAction}
                 onExit={handleExitFocusedReview}
+              />
+            ) : contactsViewState ? (
+              /* S396: Enriched Contacts View - show contacts for a company */
+              <EnrichedContactsView
+                sessionId={contactsViewState.sessionId}
+                companyName={contactsViewState.companyName}
+                entityId={contactsViewState.entityId}
+                onBack={() => setContactsViewState(null)}
+                onContactSelect={(contact) => {
+                  console.log('[WorkspaceSurface] Contact selected:', contact.fullName);
+                  // TODO: Handle contact selection (e.g., open in CRM, copy to clipboard)
+                }}
+                onEnrich={async () => {
+                  // S396: Re-enrich when session expired
+                  console.log('[WorkspaceSurface] Re-enriching:', contactsViewState.companyName);
+                  setContactsViewState(null); // Close contacts view
+                  // Find the card and trigger enrich action
+                  const card = rawCards.find(c => c.entityId === contactsViewState.entityId || c.id === contactsViewState.entityId);
+                  if (card) {
+                    await handleCardAction(card.id, 'enrich');
+                  }
+                }}
               />
             ) : activeFilter ? (
               /* User is filtering - show filtered cards or empty message */

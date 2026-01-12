@@ -48,8 +48,10 @@ interface EnrichedContact {
 interface EnrichedContactsViewProps {
   sessionId: string;
   companyName: string;
+  entityId?: string;  // S396: For re-enrichment
   onBack: () => void;
   onContactSelect?: (contact: EnrichedContact) => void;
+  onEnrich?: () => void;  // S396: Callback to re-enrich if session expired
 }
 
 // =============================================================================
@@ -284,25 +286,45 @@ function ContactCard({
 export function EnrichedContactsView({
   sessionId,
   companyName,
+  entityId,
   onBack,
   onContactSelect,
+  onEnrich,
 }: EnrichedContactsViewProps) {
   const [contacts, setContacts] = useState<EnrichedContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
 
   // Fetch contacts on mount
+  // S396: Try sessionId first, then fallback to entityId (DB lookup)
   useEffect(() => {
     async function fetchContacts() {
       try {
-        const response = await fetch(`/api/enrichment/start?sessionId=${sessionId}`);
-        const data = await response.json();
+        // First try by sessionId
+        let response = await fetch(`/api/enrichment/start?sessionId=${sessionId}`);
+        let data = await response.json();
 
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to fetch contacts');
+        // S396: If session not found but we have entityId, try loading from DB by entityId
+        if (!data.success && data.error === 'Session not found' && entityId) {
+          console.log('[EnrichedContactsView] Session not found, trying entityId lookup:', entityId);
+          response = await fetch(`/api/enrichment/start?entityId=${entityId}`);
+          data = await response.json();
         }
 
+        if (!data.success) {
+          // S396: Detect session expired/not found
+          if (data.error === 'Session not found') {
+            setIsSessionExpired(true);
+            setError('No contacts found. Click "Enrich Now" to find decision makers.');
+          } else {
+            throw new Error(data.error || 'Failed to fetch contacts');
+          }
+          return;
+        }
+
+        console.log('[EnrichedContactsView] Loaded', data.contacts?.length || 0, 'contacts from DB');
         setContacts(data.contacts || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load contacts');
@@ -312,7 +334,7 @@ export function EnrichedContactsView({
     }
 
     fetchContacts();
-  }, [sessionId]);
+  }, [sessionId, entityId]);
 
   // Separate primary and secondary contacts
   const primaryContacts = contacts.filter(c => c.priority === 'primary');
@@ -330,13 +352,26 @@ export function EnrichedContactsView({
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <p className="text-red-400 mb-4">{error}</p>
-        <button
-          onClick={onBack}
-          className="text-sm text-gray-400 hover:text-white"
-        >
-          Go back
-        </button>
+        <p className={`mb-4 ${isSessionExpired ? 'text-gray-400' : 'text-red-400'}`}>
+          {error}
+        </p>
+        <div className="flex items-center gap-3">
+          {/* S396: Show Enrich Now button if session expired and callback provided */}
+          {isSessionExpired && onEnrich && (
+            <button
+              onClick={onEnrich}
+              className="px-4 py-2 bg-white text-slate-900 font-medium rounded-lg hover:bg-gray-100 transition-colors text-sm"
+            >
+              Enrich Now
+            </button>
+          )}
+          <button
+            onClick={onBack}
+            className="text-sm text-gray-400 hover:text-white"
+          >
+            Go back
+          </button>
+        </div>
       </div>
     );
   }
