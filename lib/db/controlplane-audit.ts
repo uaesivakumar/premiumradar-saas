@@ -28,6 +28,10 @@ export type AuditAction =
   | 'activate_policy'
   | 'deprecate_policy'
   | 'create_policy_version'  // Phase 1A: Policy versioning
+  | 'update_enrichment_policy'  // S397: Update enrichment policy text
+  | 'interpret_policy'          // S398: LLM interpretation
+  | 'approve_policy'            // S399: Founder approval
+  | 'reject_policy'             // S399: Founder rejection
   | 'create_binding'
   | 'update_binding'
   | 'delete_binding';
@@ -38,6 +42,7 @@ export type AuditTargetType =
   | 'mvt_version'  // S255: MVT version entries
   | 'persona'
   | 'policy'
+  | 'enrichment_policy_version'  // S399: Policy version entries
   | 'binding';
 
 interface AuditLogParams {
