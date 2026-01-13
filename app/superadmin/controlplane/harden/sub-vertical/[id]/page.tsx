@@ -31,6 +31,11 @@ import {
   Plus,
   Trash2,
   FileText,
+  BookOpen,
+  Sparkles,
+  Eye,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { RuntimeReadinessPanel } from '@/components/controlplane/harden/RuntimeReadinessPanel';
 
@@ -104,6 +109,31 @@ export default function SubVerticalHardenPage() {
   const [newGolden, setNewGolden] = useState({ name: '', description: '' });
   const [newKillScenario, setNewKillScenario] = useState({ name: '', description: '' });
 
+  // Enrichment Policy state (S397-S400)
+  const [enrichmentPolicy, setEnrichmentPolicy] = useState('');
+  const [enrichmentPolicyVersion, setEnrichmentPolicyVersion] = useState(0);
+  const [policyReview, setPolicyReview] = useState<{
+    pending_review: {
+      version_id: string;
+      version: number;
+      interpreted_ipr: unknown;
+      interpretation_confidence: string;
+      interpretation_warnings: string[];
+    } | null;
+    active_version: {
+      version: number;
+      approved_by: string;
+      approved_at: string;
+      interpreted_ipr: unknown;
+    } | null;
+  } | null>(null);
+  const [isInterpretingPolicy, setIsInterpretingPolicy] = useState(false);
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+  const [isApprovingPolicy, setIsApprovingPolicy] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [policySuccess, setPolicySuccess] = useState<string | null>(null);
+  const [showPolicyReview, setShowPolicyReview] = useState(false);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -171,6 +201,28 @@ export default function SubVerticalHardenPage() {
       setAllowedSignals(data.data.sub_vertical.allowed_signals || []);
       setKillRules(data.data.sub_vertical.kill_rules || []);
       setSeedScenarios(data.data.sub_vertical.seed_scenarios || { golden: [], kill: [] });
+
+      // Load enrichment policy (S397-S400)
+      try {
+        const policyRes = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/enrichment-policy`);
+        if (policyRes.ok) {
+          const policyData = await policyRes.json();
+          if (policyData.success) {
+            setEnrichmentPolicy(policyData.data.enrichment_policy_text || '');
+            setEnrichmentPolicyVersion(policyData.data.enrichment_policy_version || 0);
+          }
+        }
+
+        const reviewRes = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/policy-review`);
+        if (reviewRes.ok) {
+          const reviewData = await reviewRes.json();
+          if (reviewData.success) {
+            setPolicyReview(reviewData.data);
+          }
+        }
+      } catch (policyErr) {
+        console.log('[SubVertical Harden] Policy load (optional):', policyErr);
+      }
     } catch (err) {
       console.error('[SubVertical Harden] Load error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load sub-vertical audit data');
@@ -237,6 +289,153 @@ export default function SubVerticalHardenPage() {
       setSaveError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // === ENRICHMENT POLICY HELPERS (S397-S400) ===
+  const handleSavePolicy = async () => {
+    if (!enrichmentPolicy.trim()) {
+      setPolicyError('Policy text is required');
+      return;
+    }
+
+    setIsSavingPolicy(true);
+    setPolicyError(null);
+    setPolicySuccess(null);
+
+    try {
+      const res = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/enrichment-policy`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enrichment_policy_text: enrichmentPolicy }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to save policy');
+      }
+
+      setEnrichmentPolicyVersion(data.data.enrichment_policy_version);
+      setPolicySuccess('Policy saved. Click "Interpret" to generate structured interpretation.');
+      setTimeout(() => setPolicySuccess(null), 5000);
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : 'Failed to save policy');
+    } finally {
+      setIsSavingPolicy(false);
+    }
+  };
+
+  const handleInterpretPolicy = async () => {
+    setIsInterpretingPolicy(true);
+    setPolicyError(null);
+    setPolicySuccess(null);
+
+    try {
+      const res = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/enrichment-policy/interpret`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || data.error || 'Failed to interpret policy');
+      }
+
+      // Reload review data
+      const reviewRes = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/policy-review`);
+      if (reviewRes.ok) {
+        const reviewData = await reviewRes.json();
+        if (reviewData.success) {
+          setPolicyReview(reviewData.data);
+        }
+      }
+
+      setPolicySuccess(`Interpretation created (v${data.data.version}). Review below and approve.`);
+      setShowPolicyReview(true);
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : 'Failed to interpret policy');
+    } finally {
+      setIsInterpretingPolicy(false);
+    }
+  };
+
+  const handleApprovePolicy = async () => {
+    if (!policyReview?.pending_review?.version_id) return;
+
+    setIsApprovingPolicy(true);
+    setPolicyError(null);
+    setPolicySuccess(null);
+
+    try {
+      const res = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/policy-review/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          version_id: policyReview.pending_review.version_id,
+          approval_notes: 'Approved via Control Plane UI',
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || data.error || 'Failed to approve policy');
+      }
+
+      // Reload review data
+      const reviewRes = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/policy-review`);
+      if (reviewRes.ok) {
+        const reviewData = await reviewRes.json();
+        if (reviewData.success) {
+          setPolicyReview(reviewData.data);
+        }
+      }
+
+      setPolicySuccess(`Policy v${data.data.version} approved and now active!`);
+      setShowPolicyReview(false);
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : 'Failed to approve policy');
+    } finally {
+      setIsApprovingPolicy(false);
+    }
+  };
+
+  const handleRejectPolicy = async (reason: string) => {
+    if (!policyReview?.pending_review?.version_id) return;
+
+    setIsApprovingPolicy(true);
+    setPolicyError(null);
+
+    try {
+      const res = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/policy-review/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          version_id: policyReview.pending_review.version_id,
+          rejection_reason: reason || 'Rejected via Control Plane UI',
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || data.error || 'Failed to reject policy');
+      }
+
+      // Reload review data
+      const reviewRes = await fetch(`/api/superadmin/controlplane/sub-verticals/${id}/policy-review`);
+      if (reviewRes.ok) {
+        const reviewData = await reviewRes.json();
+        if (reviewData.success) {
+          setPolicyReview(reviewData.data);
+        }
+      }
+
+      setPolicyError(`Policy rejected. Edit the policy and re-interpret.`);
+      setShowPolicyReview(false);
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : 'Failed to reject policy');
+    } finally {
+      setIsApprovingPolicy(false);
     }
   };
 
@@ -543,6 +742,168 @@ export default function SubVerticalHardenPage() {
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* Enrichment Policy Section (S397-S400) */}
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-cyan-400" />
+                  <h2 className="text-sm font-medium text-white">Enrichment Policy</h2>
+                  {enrichmentPolicyVersion > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">
+                      v{enrichmentPolicyVersion}
+                    </span>
+                  )}
+                  {policyReview?.active_version && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">
+                      ACTIVE: v{policyReview.active_version.version}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {policyReview?.pending_review && (
+                    <button
+                      onClick={() => setShowPolicyReview(!showPolicyReview)}
+                      className="flex items-center gap-1 px-2 py-1 text-amber-400 hover:bg-amber-500/20 rounded text-xs"
+                    >
+                      <Eye className="w-3 h-3" />
+                      Review Pending
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Policy feedback messages */}
+              {policyError && (
+                <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded flex items-center gap-2 text-red-400 text-xs">
+                  <AlertCircle className="w-3 h-3" />
+                  {policyError}
+                </div>
+              )}
+              {policySuccess && (
+                <div className="mb-3 p-2 bg-emerald-500/10 border border-emerald-500/30 rounded flex items-center gap-2 text-emerald-400 text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  {policySuccess}
+                </div>
+              )}
+
+              {/* Policy text editor */}
+              <div className="mb-3">
+                <label className="block text-xs text-neutral-500 mb-1">
+                  Plain English Policy
+                </label>
+                <textarea
+                  value={enrichmentPolicy}
+                  onChange={(e) => setEnrichmentPolicy(e.target.value)}
+                  placeholder="Write your enrichment policy in plain English. Example:
+
+For large companies with more than 500 employees, prioritize HR Head, Payroll Manager, and Compensation & Benefits Lead.
+
+For mid-sized companies between 100 and 500 employees, focus on HR Manager or Finance Manager.
+
+For small companies with fewer than 100 employees, prioritize Founder, Managing Director, or Finance Manager."
+                  rows={8}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-mono"
+                />
+                <p className="text-[10px] text-neutral-600 mt-1">
+                  Define contact priority rules by company size, role preferences, and fallback behavior.
+                </p>
+              </div>
+
+              {/* Policy actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSavePolicy}
+                  disabled={isSavingPolicy || !enrichmentPolicy.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs rounded transition-colors disabled:opacity-50"
+                >
+                  {isSavingPolicy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Save Policy
+                </button>
+                <button
+                  onClick={handleInterpretPolicy}
+                  disabled={isInterpretingPolicy || !enrichmentPolicy.trim() || enrichmentPolicyVersion === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs rounded transition-colors disabled:opacity-50"
+                >
+                  {isInterpretingPolicy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  Interpret Policy
+                </button>
+              </div>
+
+              {/* Policy Review Panel */}
+              {showPolicyReview && policyReview?.pending_review && (
+                <div className="mt-4 p-3 bg-amber-500/5 border border-amber-500/30 rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-medium text-amber-400">
+                      Pending Interpretation (v{policyReview.pending_review.version})
+                    </h3>
+                    <span className="text-[10px] text-neutral-500">
+                      Confidence: {(parseFloat(policyReview.pending_review.interpretation_confidence) * 100).toFixed(0)}%
+                    </span>
+                  </div>
+
+                  {/* Show interpreted IPR */}
+                  <div className="mb-3">
+                    <label className="block text-[10px] text-neutral-500 mb-1">Interpreted Structure (IPR)</label>
+                    <pre className="p-2 bg-neutral-900 border border-neutral-800 rounded text-[10px] text-neutral-300 overflow-auto max-h-48 font-mono">
+                      {JSON.stringify(policyReview.pending_review.interpreted_ipr, null, 2)}
+                    </pre>
+                  </div>
+
+                  {/* Warnings if any */}
+                  {policyReview.pending_review.interpretation_warnings?.length > 0 && (
+                    <div className="mb-3 p-2 bg-amber-500/10 rounded text-[10px] text-amber-300">
+                      <strong>Warnings:</strong>
+                      <ul className="mt-1 space-y-0.5">
+                        {policyReview.pending_review.interpretation_warnings.map((w: string, i: number) => (
+                          <li key={i}>• {w}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Approval actions */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleApprovePolicy}
+                      disabled={isApprovingPolicy}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded transition-colors disabled:opacity-50"
+                    >
+                      {isApprovingPolicy ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3" />}
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectPolicy('Does not match intent')}
+                      disabled={isApprovingPolicy}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors disabled:opacity-50"
+                    >
+                      <ThumbsDown className="w-3 h-3" />
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => setShowPolicyReview(false)}
+                      className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-white text-xs rounded"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Active policy info */}
+              {policyReview?.active_version && !showPolicyReview && (
+                <div className="mt-3 p-2 bg-emerald-500/5 border border-emerald-500/30 rounded text-[10px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-emerald-400">
+                      Active Policy: v{policyReview.active_version.version}
+                    </span>
+                    <span className="text-neutral-500">
+                      Approved by {policyReview.active_version.approved_by}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Signals Section - EDITABLE */}
