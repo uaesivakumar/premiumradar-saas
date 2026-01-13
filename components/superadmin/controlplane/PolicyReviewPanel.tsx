@@ -223,14 +223,25 @@ export function PolicyReviewPanel({
     if (ipr.target_roles?.length > 0) {
       sections.push('\n## Target Roles');
       ipr.target_roles.forEach((r, i) => {
-        const sizeRange = r.company_size_range;
-        const rangeText = sizeRange.min && sizeRange.max
-          ? `${sizeRange.min}-${sizeRange.max}`
-          : sizeRange.min
-          ? `${sizeRange.min}+`
-          : `<${sizeRange.max}`;
         sections.push(`\n### Rule ${i + 1} (Priority ${r.priority})`);
-        sections.push(`Company size: ${rangeText} employees`);
+
+        // Handle different scope types
+        if (r.applies_to_all) {
+          sections.push(`Scope: ALL companies`);
+        } else if (r.company_size_range) {
+          const sizeRange = r.company_size_range;
+          const rangeText = sizeRange.min && sizeRange.max
+            ? `${sizeRange.min}-${sizeRange.max}`
+            : sizeRange.min
+            ? `${sizeRange.min}+`
+            : sizeRange.max
+            ? `<${sizeRange.max}`
+            : 'unspecified';
+          sections.push(`Company size: ${rangeText} employees`);
+        } else if (r.conditions?.length) {
+          sections.push(`Conditions: ${r.conditions.map(c => `${c.field} ${c.operator} ${c.value}`).join(', ')}`);
+        }
+
         sections.push(`Titles: ${r.titles.join(', ')}`);
         sections.push(`Reason: ${r.reason}`);
       });

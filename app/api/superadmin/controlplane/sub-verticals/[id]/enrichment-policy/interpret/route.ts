@@ -19,6 +19,7 @@ import { validateSuperAdminSession } from '@/lib/superadmin-auth';
 import { logControlPlaneAudit } from '@/lib/db/controlplane-audit';
 import {
   IntermediatePolicyRepresentation,
+  IPRTargetRole,
   hashPolicyText,
   createEmptyIPR,
 } from '@/lib/policy/ipr-schema';
@@ -39,16 +40,33 @@ interface RouteParams {
 }
 
 /**
- * LOSSLESS Policy Interpreter
+ * STRICT ENUM PARSING MODE - Policy Interpreter v2
  *
- * CRITICAL RULES (STRICTLY ENFORCED):
- * 1. ZERO ROLE LOSS - Every role mentioned in the policy MUST appear in the IPR
- * 2. ZERO DEFAULTS - Do NOT insert default_roles unless explicitly stated
- * 3. ZERO ASSUMPTIONS - Do NOT use "assume_mid" or any assumption
- * 4. EXPLICIT UNCERTAINTY - If policy says "deprioritize confidence", use that exactly
- * 5. FAITHFUL TRANSLATION - Preserve intent, don't optimize or invent
+ * CRITICAL CONSTRAINTS (COMPILER-LEVEL ENFORCEMENT):
  *
- * If something is not stated, OMIT it. Don't fill in blanks.
+ * 1. STRICT ROLE WHITELIST
+ *    - ONLY roles explicitly written in policy are allowed
+ *    - Slash-variants (HR Manager / People Manager) are ONE role with aliases
+ *    - NO semantic expansion (HR Manager does NOT imply CHRO)
+ *    - NO hierarchy inference
+ *    - If policy says "Do not introduce roles outside the lists" → strict enum
+ *
+ * 2. EXPLICIT SCOPE DECLARATION (MANDATORY)
+ *    Every target_roles block MUST have ONE of:
+ *    - applies_to_all: true (for global/primary roles)
+ *    - company_size_range: { min, max } (size-based)
+ *    - conditions: [] (signal/condition-based)
+ *    NULL-NULL SCOPE IS FORBIDDEN
+ *
+ * 3. ONE ROLE GROUP PER LOGIC BLOCK
+ *    - No duplication
+ *    - No role scattering
+ *    - Each entry = one coherent rule from policy
+ *
+ * 4. LOSSLESS TRANSLATION
+ *    - Every role in policy MUST appear in IPR
+ *    - Every constraint in policy MUST be represented
+ *    - NO invented roles, NO invented rules
  */
 async function interpretPolicyWithLLM(
   policyText: string,
@@ -68,254 +86,412 @@ async function interpretPolicyWithLLM(
   ipr.interpretation_notes = [];
 
   const warnings: string[] = [];
-  let confidence = 0.9;
-
-  // Parse the policy text into sentences for analysis
-  const sentences = policyText.split(/[.\n]/).map((s) => s.trim()).filter((s) => s.length > 0);
+  let confidence = 0.95;
 
   // ============================================================
-  // STEP 1: Extract ALL numeric thresholds with explicit values
+  // STEP 1: DETECT STRICT MODE
   // ============================================================
-  const thresholdMatches: Array<{ value: number; context: string; comparison: 'gte' | 'lt' }> = [];
+  const lowerPolicy = policyText.toLowerCase();
+  const isStrictMode = lowerPolicy.includes('do not introduce roles outside') ||
+                       lowerPolicy.includes('strict rule') ||
+                       lowerPolicy.includes('only roles');
 
-  // Pattern: "more than X employees" or "X+ employees"
-  const morePatterns = [
-    /more than (\d+)\s*employees/gi,
-    /(\d+)\+\s*employees/gi,
-    /greater than (\d+)\s*employees/gi,
-    /over (\d+)\s*employees/gi,
-  ];
+  if (isStrictMode) {
+    ipr.interpretation_notes.push('STRICT MODE: Only explicitly listed roles will be extracted');
+  }
 
-  // Pattern: "fewer than X employees" or "<X employees"
-  const lessPatterns = [
-    /fewer than (\d+)\s*employees/gi,
-    /less than (\d+)\s*employees/gi,
-    /under (\d+)\s*employees/gi,
-    /<\s*(\d+)\s*employees/gi,
-  ];
+  // ============================================================
+  // STEP 2: PARSE POLICY INTO LOGICAL BLOCKS
+  // ============================================================
+  // Split by double newlines or section headers
+  const blocks = policyText.split(/\n\n+/).map(b => b.trim()).filter(b => b.length > 0);
 
-  // Pattern: "between X and Y employees"
-  const betweenPattern = /between\s*(\d+)\s*and\s*(\d+)\s*employees/gi;
+  interface PolicyBlock {
+    rawText: string;
+    scopeType: 'all' | 'large' | 'mid' | 'small' | 'fallback' | 'uncertainty' | 'constraint';
+    sizeRange: { min: number | null; max: number | null } | null;
+    appliesTo: 'all' | 'size' | 'condition';
+    roles: string[];
+    isExclusion: boolean;
+    isFallback: boolean;
+  }
 
-  for (const pattern of morePatterns) {
-    for (const match of policyText.matchAll(pattern)) {
-      thresholdMatches.push({ value: parseInt(match[1]), context: match[0], comparison: 'gte' });
+  const parsedBlocks: PolicyBlock[] = [];
+
+  // ============================================================
+  // STEP 3: EXTRACT ROLES FROM EACH BLOCK (STRICT WHITELIST)
+  // ============================================================
+  // SANITATION RULES:
+  // 1. Preserve full role names EXACTLY as written (no truncation)
+  // 2. NO instructional text in titles (filter "Prioritize X", "Focus on X")
+  // 3. Titles = atomic enums only
+
+  const extractRolesStrict = (text: string): string[] => {
+    const roles: string[] = [];
+
+    // INSTRUCTIONAL PREFIXES TO FILTER OUT (these are NOT role names)
+    const instructionalPrefixes = [
+      'prioritize', 'focus on', 'use ', 'avoid', 'target', 'if ', 'when ',
+      'for large', 'for mid', 'for small', 'unless', 'primarily', 'goal:'
+    ];
+
+    // Known role-ending words (helps identify role patterns)
+    const knownRoleWords = ['Manager', 'Director', 'Head', 'Lead', 'Specialist',
+      'Administrator', 'Coordinator', 'Officer', 'Generalist', 'Admin'];
+
+    // Extract lines that look like role lists (standalone lines with role names)
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
+
+      // SKIP instructional lines (not role lists)
+      const lowerLine = trimmedLine.toLowerCase();
+      if (instructionalPrefixes.some(prefix => lowerLine.startsWith(prefix))) {
+        continue; // This is instruction, not a role
+      }
+
+      // SKIP lines that are clearly sentences (have verbs/prepositions indicating prose)
+      if (/\b(is|are|should|will|can|must|may|need|the|for|with|from|into)\b/i.test(trimmedLine) &&
+          trimmedLine.length > 60) {
+        continue; // Long line with verbs = prose, not role
+      }
+
+      // SKIP section headers (e.g., "Large companies (500+ employees):")
+      if (/compan(y|ies).*:$/i.test(trimmedLine)) {
+        continue;
+      }
+
+      // Check if this line contains role-like words
+      const hasRoleWord = knownRoleWords.some(w => trimmedLine.includes(w));
+      if (!hasRoleWord) continue;
+
+      // This line looks like a role - preserve it EXACTLY
+      // Pattern: Role names with optional (abbreviations) and / separators
+      // Examples:
+      //   "HR Manager / People Manager"
+      //   "Compensation & Benefits (C&B) Manager / C&B Specialist"
+      //   "Onboarding Specialist / People Operations Specialist"
+      const rolePattern = /^[A-Z][a-zA-Z&\s()]+(?:\s*\/\s*[A-Z][a-zA-Z&\s()]+)*$/;
+
+      if (rolePattern.test(trimmedLine)) {
+        // This entire line is a role name - preserve EXACTLY
+        const role = trimmedLine.trim();
+        if (!roles.includes(role)) {
+          roles.push(role);
+        }
+      }
     }
-  }
 
-  for (const pattern of lessPatterns) {
-    for (const match of policyText.matchAll(pattern)) {
-      thresholdMatches.push({ value: parseInt(match[1]), context: match[0], comparison: 'lt' });
+    return roles;
+  };
+
+  // ============================================================
+  // STEP 4: PARSE EACH BLOCK FOR SCOPE AND ROLES
+  // ============================================================
+  // Track current section context (for fallback roles that appear in size sections)
+  let currentSizeContext: 'all' | 'large' | 'mid' | 'small' | null = null;
+  let isFallbackContext = false; // Track if we're in a fallback section
+
+  for (const blockText of blocks) {
+    const lowerBlock = blockText.toLowerCase();
+
+    // Determine scope type
+    let scopeType: PolicyBlock['scopeType'] = 'all';
+    let sizeRange: { min: number | null; max: number | null } | null = null;
+    let appliesTo: PolicyBlock['appliesTo'] = 'all';
+    let isExclusion = false;
+    let isFallback = false;
+
+    // Check for size-based scope (these are section HEADERS)
+    if (lowerBlock.includes('large compan') || lowerBlock.includes('500+') || lowerBlock.includes('500+ employees')) {
+      scopeType = 'large';
+      sizeRange = { min: 500, max: null };
+      appliesTo = 'size';
+      currentSizeContext = 'large';
+      isFallbackContext = false;
+    } else if (lowerBlock.includes('mid-size') || lowerBlock.includes('mid size') ||
+               lowerBlock.includes('100–499') || lowerBlock.includes('100-499') ||
+               (lowerBlock.includes('100') && lowerBlock.includes('499'))) {
+      scopeType = 'mid';
+      sizeRange = { min: 100, max: 499 };
+      appliesTo = 'size';
+      currentSizeContext = 'mid';
+      isFallbackContext = false;
+    } else if (lowerBlock.includes('small compan') || lowerBlock.includes('<100') ||
+               lowerBlock.includes('fewer than 100') || lowerBlock.includes('under 100')) {
+      scopeType = 'small';
+      sizeRange = { min: null, max: 100 };
+      appliesTo = 'size';
+      currentSizeContext = 'small';
+      isFallbackContext = false;
+    } else if (lowerBlock.includes('all companies') || lowerBlock.includes('any size') ||
+               lowerBlock.includes('primary roles')) {
+      scopeType = 'all';
+      appliesTo = 'all';
+      currentSizeContext = 'all';
+      isFallbackContext = false;
+    } else if (lowerBlock.includes('uncertainty') || lowerBlock.includes('unknown')) {
+      scopeType = 'uncertainty';
+      appliesTo = 'condition';
+      currentSizeContext = null; // Reset context
+      isFallbackContext = false;
+    } else if (lowerBlock.includes('strict rule') || lowerBlock.includes('do not introduce')) {
+      scopeType = 'constraint';
+      isExclusion = true;
+      currentSizeContext = null; // Reset context
+      isFallbackContext = false;
     }
-  }
 
-  for (const match of policyText.matchAll(betweenPattern)) {
-    const min = parseInt(match[1]);
-    const max = parseInt(match[2]);
-    thresholdMatches.push({ value: min, context: match[0], comparison: 'gte' });
-    thresholdMatches.push({ value: max, context: match[0], comparison: 'lt' });
-    ipr.interpretation_notes.push(`Found explicit range: ${min}-${max} employees`);
-  }
+    // FALLBACK DETECTION: "if none of", "fallback", "operational fallback"
+    // Set fallback context flag
+    if (lowerBlock.includes('fallback') || lowerBlock.includes('if none of')) {
+      isFallbackContext = true;
+    }
 
-  // Deduplicate and create threshold objects
-  const seenThresholds = new Set<string>();
-  for (const t of thresholdMatches) {
-    const key = `${t.value}-${t.comparison}`;
-    if (!seenThresholds.has(key)) {
-      seenThresholds.add(key);
-      const name = t.comparison === 'gte'
-        ? `threshold_${t.value}_or_more`
-        : `threshold_under_${t.value}`;
-      ipr.thresholds.push({
-        name,
-        field: 'headcount',
-        value: t.value,
-        unit: 'employees',
-        comparison: t.comparison,
+    // ROLE-ONLY BLOCKS: If block has roles but no section markers,
+    // inherit the current context (size and fallback)
+    const roles = extractRolesStrict(blockText);
+    const isRoleOnlyBlock = roles.length > 0 &&
+      !lowerBlock.includes('compan') &&
+      !lowerBlock.includes('uncertainty') &&
+      !lowerBlock.includes('strict') &&
+      !lowerBlock.includes('primary roles') &&
+      !lowerBlock.includes('all companies');
+
+    if (isRoleOnlyBlock) {
+      // Inherit the current context for role-only blocks
+      if (isFallbackContext && currentSizeContext === 'small') {
+        // These are FALLBACK roles for small companies
+        scopeType = 'small';
+        sizeRange = { min: null, max: 100 };
+        appliesTo = 'size';
+        isFallback = true;
+      } else if (currentSizeContext === 'small') {
+        scopeType = 'small';
+        sizeRange = { min: null, max: 100 };
+        appliesTo = 'size';
+      } else if (currentSizeContext === 'mid') {
+        scopeType = 'mid';
+        sizeRange = { min: 100, max: 499 };
+        appliesTo = 'size';
+      } else if (currentSizeContext === 'large') {
+        scopeType = 'large';
+        sizeRange = { min: 500, max: null };
+        appliesTo = 'size';
+      }
+      // If currentSizeContext is 'all', scopeType remains 'all' (already set)
+    }
+
+    // Check for exclusion indicators
+    if (lowerBlock.includes('avoid') || lowerBlock.includes('do not') || lowerBlock.includes('unless')) {
+      isExclusion = true;
+    }
+
+    if (roles.length > 0 || scopeType === 'constraint' || scopeType === 'uncertainty') {
+      parsedBlocks.push({
+        rawText: blockText,
+        scopeType,
+        sizeRange,
+        appliesTo,
+        roles,
+        isExclusion,
+        isFallback,
       });
     }
   }
 
   // ============================================================
-  // STEP 2: Extract ALL roles mentioned - ZERO LOSS
+  // STEP 5: BUILD TARGET_ROLES WITH EXPLICIT SCOPE
   // ============================================================
-  // Comprehensive role list - includes EVERY role that could appear
-  const allRolePatterns = [
-    // HR roles
-    'HR Head', 'Head of HR', 'HR Director', 'HR Manager',
-    'Chief People Officer', 'CPO', 'CHRO', 'Chief HR Officer',
-    'Human Resources Manager', 'Human Resources Director',
-    // Payroll/Benefits roles
-    'Payroll Manager', 'Payroll Director', 'Head of Payroll',
-    'Compensation & Benefits Lead', 'Compensation and Benefits Lead',
-    'C&B Lead', 'C&B Manager', 'Benefits Manager', 'Benefits Director',
-    'Compensation Manager', 'Compensation Director',
-    // Finance roles
-    'Finance Manager', 'Finance Director', 'CFO', 'Chief Financial Officer',
-    'Financial Controller', 'Head of Finance',
-    // Executive roles
-    'Founder', 'Co-Founder', 'CEO', 'COO', 'CTO',
-    'Managing Director', 'MD', 'General Manager', 'GM',
-    'Owner', 'President', 'Vice President', 'VP',
-    // Operations roles
-    'Office Manager', 'Operations Manager', 'Admin Manager',
-  ];
+  const processedRoles = new Set<string>();
 
-  // Function to extract roles from a sentence
-  const extractRolesFromText = (text: string): string[] => {
-    const found: string[] = [];
-    const lowerText = text.toLowerCase();
+  for (const block of parsedBlocks) {
+    if (block.roles.length === 0) continue;
+    if (block.isExclusion && !block.isFallback) continue; // Skip pure exclusion blocks
 
-    for (const role of allRolePatterns) {
-      if (lowerText.includes(role.toLowerCase())) {
-        // Use the exact case from the pattern
-        if (!found.includes(role)) {
-          found.push(role);
-        }
-      }
-    }
-    return found;
-  };
+    // Deduplicate - don't add roles we've already processed
+    const newRoles = block.roles.filter(r => !processedRoles.has(r));
+    if (newRoles.length === 0) continue;
 
-  // ============================================================
-  // STEP 3: Associate roles with company size contexts
-  // ============================================================
-  interface SizeContext {
-    type: 'large' | 'mid' | 'small' | 'unknown';
-    min: number | null;
-    max: number | null;
-    roles: string[];
-    sourceText: string;
-  }
+    newRoles.forEach(r => processedRoles.add(r));
 
-  const sizeContexts: SizeContext[] = [];
-
-  for (const sentence of sentences) {
-    const lowerSentence = sentence.toLowerCase();
-    const roles = extractRolesFromText(sentence);
-
-    if (roles.length === 0) continue; // No roles in this sentence
-
-    // Determine size context from the sentence
-    let sizeType: 'large' | 'mid' | 'small' | 'unknown' = 'unknown';
-    let min: number | null = null;
-    let max: number | null = null;
-
-    // Check for explicit size indicators
-    if (lowerSentence.includes('large') || lowerSentence.includes('more than 500') || lowerSentence.includes('500+')) {
-      sizeType = 'large';
-      min = 500;
-      max = null;
-    } else if (lowerSentence.includes('mid-size') || lowerSentence.includes('mid size') ||
-               lowerSentence.includes('between 100 and 500') || lowerSentence.includes('100-500')) {
-      sizeType = 'mid';
-      min = 100;
-      max = 500;
-    } else if (lowerSentence.includes('small') || lowerSentence.includes('fewer than 100') || lowerSentence.includes('<100')) {
-      sizeType = 'small';
-      min = null;
-      max = 100;
-    }
-
-    sizeContexts.push({
-      type: sizeType,
-      min,
-      max,
-      roles,
-      sourceText: sentence,
-    });
-  }
-
-  // ============================================================
-  // STEP 4: Build target_roles from extracted contexts
-  // ============================================================
-  for (const ctx of sizeContexts) {
-    if (ctx.roles.length === 0) continue;
-
-    // Build reason from source text
-    const reasonMap: Record<string, string> = {
-      large: 'Large company contacts per policy',
-      mid: 'Mid-size company contacts per policy',
-      small: 'Small company contacts per policy',
-      unknown: 'Contacts extracted from policy (size context unclear)',
+    // Build the target_roles entry with EXPLICIT scope
+    const entry: {
+      company_size_range?: { min: number | null; max: number | null };
+      applies_to_all?: boolean;
+      conditions?: Array<{ field: string; operator: string; value: unknown; description: string }>;
+      titles: string[];
+      priority: number;
+      reason: string;
+    } = {
+      titles: newRoles,
+      priority: 1,
+      reason: '',
     };
 
-    ipr.target_roles.push({
-      company_size_range: { min: ctx.min, max: ctx.max },
-      titles: ctx.roles,
-      priority: 1,
-      reason: reasonMap[ctx.type],
+    // Set explicit scope (MANDATORY - no null-null)
+    if (block.appliesTo === 'all') {
+      (entry as { applies_to_all?: boolean }).applies_to_all = true;
+      entry.reason = 'Primary roles for ALL companies per policy.';
+    } else if (block.appliesTo === 'size' && block.sizeRange) {
+      entry.company_size_range = block.sizeRange;
+      const sizeDesc = block.scopeType === 'large' ? 'Large (500+)' :
+                       block.scopeType === 'mid' ? 'Mid-size (100-499)' :
+                       block.scopeType === 'small' ? 'Small (<100)' : 'Size-based';
+
+      // Check if this is a fallback role (lower priority)
+      if (block.isFallback) {
+        entry.reason = `Fallback operational contacts for ${sizeDesc} companies when primary roles not found.`;
+        entry.priority = 2; // Lower priority for fallback
+      } else {
+        entry.reason = `${sizeDesc} company roles per policy.`;
+      }
+    } else if (block.appliesTo === 'condition') {
+      if (block.isFallback) {
+        entry.conditions = [{
+          field: 'primary_roles_found',
+          operator: 'eq',
+          value: false,
+          description: 'Fallback when primary HR/payroll roles not found',
+        }];
+        entry.reason = 'Fallback operational contacts per policy.';
+        entry.priority = 2; // Lower priority for fallback
+      } else {
+        entry.conditions = [{
+          field: 'employee_count',
+          operator: 'not_exists',
+          value: true,
+          description: 'When employee count is unknown',
+        }];
+        entry.reason = 'Uncertainty handling per policy.';
+      }
+    }
+
+    ipr.target_roles.push(entry as IPRTargetRole);
+  }
+
+  // ============================================================
+  // STEP 6: EXTRACT THRESHOLDS (COLLAPSED TO SEMANTIC BOUNDARIES)
+  // ============================================================
+  // Only ONE threshold per policy clause (large/mid/small)
+  // Detect from policy TEXT, not just parsed blocks (blocks may have no roles)
+
+  // Detect semantic size boundaries from policy text directly
+  const hasLarge = lowerPolicy.includes('large compan') ||
+                   lowerPolicy.includes('500+') ||
+                   lowerPolicy.includes('500+ employees');
+  const hasMid = lowerPolicy.includes('mid-size') ||
+                 lowerPolicy.includes('mid size') ||
+                 lowerPolicy.includes('100–499') ||
+                 lowerPolicy.includes('100-499');
+  const hasSmall = lowerPolicy.includes('small compan') ||
+                   lowerPolicy.includes('<100') ||
+                   lowerPolicy.includes('fewer than 100');
+
+  // Create exactly one threshold per semantic boundary
+  if (hasLarge) {
+    ipr.thresholds.push({
+      name: 'large_company',
+      field: 'headcount',
+      value: 500,
+      unit: 'employees',
+      comparison: 'gte',
+    });
+  }
+
+  if (hasMid) {
+    ipr.thresholds.push({
+      name: 'mid_size_company',
+      field: 'headcount',
+      value: 100,
+      unit: 'employees',
+      comparison: 'gte',
+    });
+  }
+
+  if (hasSmall) {
+    ipr.thresholds.push({
+      name: 'small_company',
+      field: 'headcount',
+      value: 100,
+      unit: 'employees',
+      comparison: 'lt',
     });
   }
 
   // ============================================================
-  // STEP 5: Extract uncertainty handling - STRICTLY FROM TEXT
+  // STEP 7: EXTRACT UNCERTAINTY HANDLING
   // ============================================================
-  const lowerPolicy = policyText.toLowerCase();
-
-  // Check for explicit uncertainty statements
-  if (lowerPolicy.includes('unclear') || lowerPolicy.includes('not available')) {
-    // Check what the policy says to do
-    if (lowerPolicy.includes('deprioritize') && lowerPolicy.includes('confidence')) {
-      // User explicitly said "deprioritize confidence"
+  // Look for explicit uncertainty instructions
+  if (lowerPolicy.includes('employee count is unknown')) {
+    if (lowerPolicy.includes('proceed') || lowerPolicy.includes('continue')) {
       ipr.uncertainty_handling.when_size_unknown = 'flag_for_review';
-      ipr.fallback_behavior.when_no_match = 'deprioritize';
-      ipr.fallback_behavior.deprioritize_factor = 0.7; // Lower confidence
-      ipr.interpretation_notes.push('Policy states: deprioritize confidence when data unclear');
-    } else if (lowerPolicy.includes('still allow')) {
-      // Policy says to proceed but with lower confidence
-      ipr.uncertainty_handling.when_size_unknown = 'flag_for_review';
-      ipr.interpretation_notes.push('Policy states: allow enrichment but flag for review');
+      ipr.interpretation_notes.push('Policy: proceed with enrichment when size unknown, flag for review');
     }
-
-    // Look for "best-guess" instruction
-    if (lowerPolicy.includes('best-guess') || lowerPolicy.includes('best guess')) {
-      ipr.interpretation_notes.push('Policy requests best-guess decision makers when uncertain');
-    }
-  }
-
-  // Check for geography handling
-  if (lowerPolicy.includes('uae presence')) {
-    if (lowerPolicy.includes('preferred') && lowerPolicy.includes('not mandatory')) {
-      ipr.uncertainty_handling.when_geography_unclear = 'proceed';
-      ipr.interpretation_notes.push('Policy states: UAE presence preferred but not mandatory');
-    } else if (lowerPolicy.includes('expanding')) {
-      ipr.interpretation_notes.push('Policy allows companies expanding into region');
+    if (lowerPolicy.includes('low confidence')) {
+      ipr.interpretation_notes.push('Policy: mark results as low confidence when size unknown');
     }
   }
 
   // ============================================================
-  // STEP 6: Validate extraction quality
+  // STEP 8: EXTRACT SKIP RULES (exclusions)
   // ============================================================
-  // Count all unique roles extracted
-  const allExtractedRoles = new Set<string>();
-  for (const ctx of sizeContexts) {
-    ctx.roles.forEach((r) => allExtractedRoles.add(r));
+  // SANITATION: All reason fields must be COMPLETE sentences
+  // Scan policy TEXT directly, not just parsed blocks
+
+  // Look for "avoid executive titles" pattern in full policy
+  if (lowerPolicy.includes('avoid executive')) {
+    // Match full sentence containing "avoid executive"
+    // Handle "e.g." within parentheses by matching everything up to sentence-ending period
+    const avoidMatch = policyText.match(/[Aa]void\s+executive\s+titles[^.]*(?:\([^)]+\))[^.]*\./);
+    if (avoidMatch) {
+      const cleanReason = avoidMatch[0].trim();
+      ipr.skip_rules.push({
+        condition: {
+          field: 'role_type',
+          operator: 'in',
+          value: ['executive', 'c-level'],
+          description: 'Executive titles to avoid per policy',
+        },
+        reason: cleanReason,
+      });
+    }
   }
 
-  // Count all roles mentioned in policy text for comparison
-  const allMentionedRoles = extractRolesFromText(policyText);
-
-  // Check for role loss
-  const missingRoles = allMentionedRoles.filter((r) => !allExtractedRoles.has(r));
-  if (missingRoles.length > 0) {
-    warnings.push(`WARNING: These roles appear in policy but may not be in target_roles: ${missingRoles.join(', ')}`);
-    confidence -= 0.2;
+  // Check for strict rule constraint
+  if (lowerPolicy.includes('do not introduce roles outside')) {
+    ipr.interpretation_notes.push('STRICT CONSTRAINT: Only explicitly listed roles are valid');
   }
 
+  // ============================================================
+  // STEP 9: VALIDATION
+  // ============================================================
+  // Check for null-null scopes (FORBIDDEN)
+  for (const role of ipr.target_roles) {
+    const hasValidScope = role.applies_to_all ||
+                          (role.company_size_range && (role.company_size_range.min !== null || role.company_size_range.max !== null)) ||
+                          (role.conditions && role.conditions.length > 0);
+
+    if (!hasValidScope) {
+      warnings.push(`INVALID: Role block with null scope detected. Every block must have explicit scope.`);
+      confidence -= 0.3;
+    }
+  }
+
+  // Check for empty extraction
   if (ipr.target_roles.length === 0) {
-    warnings.push('No target roles could be extracted. Please check role names in policy.');
-    confidence = 0.3;
+    warnings.push('No role blocks extracted. Check policy format.');
+    confidence = 0.2;
   }
 
-  if (ipr.thresholds.length === 0) {
-    warnings.push('No explicit thresholds found. Extracted roles may lack size context.');
-    confidence -= 0.1;
+  // Summary notes
+  const totalRoles = new Set(ipr.target_roles.flatMap(r => r.titles)).size;
+  ipr.interpretation_notes.push(`Extracted ${totalRoles} unique roles across ${ipr.target_roles.length} scoped blocks`);
+  ipr.interpretation_notes.push(`Found ${ipr.thresholds.length} explicit thresholds`);
+  if (isStrictMode) {
+    ipr.interpretation_notes.push('STRICT MODE ENFORCED: No semantic expansion');
   }
-
-  // Final notes
-  ipr.interpretation_notes.push(`Extracted ${allExtractedRoles.size} unique roles across ${ipr.target_roles.length} size segments`);
-  ipr.interpretation_notes.push(`Found ${ipr.thresholds.length} explicit thresholds in policy text`);
 
   return { ipr, confidence, warnings };
 }

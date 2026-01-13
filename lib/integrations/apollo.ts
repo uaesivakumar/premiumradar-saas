@@ -253,19 +253,29 @@ export async function searchUAEEmployers(options?: {
  *
  * CRITICAL: Must pass either organizationId OR organizationName to filter by company.
  * Without these, Apollo returns contacts from ANY company!
+ *
+ * LEAD CONTEXT (S396): discoveryRegion is MANDATORY to prevent credit waste.
+ * Discovery finds UAE companies, but Apollo returns GLOBAL contacts by default.
+ * We filter at query time using person_locations to avoid fetching irrelevant leads.
  */
 export async function searchContacts(params: {
   organizationId?: string;
   organizationName?: string;
+  discoveryRegion: string; // MANDATORY: e.g., 'United Arab Emirates', 'UAE', 'India'
   titles?: string[];
   seniorities?: string[];
   page?: number;
   perPage?: number;
 }): Promise<ApolloContact[]> {
-  // Build the request body with proper company filtering
+  // Normalize region to Apollo format
+  const normalizedRegion = normalizeRegionForApollo(params.discoveryRegion);
+
+  // Build the request body with proper company AND geography filtering
   const requestBody: Record<string, unknown> = {
     person_titles: params.titles || ['HR Director', 'Chief People Officer', 'VP Human Resources', 'Head of HR', 'HR Manager', 'Finance Director', 'CFO'],
     person_seniorities: params.seniorities || ['director', 'vp', 'c_suite', 'owner', 'partner'],
+    // LEAD CONTEXT: Filter contacts by discovery region at query time (zero credit waste)
+    person_locations: [normalizedRegion],
     page: params.page || 1,
     per_page: params.perPage || 10,
   };
@@ -282,6 +292,8 @@ export async function searchContacts(params: {
   console.log('[Apollo] searchContacts request:', {
     organizationId: params.organizationId,
     organizationName: params.organizationName,
+    discoveryRegion: params.discoveryRegion,
+    normalizedRegion,
     titles: requestBody.person_titles,
   });
 
@@ -290,17 +302,59 @@ export async function searchContacts(params: {
     pagination?: { total_entries: number };
   }>('/people/search', 'POST', requestBody, 'people_search');
 
-  console.log('[Apollo] searchContacts found:', response.people?.length || 0, 'contacts');
+  console.log('[Apollo] searchContacts found:', response.people?.length || 0, 'contacts in', normalizedRegion);
 
   return response.people || [];
 }
 
 /**
- * Search for HR decision makers at UAE employers
+ * Normalize region names to Apollo's expected format
+ * Apollo uses full country names, not abbreviations
  */
-export async function searchHRContacts(companyName: string): Promise<ApolloContact[]> {
+function normalizeRegionForApollo(region: string): string {
+  const regionMap: Record<string, string> = {
+    // Common abbreviations
+    'uae': 'United Arab Emirates',
+    'UAE': 'United Arab Emirates',
+    'usa': 'United States',
+    'USA': 'United States',
+    'us': 'United States',
+    'US': 'United States',
+    'uk': 'United Kingdom',
+    'UK': 'United Kingdom',
+    // Full names pass through
+    'United Arab Emirates': 'United Arab Emirates',
+    'United States': 'United States',
+    'United Kingdom': 'United Kingdom',
+    'India': 'India',
+    'Singapore': 'Singapore',
+    'Saudi Arabia': 'Saudi Arabia',
+    'Qatar': 'Qatar',
+    'Bahrain': 'Bahrain',
+    'Kuwait': 'Kuwait',
+    'Oman': 'Oman',
+  };
+
+  return regionMap[region] || region; // Pass through if not found
+}
+
+/**
+ * Search for HR decision makers at employers
+ *
+ * LEAD CONTEXT (S396): discoveryRegion is MANDATORY.
+ * Filters contacts to the same region where the company was discovered.
+ * This prevents credit waste from fetching geographically irrelevant contacts.
+ *
+ * @param companyName - Company name to search contacts for
+ * @param discoveryRegion - Region where company was discovered (e.g., 'UAE', 'India')
+ */
+export async function searchHRContacts(
+  companyName: string,
+  discoveryRegion: string
+): Promise<ApolloContact[]> {
   return searchContacts({
     organizationName: companyName,
+    discoveryRegion, // MANDATORY: pass discovery region to filter contacts
     titles: [
       'HR Director',
       'Chief People Officer',

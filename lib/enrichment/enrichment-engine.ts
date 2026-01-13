@@ -49,7 +49,12 @@ export interface EnrichmentRequest {
   tenantId: string;
   workspaceId: string;
   subVertical: string;
-  region?: string;
+  /**
+   * LEAD CONTEXT (S396): Discovery region is MANDATORY.
+   * Used to filter Apollo contacts to the same region where company was discovered.
+   * This prevents credit waste from fetching geographically irrelevant contacts.
+   */
+  region: string; // MANDATORY - no longer optional
   maxContacts?: number;
 }
 
@@ -173,10 +178,11 @@ export async function enrichCompanyContacts(
   });
 
   try {
-    // Step 2: Role-scoped contact discovery
-    console.log('[EnrichmentEngine] Calling Apollo for HR contacts...');
+    // Step 2: Role-scoped contact discovery with LEAD CONTEXT
+    // LEAD CONTEXT (S396): Pass discovery region to filter contacts geographically
+    console.log('[EnrichmentEngine] Calling Apollo for HR contacts in region:', request.region);
 
-    const apolloContacts = await searchHRContacts(request.entityName);
+    const apolloContacts = await searchHRContacts(request.entityName, request.region);
 
     // Store raw response as evidence (NEVER sent to UI, persisted to DB)
     await storeEvidence({

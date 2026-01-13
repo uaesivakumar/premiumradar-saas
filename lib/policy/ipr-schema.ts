@@ -72,13 +72,17 @@ export interface IPRThreshold {
  * }
  */
 export interface IPRTargetRole {
-  // Company size range this applies to
-  company_size_range: {
+  // SCOPE DECLARATION (exactly ONE must be set)
+  // Option 1: Applies to all companies regardless of size/conditions
+  applies_to_all?: boolean;
+
+  // Option 2: Company size range this applies to
+  company_size_range?: {
     min: number | null;
     max: number | null;
   };
 
-  // Alternative conditions (if not size-based)
+  // Option 3: Condition-based scope (signals, entity type, etc.)
   conditions?: IPRCondition[];
 
   // Target job titles (in priority order)

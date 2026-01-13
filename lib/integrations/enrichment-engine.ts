@@ -512,10 +512,11 @@ export async function enrichSingleEntity(
       return null;
     }
 
-    // Get contact
+    // Get contact with LEAD CONTEXT (S396)
+    // Pass region to filter contacts geographically - prevents credit waste
     let hrContact: ApolloContact | undefined;
     try {
-      const contacts = await searchHRContacts(entityNameOrDomain);
+      const contacts = await searchHRContacts(entityNameOrDomain, region);
       hrContact = contacts[0];
     } catch (error) {
       // Continue without contact

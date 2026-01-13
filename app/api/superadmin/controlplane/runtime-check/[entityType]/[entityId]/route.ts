@@ -210,12 +210,31 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         mvtCertified = false;
       }
 
+      // S397-S400: Check for approved enrichment policy
+      let hasEnrichmentPolicy = false;
+      try {
+        const policyVersion = await queryOne<{ id: string }>(
+          `SELECT id FROM enrichment_policy_versions
+           WHERE sub_vertical_id = $1 AND status = 'approved'
+           LIMIT 1`,
+          [entityId]
+        );
+        hasEnrichmentPolicy = !!policyVersion;
+      } catch (policyError) {
+        console.warn('[RuntimeCheck] Enrichment policy check:', policyError instanceof Error ? policyError.message : 'unknown');
+      }
+
+      if (!hasEnrichmentPolicy) {
+        mvtIssues.push('no enrichment_policy');
+        mvtCertified = false;
+      }
+
       if (mvtIssues.length === 0) {
         checks.push({
           check: 'mvt_complete',
           status: 'pass',
           message: 'MVT complete',
-          details: `buyer_role, decision_owner, ${allowedSignals.length} signals, ${killRules.length} kill rules, scenarios`,
+          details: `buyer_role, decision_owner, ${allowedSignals.length} signals, ${killRules.length} kill rules, scenarios, enrichment_policy`,
         });
       } else {
         checks.push({
