@@ -170,7 +170,11 @@ export interface IntermediatePolicyRepresentation {
 }
 
 /**
- * Create an empty IPR with defaults
+ * Create an empty IPR with NO assumptions
+ *
+ * LOSSLESS PRINCIPLE: Only include what's explicitly stated in the policy.
+ * If the policy doesn't specify something, leave it EMPTY or mark as UNSTATED.
+ * NEVER assume mid, NEVER insert default roles.
  */
 export function createEmptyIPR(): IntermediatePolicyRepresentation {
   return {
@@ -180,14 +184,15 @@ export function createEmptyIPR(): IntermediatePolicyRepresentation {
     thresholds: [],
     target_roles: [],
     skip_rules: [],
+    // LOSSLESS: No defaults - only populate from explicit policy statements
     fallback_behavior: {
-      when_no_match: 'use_default',
-      default_roles: ['HR Manager', 'Finance Manager'],
+      when_no_match: 'flag_for_review', // Conservative: flag if no match, don't assume
     },
+    // LOSSLESS: No assumptions about uncertainty - leave for explicit policy
     uncertainty_handling: {
-      when_size_unknown: 'assume_mid',
-      when_geography_unclear: 'proceed',
-      when_industry_mismatch: 'proceed',
+      when_size_unknown: 'flag_for_review', // Conservative: don't assume size
+      when_geography_unclear: 'flag_for_review', // Conservative: don't assume
+      when_industry_mismatch: 'skip', // Conservative: skip if industry doesn't match (only option without assumptions)
     },
   };
 }

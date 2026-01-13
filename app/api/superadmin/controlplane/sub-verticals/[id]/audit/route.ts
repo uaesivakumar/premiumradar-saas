@@ -42,6 +42,7 @@ interface MVTStatus {
     has_kill_rules: boolean;
     has_compliance_rule: boolean;
     has_seed_scenarios: boolean;
+    has_enrichment_policy: boolean;  // S397-S400: Enrichment Policy required for MVT
   };
   missing: string[];
 }
@@ -133,6 +134,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       mvt_validated_at: mvtData?.mvt_validated_at || null,
     };
 
+    // S397-S400: Check for approved enrichment policy
+    let hasApprovedEnrichmentPolicy = false;
+    try {
+      const policyVersion = await queryOne<{ id: string }>(
+        `SELECT id FROM enrichment_policy_versions
+         WHERE sub_vertical_id = $1 AND status = 'approved'
+         LIMIT 1`,
+        [id]
+      );
+      hasApprovedEnrichmentPolicy = !!policyVersion;
+    } catch (policyError) {
+      // Policy table might not exist yet
+      console.warn('[ControlPlane:SubVertical Audit] Enrichment policy check:', policyError instanceof Error ? policyError.message : 'unknown');
+    }
+
     // Calculate MVT status with defensive null handling
     const allowedSignals = Array.isArray(fullSubVertical.allowed_signals) ? fullSubVertical.allowed_signals : [];
     const killRules = Array.isArray(fullSubVertical.kill_rules) ? fullSubVertical.kill_rules : [];
@@ -161,6 +177,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       has_kill_rules: Array.isArray(killRules) && killRules.length > 0,
       has_compliance_rule: hasComplianceRule,
       has_seed_scenarios: !!(seedScenarios?.golden?.length || seedScenarios?.kill?.length),
+      has_enrichment_policy: hasApprovedEnrichmentPolicy,  // S397-S400
     };
 
     const missing: string[] = [];
@@ -170,6 +187,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!mvtChecks.has_kill_rules) missing.push('kill_rules');
     if (!mvtChecks.has_compliance_rule) missing.push('compliance_rule');
     if (!mvtChecks.has_seed_scenarios) missing.push('seed_scenarios');
+    if (!mvtChecks.has_enrichment_policy) missing.push('enrichment_policy');
 
     const mvtStatus: MVTStatus = {
       valid: missing.length === 0,

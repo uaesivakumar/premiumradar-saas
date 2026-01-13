@@ -71,6 +71,7 @@ interface MVTStatus {
     has_kill_rules: boolean;
     has_compliance_rule: boolean;
     has_seed_scenarios: boolean;
+    has_enrichment_policy: boolean;  // S397-S400: Required for MVT
   };
   missing: string[];
 }
