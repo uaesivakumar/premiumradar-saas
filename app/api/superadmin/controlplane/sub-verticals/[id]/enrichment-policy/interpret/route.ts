@@ -373,6 +373,7 @@ function interpretTierBasedPolicy(
       },
       reason: 'These roles are explicitly excluded from enrichment targets per policy.',
     });
+    ipr.interpretation_notes = ipr.interpretation_notes || [];
     ipr.interpretation_notes.push(`Extracted ${extractedExclusions.length} excluded roles → skip_rules`);
   }
 
@@ -549,6 +550,7 @@ function interpretTierBasedPolicy(
 
   // Summary
   const totalRoles = new Set(ipr.target_roles.flatMap(r => r.titles)).size;
+  ipr.interpretation_notes = ipr.interpretation_notes || [];
   ipr.interpretation_notes.push(`Tier 1 (PRIMARY): ${tiers.find(t => t.tier === 1)?.roles.length || 0} roles, applies_to_all=true`);
   ipr.interpretation_notes.push(`Tier 2 (SECONDARY): ${tiers.find(t => t.tier === 2)?.roles.length || 0} roles, conditional`);
   ipr.interpretation_notes.push(`Tier 3 (FALLBACK): ${tiers.find(t => t.tier === 3)?.roles.length || 0} roles, fallback condition`);
@@ -929,6 +931,7 @@ function interpretSizeBasedPolicy(
   // STEP 7: EXTRACT UNCERTAINTY HANDLING
   // ============================================================
   if (lowerPolicy.includes('employee count is unknown')) {
+    ipr.interpretation_notes = ipr.interpretation_notes || [];
     if (lowerPolicy.includes('proceed') || lowerPolicy.includes('continue')) {
       ipr.uncertainty_handling.when_size_unknown = 'flag_for_review';
       ipr.interpretation_notes.push('Policy: proceed with enrichment when size unknown, flag for review');
@@ -957,6 +960,7 @@ function interpretSizeBasedPolicy(
     }
   }
 
+  ipr.interpretation_notes = ipr.interpretation_notes || [];
   if (lowerPolicy.includes('do not introduce roles outside')) {
     ipr.interpretation_notes.push('STRICT CONSTRAINT: Only explicitly listed roles are valid');
   }
