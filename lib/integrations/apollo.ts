@@ -17,6 +17,49 @@ import { logSivaMetric } from '@/lib/siva/metrics';
 // TYPES
 // =============================================================================
 
+/**
+ * Discovery Region - granular geography from Control Plane
+ * State is optional; when present, it MUST be enforced
+ */
+export interface DiscoveryRegion {
+  country: string;
+  state?: string;
+  city?: string;
+}
+
+/**
+ * Lead Location - extracted from Apollo contact response
+ */
+export interface LeadLocation {
+  city?: string;
+  state?: string;
+  country?: string;
+}
+
+/**
+ * Lead Context - decision artifact for geographic relevance
+ * This is the architectural contract between Discovery and Enrichment
+ */
+export interface LeadContext {
+  discovery_region: DiscoveryRegion;
+  lead_location: LeadLocation;
+  relevance: {
+    in_region: boolean;
+    match_level: 'state' | 'country' | 'none';
+    reason: string;
+  };
+  actionable: boolean;
+  query_granularity: 'state' | 'country'; // What was actually sent to Apollo
+}
+
+/**
+ * Apollo contact enriched with Lead Context
+ */
+export interface ApolloContactWithContext {
+  contact: ApolloContact;
+  lead_context: LeadContext;
+}
+
 export interface ApolloCompany {
   id: string;
   name: string;
@@ -311,8 +354,8 @@ export async function searchContacts(params: {
  * Normalize region names to Apollo's expected format
  * Apollo uses full country names, not abbreviations
  */
-function normalizeRegionForApollo(region: string): string {
-  const regionMap: Record<string, string> = {
+function normalizeCountryForApollo(country: string): string {
+  const countryMap: Record<string, string> = {
     // Common abbreviations
     'uae': 'United Arab Emirates',
     'UAE': 'United Arab Emirates',
@@ -335,7 +378,111 @@ function normalizeRegionForApollo(region: string): string {
     'Oman': 'Oman',
   };
 
-  return regionMap[region] || region; // Pass through if not found
+  return countryMap[country] || country; // Pass through if not found
+}
+
+/**
+ * Build Apollo person_locations filter with maximum granularity
+ *
+ * ARCHITECTURAL RULE: If state exists in discovery region, it MUST be enforced.
+ * Apollo supports "State, Country" format (e.g., "Maharashtra, India")
+ *
+ * @returns { locationFilter: string, granularity: 'state' | 'country' }
+ */
+function buildApolloLocationFilter(region: DiscoveryRegion): {
+  locationFilter: string;
+  granularity: 'state' | 'country';
+} {
+  const normalizedCountry = normalizeCountryForApollo(region.country);
+
+  if (region.state) {
+    // STATE-LEVEL ENFORCEMENT: Use "State, Country" format
+    const locationFilter = `${region.state}, ${normalizedCountry}`;
+    console.log('[LeadContext] Using STATE-level filter:', locationFilter);
+    return { locationFilter, granularity: 'state' };
+  }
+
+  // COUNTRY-LEVEL FALLBACK: Only when state is not specified
+  console.log('[LeadContext] Using COUNTRY-level filter (no state specified):', normalizedCountry);
+  return { locationFilter: normalizedCountry, granularity: 'country' };
+}
+
+/**
+ * Evaluate Lead Context - determine if a lead is geographically relevant
+ *
+ * This is the DECISION ARTIFACT that proves whether a lead matches the discovery region.
+ * Without this, geographic relevance is coincidental, not enforced.
+ *
+ * @param discoveryRegion - The region from the sub-vertical/discovery
+ * @param leadLocation - The location from Apollo contact response
+ * @param queryGranularity - What granularity was used in the Apollo query
+ */
+export function evaluateLeadContext(
+  discoveryRegion: DiscoveryRegion,
+  leadLocation: LeadLocation,
+  queryGranularity: 'state' | 'country'
+): LeadContext {
+  const normalizedDiscoveryCountry = normalizeCountryForApollo(discoveryRegion.country).toLowerCase();
+  const leadCountry = (leadLocation.country || '').toLowerCase();
+  const leadState = (leadLocation.state || '').toLowerCase();
+  const discoveryState = (discoveryRegion.state || '').toLowerCase();
+
+  // Check country match
+  const countryMatches = leadCountry.includes(normalizedDiscoveryCountry.toLowerCase()) ||
+                         normalizedDiscoveryCountry.toLowerCase().includes(leadCountry);
+
+  // Check state match (only if discovery has state specified)
+  const stateMatches = discoveryState
+    ? leadState.includes(discoveryState) || discoveryState.includes(leadState)
+    : true; // If no state in discovery, don't check
+
+  // Determine match level and in_region status
+  let in_region = false;
+  let match_level: 'state' | 'country' | 'none' = 'none';
+  let reason = '';
+
+  if (!countryMatches) {
+    in_region = false;
+    match_level = 'none';
+    reason = `Lead in ${leadLocation.country || 'unknown'}, discovery region is ${discoveryRegion.country}`;
+  } else if (discoveryRegion.state && !stateMatches) {
+    // Country matches but state doesn't - this is a FAILURE when state is specified
+    in_region = false;
+    match_level = 'country';
+    reason = `Lead in ${leadLocation.state || leadLocation.country}, discovery region requires ${discoveryRegion.state}`;
+  } else if (discoveryRegion.state && stateMatches) {
+    // State matches - full compliance
+    in_region = true;
+    match_level = 'state';
+    reason = `Lead in ${discoveryRegion.state}, ${discoveryRegion.country} - matches discovery region`;
+  } else {
+    // No state in discovery, country matches - acceptable
+    in_region = true;
+    match_level = 'country';
+    reason = `Lead in ${discoveryRegion.country} - matches discovery country (no state constraint)`;
+  }
+
+  const leadContext: LeadContext = {
+    discovery_region: discoveryRegion,
+    lead_location: leadLocation,
+    relevance: {
+      in_region,
+      match_level,
+      reason,
+    },
+    actionable: in_region,
+    query_granularity: queryGranularity,
+  };
+
+  // Log the decision artifact
+  console.log('[LeadContext] Evaluation:', JSON.stringify(leadContext, null, 2));
+
+  return leadContext;
+}
+
+// Legacy function for backward compatibility
+function normalizeRegionForApollo(region: string): string {
+  return normalizeCountryForApollo(region);
 }
 
 /**
@@ -456,5 +603,127 @@ export function toEBEmployer(company: ApolloCompany): {
     description: company.description || `${company.name} - ${company.industry || 'Company'} in ${company.city || 'UAE'}`,
     website: company.website_url,
     linkedIn: company.linkedin_url,
+  };
+}
+
+// =============================================================================
+// LEAD CONTEXT SEARCH (STATE-LEVEL ENFORCEMENT)
+// =============================================================================
+
+/**
+ * Search for contacts WITH Lead Context evaluation
+ *
+ * ARCHITECTURAL REQUIREMENT: This function enforces state-level geography
+ * when the discovery region includes a state. It produces decision artifacts
+ * for every lead, making geographic relevance auditable.
+ *
+ * @param params.organizationName - Company name to search
+ * @param params.discoveryRegion - Full discovery region with country + optional state
+ * @param params.titles - Job titles to search for
+ * @param params.seniorities - Seniority levels
+ * @param params.perPage - Results per page
+ *
+ * @returns Object with actionable leads, rejected leads, and query metadata
+ */
+export async function searchContactsWithContext(params: {
+  organizationId?: string;
+  organizationName?: string;
+  discoveryRegion: DiscoveryRegion; // MANDATORY: structured region with state
+  titles?: string[];
+  seniorities?: string[];
+  page?: number;
+  perPage?: number;
+}): Promise<{
+  actionable: ApolloContactWithContext[];
+  rejected: ApolloContactWithContext[];
+  query_metadata: {
+    location_filter: string;
+    granularity: 'state' | 'country';
+    total_returned: number;
+    actionable_count: number;
+    rejected_count: number;
+  };
+}> {
+  // Build location filter with maximum granularity
+  const { locationFilter, granularity } = buildApolloLocationFilter(params.discoveryRegion);
+
+  console.log('[LeadContext] === SEARCH WITH CONTEXT ===');
+  console.log('[LeadContext] Discovery Region:', JSON.stringify(params.discoveryRegion));
+  console.log('[LeadContext] Apollo Filter:', locationFilter);
+  console.log('[LeadContext] Granularity:', granularity);
+
+  // Build the request body with state-level filtering
+  const requestBody: Record<string, unknown> = {
+    person_titles: params.titles || ['Finance Manager', 'HR Director'],
+    person_seniorities: params.seniorities || ['manager', 'senior', 'director'],
+    // STATE-LEVEL ENFORCEMENT: Use the granular location filter
+    person_locations: [locationFilter],
+    page: params.page || 1,
+    per_page: params.perPage || 15,
+  };
+
+  // Add company filter
+  if (params.organizationId) {
+    requestBody.organization_ids = [params.organizationId];
+  } else if (params.organizationName) {
+    requestBody.q_organization_name = params.organizationName;
+  }
+
+  console.log('[LeadContext] Apollo Request:', JSON.stringify(requestBody, null, 2));
+
+  const response = await apolloRequest<{
+    people?: ApolloContact[];
+    pagination?: { total_entries: number };
+  }>('/people/search', 'POST', requestBody, 'people_search_with_context');
+
+  const contacts = response.people || [];
+  console.log('[LeadContext] Apollo returned:', contacts.length, 'contacts');
+
+  // Evaluate Lead Context for EVERY contact
+  const actionable: ApolloContactWithContext[] = [];
+  const rejected: ApolloContactWithContext[] = [];
+
+  for (const contact of contacts) {
+    // Extract lead location from contact's organization
+    const leadLocation: LeadLocation = {
+      city: contact.organization?.city,
+      state: contact.organization?.state,
+      country: contact.organization?.country,
+    };
+
+    // Evaluate Lead Context (this is the decision artifact)
+    const leadContext = evaluateLeadContext(
+      params.discoveryRegion,
+      leadLocation,
+      granularity
+    );
+
+    const contactWithContext: ApolloContactWithContext = {
+      contact,
+      lead_context: leadContext,
+    };
+
+    if (leadContext.actionable) {
+      actionable.push(contactWithContext);
+    } else {
+      rejected.push(contactWithContext);
+    }
+  }
+
+  console.log('[LeadContext] === RESULTS SUMMARY ===');
+  console.log('[LeadContext] Total:', contacts.length);
+  console.log('[LeadContext] Actionable:', actionable.length);
+  console.log('[LeadContext] Rejected:', rejected.length);
+
+  return {
+    actionable,
+    rejected,
+    query_metadata: {
+      location_filter: locationFilter,
+      granularity,
+      total_returned: contacts.length,
+      actionable_count: actionable.length,
+      rejected_count: rejected.length,
+    },
   };
 }
