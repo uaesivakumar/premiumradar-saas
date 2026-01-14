@@ -32,6 +32,7 @@ import {
   isDSLFormat,
   suggestDSLFromFreeText,
   IPR as DSL_IPR,
+  DSL_COMPILER_VERSION,
 } from '@/lib/enrichment/policy-dsl';
 
 interface SubVerticalWithPolicy {
@@ -1115,7 +1116,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       interpretedBy = 'llm_interpreter_v3';
     }
 
+    // Compute policy hash for audit trail
+    const policyHash = hashPolicyText(policyText);
+
     // Create new policy version with interpretation
+    // Include DSL audit artifact fields for Phase 1 Approval Contract
     const policyVersion = await queryOne<{
       id: string;
       version: number;
@@ -1125,8 +1130,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       `INSERT INTO enrichment_policy_versions (
          sub_vertical_id, version, policy_text, interpreted_ipr,
          interpretation_confidence, interpretation_warnings,
-         interpreted_at, interpreted_by, status, created_by
-       ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'pending_approval', $8)
+         interpreted_at, interpreted_by, status, created_by,
+         source_format, dsl_text, compiler_version, policy_hash, runtime_binding
+       ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, 'pending_approval', $8, $9, $10, $11, $12, $13)
        RETURNING id, version, status, created_at`,
       [
         id,
@@ -1137,6 +1143,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         JSON.stringify(warnings),
         interpretedBy, // 'dsl_compiler_v2' or 'llm_interpreter_v3'
         actorUser,
+        // DSL Audit Artifact Fields (Phase 1 Gate)
+        policyIsDSL ? 'dsl' : 'legacy_free_text',           // source_format
+        policyIsDSL ? policyText : null,                    // dsl_text (only for DSL)
+        policyIsDSL ? DSL_COMPILER_VERSION : null,          // compiler_version
+        policyHash,                                          // policy_hash
+        policyIsDSL ? 'compiled_ipr_only' : 'interpreter_allowed', // runtime_binding
       ]
     );
 

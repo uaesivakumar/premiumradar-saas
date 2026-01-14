@@ -97,6 +97,12 @@ export interface DSLWarning {
 // =============================================================================
 
 /**
+ * DSL Compiler Version - used for audit trail and reproducibility
+ * Increment when compiler logic changes.
+ */
+export const DSL_COMPILER_VERSION = 'dsl_compiler_v2.0';
+
+/**
  * Required sections in the DSL (order matters for validation)
  */
 const REQUIRED_SECTIONS = ['PRIMARY', 'EXCLUDE'] as const;
